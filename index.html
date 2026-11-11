@@ -103,6 +103,15 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 .pc span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pc button{color:var(--mute);width:26px;height:26px;flex:none}
 #attach{flex:none;margin-bottom:2px}
+.m p{margin:0 0 .45em}.m p:last-child{margin:0}
+.m h3,.m h4,.m h5,.m h6{margin:.7em 0 .3em;line-height:1.3;font-size:1.02em}.m h3{font-size:1.15em}
+.m ul,.m ol{padding-left:1.3em;margin:.3em 0}.m li{margin:.15em 0}
+.m hr{border:0;border-top:1px solid var(--line);margin:.7em 0}
+.m blockquote{border-left:3px solid var(--ac);padding-left:10px;color:var(--mute);margin:.4em 0}
+.m a{color:var(--ac)}.sp{height:.35em}
+.tw{overflow-x:auto;margin:.5em 0}.m table{border-collapse:collapse;font-size:14px}
+.m th,.m td{border:1px solid var(--line);padding:5px 9px;text-align:left;vertical-align:top;overflow-wrap:normal}
+.m th{background:var(--bg)}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:14px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
 #toast.on{opacity:1}
 </style>
@@ -164,7 +173,34 @@ const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S,strip))}catch(e){}}
 function save(){S.ts=Date.now();rawSave();schedPush()}
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1800)}
-function md(t){return esc(t).split('```').map((p,i)=>i%2?'<pre><code>'+p.replace(/^[\w-]*\n/,'')+'</code></pre>':p.replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')).join('')}
+function inl(t){return t.replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<i>$2</i>').replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')}
+function tbl(rows){
+  const R=rows.map(r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim()));
+  const sep=R[1]&&R[1].every(c=>/^:?-{1,}:?$/.test(c));
+  const head=sep?R[0]:null,body=sep?R.slice(2):R;
+  return '<div class="tw"><table>'+(head?'<thead><tr>'+head.map(c=>'<th>'+inl(c)+'</th>').join('')+'</tr></thead>':'')+'<tbody>'+body.map(r=>'<tr>'+r.map(c=>'<td>'+inl(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+}
+function md(t){
+  return esc(t).split('```').map((p,i)=>{
+    if(i%2)return '<pre><code>'+p.replace(/^[\w-]*\n/,'')+'</code></pre>';
+    let h='',list=null,tb=[];
+    const eL=()=>{if(list){h+='</'+list+'>';list=null}};
+    const eT=()=>{if(tb.length){h+=tbl(tb);tb=[]}};
+    for(const ln of p.split('\n')){
+      let m;
+      if(/^\s*\|.*\|\s*$/.test(ln)){eL();tb.push(ln);continue}
+      eT();
+      if(m=ln.match(/^(#{1,6})\s+(.*)$/)){eL();const n=m[1].length<=3?3:4;h+='<h'+n+'>'+inl(m[2])+'</h'+n+'>'}
+      else if(/^\s*(-{3,}|\*{3,})\s*$/.test(ln)){eL();h+='<hr>'}
+      else if(m=ln.match(/^\s*[*+-]\s+(.*)$/)){if(list!=='ul'){eL();h+='<ul>';list='ul'}h+='<li>'+inl(m[1])+'</li>'}
+      else if(m=ln.match(/^\s*\d+[.)]\s+(.*)$/)){if(list!=='ol'){eL();h+='<ol>';list='ol'}h+='<li>'+inl(m[1])+'</li>'}
+      else if(m=ln.match(/^&gt;\s?(.*)$/)){eL();h+='<blockquote>'+inl(m[1])+'</blockquote>'}
+      else if(!ln.trim()){eL();h+='<div class="sp"></div>'}
+      else{eL();h+='<p>'+inl(ln)+'</p>'}
+    }
+    eL();eT();return h;
+  }).join('');
+}
 function applyTheme(){if(S.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=S.theme}
 function chat(){return S.chats.find(c=>c.id===S.cur)}
 function newChat(){const c={id:uid(),title:'New chat',msgs:[]};S.chats.unshift(c);S.cur=c.id;home=false;save();closeDrawer();render();$('box').focus()}
