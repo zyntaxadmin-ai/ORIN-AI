@@ -94,6 +94,15 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 .home h2{font-size:26px}.home p{color:var(--mute)}
 .home>.btn{width:100%;margin:16px 0 8px}
 .rc{display:block;width:100%;text-align:left;background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:8px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.th{display:block;max-width:100%;max-height:220px;border-radius:12px;margin-bottom:6px}
+.tag{display:inline-block;font-size:12.5px;background:rgba(127,127,127,.2);padding:2px 8px;border-radius:99px;margin:0 4px 6px 0}
+#tray{display:none;gap:8px;padding:8px 12px 0;background:var(--sf);border-top:1px solid var(--line);overflow-x:auto}
+#tray.on{display:flex}
+.pc{flex:none;border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 6px;display:flex;align-items:center;gap:6px;font-size:13px;max-width:190px}
+.pc img{width:38px;height:38px;object-fit:cover;border-radius:8px}
+.pc span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc button{color:var(--mute);width:26px;height:26px;flex:none}
+#attach{flex:none;margin-bottom:2px}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:14px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
 #toast.on{opacity:1}
 </style>
@@ -107,7 +116,10 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
     <button class="ib" id="gear" aria-label="Settings">⚙</button>
   </header>
   <div id="msgs"></div>
+  <div id="tray"></div>
   <form class="in" id="form">
+    <button type="button" class="ib" id="attach" aria-label="Attach">📎</button>
+    <input type="file" id="fi" multiple hidden accept="image/*,text/*,.md,.csv,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,.log,.java,.c,.cpp,.sh,.sql">
     <textarea id="box" rows="1" placeholder="Message likho…" aria-label="Message"></textarea>
     <button class="send" id="sendb" aria-label="Send">↑</button>
   </form>
@@ -143,12 +155,13 @@ const PRESETS=[
  ['Anthropic','anthropic','https://api.anthropic.com'],
  ['Gemini','gemini','https://generativelanguage.googleapis.com']];
 const KEY='my-ai-v1';
+const strip=(k,v)=>k==='imgs'?undefined:v;
 let S={providers:[],chats:[],cur:null,system:'',theme:'auto'};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 const $=id=>document.getElementById(id);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S,strip))}catch(e){}}
 function save(){S.ts=Date.now();rawSave();schedPush()}
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1800)}
 function md(t){return esc(t).split('```').map((p,i)=>i%2?'<pre><code>'+p.replace(/^[\w-]*\n/,'')+'</code></pre>':p.replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')).join('')}
@@ -176,7 +189,7 @@ async function refreshTok(){
 }
 async function push(){
   const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,ts:S.ts||Date.now()};
-  await sb('/rest/v1/orin_data?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:C().session.uid,data:d,updated_at:new Date().toISOString()})});
+  await sb('/rest/v1/orin_data?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:C().session.uid,data:d,updated_at:new Date().toISOString()},strip)});
   cst='synced '+new Date().toLocaleTimeString();
 }
 function schedPush(){if(!C().session)return;clearTimeout(pt);pt=setTimeout(()=>push().catch(e=>{cst='error: '+e.message}),1500)}
@@ -237,6 +250,13 @@ function homeHTML(){
 }
 
 /* ---------- Providers ---------- */
+function cv(p,m){
+  const im=m.imgs&&m.imgs.length?m.imgs:null,tx=m.content||(im?'Describe this image.':' ');
+  if(p.type==='gemini')return{role:m.role==='assistant'?'model':'user',parts:(im||[]).map(i=>({inlineData:{mimeType:i.mime,data:i.data}})).concat([{text:tx}])};
+  if(!im)return{role:m.role,content:m.content};
+  if(p.type==='anthropic')return{role:m.role,content:im.map(i=>({type:'image',source:{type:'base64',media_type:i.mime,data:i.data}})).concat([{type:'text',text:tx}])};
+  return{role:m.role,content:[{type:'text',text:tx}].concat(im.map(i=>({type:'image_url',image_url:{url:'data:'+i.mime+';base64,'+i.data}})))};
+}
 async function callProvider(p,history,onDelta){
   const ctl=new AbortController();let to=setTimeout(()=>ctl.abort(),60000);
   const sys=S.system.trim();const base=p.url.replace(/\/+$/,'');
@@ -244,14 +264,14 @@ async function callProvider(p,history,onDelta){
     let url,headers={'Content-Type':'application/json'},body;
     if(p.type==='anthropic'){
       url=base+'/v1/messages';headers['x-api-key']=p.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
-      body={model:p.model,max_tokens:4096,stream:true,messages:history};if(sys)body.system=sys;
+      body={model:p.model,max_tokens:4096,stream:true,messages:history.map(m=>cv(p,m))};if(sys)body.system=sys;
     }else if(p.type==='gemini'){
       url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':streamGenerateContent?alt=sse&key='+encodeURIComponent(p.key);
-      body={contents:history.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}))};
+      body={contents:history.map(m=>cv(p,m))};
       if(sys)body.systemInstruction={parts:[{text:sys}]};
     }else{
       url=base+'/chat/completions';if(p.key)headers.Authorization='Bearer '+p.key;
-      body={model:p.model,stream:true,messages:(sys?[{role:'system',content:sys}]:[]).concat(history)};
+      body={model:p.model,stream:true,messages:(sys?[{role:'system',content:sys}]:[]).concat(history.map(m=>cv(p,m)))};
     }
     const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
     if(!r.ok){const j=await r.json().catch(()=>({}));const e=Array.isArray(j)?j[0]:j;throw new Error((e&&e.error&&(e.error.message||e.error))||r.status+' '+r.statusText)}
@@ -290,16 +310,35 @@ const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)retu
   el.innerHTML=md(live);
   if(near)m.scrollTop=m.scrollHeight;
 })};
+let pend=[];
+function fullText(m){return (m.content||'')+(m.files||[]).map(f=>'\n\n[File: '+f.name+']\n'+f.text).join('')}
+function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':'📄')+'<span>'+esc(a.name)+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
+function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
+async function addFiles(list){
+  for(const f of list){
+    if(pend.length>=6){toast('Max 6 ta file');break}
+    try{
+      if(f.type.startsWith('image/'))pend.push({kind:'image',name:f.name,mime:'image/jpeg',data:await readImg(f)});
+      else if(f.size>200000)toast(f.name+' onek boro (max 200KB)');
+      else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': ei file support kore na');continue}pend.push({kind:'text',name:f.name,text:t.slice(0,60000)})}
+    }catch(e){toast(f.name+' porte parlam na')}
+  }
+  renderTray();
+}
 let busy=false;
 async function send(){
-  const txt=$('box').value.trim();if(!txt||busy)return;
+  const txt=$('box').value.trim();if((!txt&&!pend.length)||busy)return;
   const list=S.providers.filter(p=>p.on&&p.model&&p.url);
   if(!list.length){toast('Age Settings e provider add koro');openSheet();return}
   if(!chat())newChat();
-  const c=chat();c.msgs.push({role:'user',content:txt});
-  if(c.title==='New chat')c.title=txt.slice(0,32);
+  const c=chat();const um={role:'user',content:txt};
+  const ims=pend.filter(a=>a.kind==='image'),fl=pend.filter(a=>a.kind==='text');
+  if(ims.length){um.imgs=ims.map(a=>({mime:a.mime,data:a.data}));um.atts=ims.map(a=>({name:a.name}))}
+  if(fl.length)um.files=fl.map(a=>({name:a.name,text:a.text}));
+  if(c.title==='New chat')c.title=(txt||(pend[0]&&pend[0].name)||'File').slice(0,32);
+  c.msgs.push(um);pend=[];renderTray();
   $('box').value='';$('box').style.height='auto';busy=true;save();render(true);
-  const history=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.content}));
+  const history=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m):m.content,imgs:m.imgs}));
   const fails=[];let done=false;
   for(const p of list){
     try{
@@ -321,7 +360,7 @@ function render(typing){
     el.innerHTML='<div class="empty"><h2>Ki jante chao?</h2><p>'+(S.providers.length?'Prothom provider fail korle porer ta te auto cole jabe.':'Shuru korar age ⚙ Settings e akta provider add koro.')+'</p></div>';return}
   let h='';
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
-    if(m.role==='user')h+='<div class="m u">'+esc(m.content).replace(/\n/g,'<br>')+'</div>';
+    if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">🖼 '+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div>';
     else if(m.role==='assistant'){
       h+='<div class="m a">'+md(m.content)+'</div><div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+'</span><button data-copy="'+i+'">Copy</button></div>';
     }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>';
@@ -369,6 +408,7 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('button');if(!t)return;const d=t.dataset;
   if(d.open){S.cur=d.open;home=false;save();closeDrawer();render()}
   else if(d.del){S.chats=S.chats.filter(c=>c.id!==d.del);if(S.cur===d.del)S.cur=S.chats[0]?.id||null;save();renderList();render()}
+  else if(d.rmp!==undefined){pend.splice(+d.rmp,1);renderTray()}
   else if(d.copy){navigator.clipboard?.writeText(chat().msgs[+d.copy].content).then(()=>toast('Copied'))}
   else if(d.preset){const x=PRESETS[+d.preset];editing=Object.assign(readForm(),{_new:true,name:x[0],type:x[1],url:x[2]});drawSheet()}
   else if(d.up!==undefined||d.dn!==undefined){const i=+(d.up??d.dn),j=d.up!==undefined?i-1:i+1;if(S.providers[j]){[S.providers[i],S.providers[j]]=[S.providers[j],S.providers[i]];save();drawSheet()}}
@@ -385,9 +425,10 @@ document.addEventListener('click',e=>{
   else if(d.act==='cout')logout()
   else if(d.act==='hnew')newChat()
   else if(d.act==='hset'){editing=null;openSheet()}
-  else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.assign({},S,{cloud:undefined}))],{type:'application/json'}));a.download='orin-backup.json';a.click()}
+  else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.assign({},S,{cloud:undefined}),strip)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
+$('attach').onclick=()=>$('fi').click();$('fi').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
 $('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
 $('newc').onclick=$('newc2').onclick=newChat;
 $('gear').onclick=()=>{editing=null;openSheet()};
