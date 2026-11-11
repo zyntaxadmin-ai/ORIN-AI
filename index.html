@@ -130,6 +130,13 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 .tw{overflow-x:auto;margin:.5em 0}.m table{border-collapse:collapse;font-size:14px}
 .m th,.m td{border:1px solid var(--line);padding:5px 9px;text-align:left;vertical-align:top;overflow-wrap:normal}
 .m th{background:var(--bg)}
+#rchip{display:none;padding:6px 12px 0;background:var(--bg)}#rchip.on{display:flex;gap:6px;align-items:center}
+#rchip button{font-size:13px;border:1px solid var(--line);border-radius:99px;padding:4px 10px;background:var(--sf);max-width:80vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dc{align-self:stretch;background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:12px;font-size:14px;display:flex;flex-direction:column;gap:6px}
+.dc small{color:var(--mute)}.df button{text-align:left;width:100%;word-break:break-all}
+.df pre{margin:6px 0;max-height:240px;overflow:auto;font-size:12.5px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px;white-space:pre-wrap}
+.tg{font-size:11px;padding:1px 6px;border-radius:99px;background:var(--ac2);margin-right:4px}.tg.d{color:var(--err)}.tg.n{color:#188038}
+.lg{font-size:12.5px;color:var(--mute);margin-bottom:6px}.lg summary{cursor:pointer}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:14px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
 #toast.on{opacity:1}
 </style>
@@ -143,6 +150,7 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
     <button class="ib" id="gear" aria-label="Settings">⚙</button>
   </header>
   <div id="msgs"></div>
+  <div id="rchip"></div>
   <div id="tray"></div>
   <form class="in" id="form">
     <div class="comp">
@@ -203,7 +211,7 @@ const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 let qw=0;
 function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S,strip))}catch(e){if(Date.now()-qw>30000){qw=Date.now();toast('Storage bhore geche! Purono chat delete koro ba Backup export koro')}}}
 function save(){S.ts=Date.now();rawSave();schedPush()}
-function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1800)}
+function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),Math.max(1800,String(t).length*55))}
 function inl(t){const cs=[];t=t.replace(/`([^`\n]+)`/g,(_,c)=>{cs.push(c);return '\u0000'+(cs.length-1)+'\u0000'});return t.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<i>$2</i>').replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\u0000(\d+)\u0000/g,(_,i)=>'<code>'+cs[i]+'</code>')}
 function tbl(rows){
   const R=rows.map(r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim()));
@@ -255,13 +263,13 @@ async function refreshTok(){
   setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:c.session.rt})},false));
 }
 async function push(){
-  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,search:S.search,imgcfg:S.imgcfg,ts:S.ts||Date.now()};
+  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,search:S.search,imgcfg:S.imgcfg,gh:S.gh,repo:S.repo,ts:S.ts||Date.now()};
   await sb('/rest/v1/orin_data?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:C().session.uid,data:d,updated_at:new Date().toISOString()},strip)});
   cst='synced '+new Date().toLocaleTimeString();
 }
 function schedPush(){if(!C().session)return;clearTimeout(pt);pt=setTimeout(()=>push().catch(e=>{cst='error: '+e.message}),1500)}
 function applyRemote(rd){
-  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.search=rd.search||S.search;S.imgcfg=rd.imgcfg||S.imgcfg;S.ts=rd.ts||0;
+  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.search=rd.search||S.search;S.imgcfg=rd.imgcfg||S.imgcfg;S.gh=rd.gh||S.gh;S.repo=rd.repo||S.repo;S.ts=rd.ts||0;
   if(!chat())S.cur=S.chats[0]?S.chats[0].id:null;
   rawSave();applyTheme();render();
 }
@@ -489,8 +497,7 @@ async function runImg(c){
 let imgMode=false;
 function updateModes(){$('webb').classList.toggle('on',!!S.web);$('imgb').classList.toggle('on',imgMode);$('box').placeholder=imgMode?'Ki chobi banabe likho…':'Message likho…'}
 async function run(c,list){
-  let history=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m)+webCtx(m):m.content,imgs:m.imgs}));
-  if(history.length>60){history=history.slice(-60);while(history.length&&history[0].role!=='user')history.shift()}
+  const history=buildHistory(c);
   const fails=[];let done=false;
   for(const p of list){
     if(stopped)break;
@@ -502,13 +509,267 @@ async function run(c,list){
   if(!done&&!stopped)c.msgs.push({role:'error',content:'Sob provider fail korse.\n'+fails.join('\n')});
   busy=false;live='';setBusyUI(false);save();render();
 }
+/* ---------- GitHub agent ---------- */
+const enc=x=>String(x).split('/').map(encodeURIComponent).join('/');
+const agentOn=()=>!!(S.repo&&S.gh&&S.gh.token);
+let ghTree=null,ghRepos,rfilter='',dview={},pushing=false,rloading=false;
+const GH_HELP='<p class="h">AI ke repo te kaj korate GitHub token lagbe (ekbar). Steps: <b>github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)</b>. Note e Orin likho, Expiration dao, <b>repo</b> box tick koro, Generate koro, token copy kore niche paste koro. Token kauke dio na.</p>';
+function ghHTML(){return '<div class="sec"><h3>GitHub (agent mode)</h3><p class="h">AI nijei repo er file porbe, likhbe, ar tumi Push chaple GitHub e jabe. Composer er + → GitHub repo theke repo bechhe nao.</p><input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn ghost sm" data-act="ropen">Repo bechhe nao</button></div></div>'}
+async function gh(path,opt={}){
+  const t=S.gh&&S.gh.token;if(!t)throw new Error('GitHub token nai');
+  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),30000);
+  const h={Authorization:'Bearer '+t,Accept:opt.raw?'application/vnd.github.raw+json':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
+  if(opt.body)h['Content-Type']='application/json';
+  try{
+    const r=await fetch('https://api.github.com'+path,{method:opt.method||'GET',headers:h,body:opt.body?JSON.stringify(opt.body):undefined,signal:ctl.signal});
+    if(opt.raw&&r.ok)return await r.text();
+    const j=r.status===204?null:await r.json().catch(()=>null);
+    if(!r.ok){const w=opt.method&&opt.method!=='GET';throw new Error('GitHub '+r.status+': '+((j&&j.message)||r.statusText)+(r.status===401?' (token thik nai)':r.status===403?' (permission ba rate limit)':w&&r.status===404?' (token e repo write permission ache?)':''))}
+    return j;
+  }catch(e){
+    if(e.name==='AbortError')throw new Error('GitHub timeout');
+    if(e instanceof TypeError)throw new Error('GitHub network error');
+    throw e;
+  }finally{clearTimeout(to)}
+}
+async function fetchRepos(){let all=[];for(let pg=1;pg<=3;pg++){const j=await gh('/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member&page='+pg);all=all.concat(j);if(j.length<100)break}return all}
+function loadRepos(){if(rloading)return;rloading=true;fetchRepos().then(l=>{ghRepos=l}).catch(e=>{ghRepos=e.message}).finally(()=>{rloading=false;if(view==='repo'&&$('rl'))$('rl').innerHTML=repoListHTML()})}
+function repoListHTML(){
+  if(ghRepos===undefined)return '<p class="h">Loading…</p>';
+  if(typeof ghRepos==='string')return '<p class="h" style="color:var(--err)">'+esc(ghRepos)+'</p>';
+  const l=ghRepos.filter(r=>!rfilter||r.full_name.toLowerCase().includes(rfilter));
+  return l.map(r=>'<button class="rc" data-rp="'+qa(r.full_name)+'">'+(S.repo&&S.repo.full===r.full_name?'✓ ':'')+esc(r.full_name)+(r.private?' 🔒':'')+'</button>').join('')||'<p class="h">Kono repo pailam na</p>';
+}
+function updateChip(){
+  const e=$('rchip');if(!S.repo){e.className='';e.innerHTML='';return}
+  const c=chat(),n=c?dcount(c):0;
+  e.className='on';e.innerHTML='<button data-act="ropen">📦 '+esc(S.repo.full)+' · '+esc(S.repo.branch)+(n?' · '+n+' draft':'')+(agentOn()?'':' · token nai')+'</button><button data-act="rclear" aria-label="Remove repo">✕</button>';
+}
+function okPath(p){
+  if(typeof p!=='string')throw new Error('path dorkar');
+  p=p.trim().replace(/^\.?\/+/,'');
+  if(!p||p.length>200||/[\\\u0000-\u001f]/.test(p)||p.split('/').some(x=>x===''||x==='.'||x==='..'))throw new Error('Invalid path: '+p);
+  if(/^\.git(\/|$)/i.test(p)||/^\.github\/workflows(\/|$)/i.test(p))throw new Error('Blocked path (security): '+p);
+  return p;
+}
+function dr(c){const R=S.repo;if(!c.draft||c.draft.repo!==R.full||c.draft.branch!==R.branch)c.draft={repo:R.full,branch:R.branch,files:{},msg:''};return c.draft}
+const dcount=c=>c.draft?Object.keys(c.draft.files).length:0;
+const defMsg=c=>{const u=[...c.msgs].reverse().find(m=>m.role==='user');return 'Update via Orin'+(u&&u.content?': '+u.content.replace(/\s+/g,' ').slice(0,60):'')};
+async function getTree(){
+  const key=S.repo.full+'@'+S.repo.branch;
+  if(ghTree&&ghTree.key===key)return ghTree;
+  const t={key,paths:new Set(),modes:{},trunc:false,empty:false};
+  try{const j=await gh('/repos/'+S.repo.full+'/git/trees/'+encodeURIComponent(S.repo.branch)+'?recursive=1');(j.tree||[]).forEach(x=>{if(x.type==='blob'){t.paths.add(x.path);t.modes[x.path]=x.mode}});t.trunc=!!j.truncated}
+  catch(e){if(/ 409/.test(e.message))t.empty=true;else throw e}
+  ghTree=t;return t;
+}
+async function readFull(c,p){
+  const d=dr(c),f=d.files[p];
+  if(f){if(f.del)throw new Error('File draft e deleted');return f.content}
+  const t=await getTree();if(!t.trunc&&!t.paths.has(p))throw new Error('File nai: '+p);
+  const txt=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true});
+  if(txt.includes('\u0000'))throw new Error('Binary file, porte parbo na');
+  return txt;
+}
+const TOOLS=[
+ {name:'list_repos',description:"List the user's GitHub repositories (optionally filtered by a text query).",parameters:{type:'object',properties:{query:{type:'string',description:'optional text filter'}}}},
+ {name:'list_files',description:'List files in the current repository (with staged draft changes applied). Optionally only under a folder path.',parameters:{type:'object',properties:{path:{type:'string',description:'optional folder prefix, e.g. src'}}}},
+ {name:'read_file',description:'Read a text file from the current repository (staged draft version if changed).',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}},
+ {name:'write_file',description:'Create or fully overwrite a file with COMPLETE content. Staged as a draft; the user pushes it.',parameters:{type:'object',properties:{path:{type:'string'},content:{type:'string',description:'full file content'}},required:['path','content']}},
+ {name:'edit_file',description:'Replace one exact piece of text in an existing file. old_text must appear exactly once. Staged as draft.',parameters:{type:'object',properties:{path:{type:'string'},old_text:{type:'string'},new_text:{type:'string'}},required:['path','old_text','new_text']}},
+ {name:'delete_file',description:'Delete a file (staged as draft).',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}},
+ {name:'create_repo',description:'Create a NEW GitHub repository for the user (asks the user to confirm) and switch to it.',parameters:{type:'object',properties:{name:{type:'string'},description:{type:'string'},private:{type:'boolean',description:'default true'}},required:['name']}},
+ {name:'commit_message',description:'Set a short commit message for the staged changes.',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}
+];
+async function tool(c,name,a){
+  if(name==='list_repos'){const l=await fetchRepos(),q=String(a.query||'').toLowerCase();return l.filter(r=>!q||r.full_name.toLowerCase().includes(q)).slice(0,60).map(r=>r.full_name+(r.private?' (private)':'')).join('\n')||'No repos'}
+  if(name==='create_repo'){
+    const n=String(a.name||'').trim();if(!/^[A-Za-z0-9._-]{1,100}$/.test(n))throw new Error('Invalid repo name');
+    const pv=a.private!==false;
+    if(!confirm('AI "'+n+'" naam e notun GitHub repo banate chay ('+(pv?'private':'public')+'). Allow?'))throw new Error('User allow kore ni');
+    const j=await gh('/user/repos',{method:'POST',body:{name:n,description:String(a.description||'').slice(0,300),private:pv,auto_init:true}});
+    S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;rawSave();
+    return 'Created '+j.full_name+' (branch '+S.repo.branch+') and selected it.';
+  }
+  const d=dr(c);
+  if(name==='commit_message'){d.msg=String(a.message||'').slice(0,200);rawSave();return 'ok'}
+  if(name==='list_files'){
+    const t=await getTree(),ps=new Set(t.paths);
+    for(const [p,f] of Object.entries(d.files)){if(f.del)ps.delete(p);else ps.add(p)}
+    let l=[...ps].sort();const pre=String(a.path||'').replace(/^\/+|\/+$/g,'');
+    if(pre)l=l.filter(x=>x===pre||x.startsWith(pre+'/'));
+    return (l.length?l.slice(0,400).join('\n'):(t.empty?'(repo empty)':'(no files)'))+(l.length>400?'\n... '+(l.length-400)+' more':'')+(t.trunc?'\n(tree truncated by GitHub)':'');
+  }
+  const p=okPath(a.path);
+  if(name==='read_file'){const x=await readFull(c,p);return x.length>40000?x.slice(0,40000)+'\n[TRUNCATED: file is '+x.length+' chars; use edit_file for changes]':x}
+  if(name==='write_file'){
+    if(typeof a.content!=='string')throw new Error('content dorkar');
+    if(a.content.length>300000)throw new Error('File onek boro (max 300KB)');
+    const t=await getTree();d.files[p]={content:a.content,ex:t.paths.has(p)};rawSave();
+    return 'Staged '+p+' ('+a.content.split('\n').length+' lines)';
+  }
+  if(name==='edit_file'){
+    const o=String(a.old_text||'');if(!o)throw new Error('old_text khali');
+    const cur=await readFull(c,p),n=cur.split(o).length-1;
+    if(n!==1)throw new Error(n?'old_text '+n+' jaygay ache, aro boro kore dao':'old_text file e nai');
+    const t=await getTree();d.files[p]={content:cur.replace(o,()=>String(a.new_text||'')),ex:t.paths.has(p)};rawSave();
+    return 'Edited '+p;
+  }
+  if(name==='delete_file'){
+    const t=await getTree(),f=d.files[p];
+    if(f&&!f.ex){delete d.files[p];rawSave();return 'Removed draft file '+p}
+    if(!t.paths.has(p)&&!t.trunc)throw new Error('File nai: '+p);
+    d.files[p]={del:1,ex:true};rawSave();return 'Staged delete of '+p;
+  }
+  throw new Error('Unknown tool '+name);
+}
+const sp=x=>{try{return typeof x==='string'?JSON.parse(x||'{}'):(x||{})}catch(e){return {}}};
+function agentCall0(p,history,work,sys){
+  const base=p.url.replace(/\/+$/,'');let url,headers={'Content-Type':'application/json'},body,tr=null;
+  if(p.type==='anthropic'){
+    url=base+'/v1/messages';headers['x-api-key']=p.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
+    const msgs=history.map(m=>cv(p,m));
+    for(const w of work){
+      if(w.role==='assistant'){tr=null;msgs.push({role:'assistant',content:(w.text?[{type:'text',text:w.text}]:[]).concat(w.calls.map(k=>({type:'tool_use',id:k.id,name:k.name,input:k.args})))})}
+      else{const b={type:'tool_result',tool_use_id:w.id,content:w.result};if(tr)tr.content.push(b);else{tr={role:'user',content:[b]};msgs.push(tr)}}
+    }
+    body={model:p.model,max_tokens:8192,system:sys,messages:msgs,tools:TOOLS.map(t=>({name:t.name,description:t.description,input_schema:t.parameters}))};
+  }else if(p.type==='gemini'){
+    url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':generateContent?key='+encodeURIComponent(p.key);
+    const cs=history.map(m=>cv(p,m));
+    for(const w of work){
+      if(w.role==='assistant'){tr=null;cs.push({role:'model',parts:w.raw||(w.text?[{text:w.text}]:[]).concat(w.calls.map(k=>({functionCall:{name:k.name,args:k.args}})))})}
+      else{const b={functionResponse:{name:w.name,response:{result:w.result}}};if(tr)tr.parts.push(b);else{tr={role:'user',parts:[b]};cs.push(tr)}}
+    }
+    body={contents:cs,systemInstruction:{parts:[{text:sys}]},tools:[{functionDeclarations:TOOLS}]};
+  }else{
+    url=base+'/chat/completions';if(p.key)headers.Authorization='Bearer '+p.key;
+    const msgs=[{role:'system',content:sys}].concat(history.map(m=>cv(p,m)));
+    for(const w of work){
+      if(w.role==='assistant')msgs.push({role:'assistant',content:w.text||null,tool_calls:w.calls.map(k=>({id:k.id,type:'function',function:{name:k.name,arguments:JSON.stringify(k.args)}}))});
+      else msgs.push({role:'tool',tool_call_id:w.id,content:w.result});
+    }
+    body={model:p.model,messages:msgs,stream:false,tools:TOOLS.map(t=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}}))};
+  }
+  return {url,headers,body};
+}
+async function agentCall(p,history,work,sys){
+  const ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),120000);
+  try{
+    const {url,headers,body}=agentCall0(p,history,work,sys);
+    const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){const e=Array.isArray(j)?j[0]:j,x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
+    let text='',calls=[],raw;
+    if(p.type==='anthropic'){
+      for(const b of j.content||[]){if(b.type==='text')text+=b.text;else if(b.type==='tool_use')calls.push({id:b.id,name:b.name,args:b.input||{}})}
+    }else if(p.type==='gemini'){
+      const parts=(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[];raw=parts.length?parts:undefined;
+      parts.forEach((x,i)=>{if(x.text&&!x.thought)text+=x.text;if(x.functionCall)calls.push({id:'g'+Date.now().toString(36)+i,name:x.functionCall.name,args:x.functionCall.args||{}})});
+    }else{
+      const m=j.choices&&j.choices[0]&&j.choices[0].message;if(!m)throw new Error('Empty reply');
+      text=typeof m.content==='string'?m.content:Array.isArray(m.content)?m.content.map(x=>x.text||'').join(''):'';
+      calls=(m.tool_calls||[]).filter(t=>t.function).map(t=>({id:t.id||('c'+Math.random().toString(36).slice(2,9)),name:t.function.name,args:sp(t.function.arguments)}));
+    }
+    if(!text.trim()&&!calls.length)throw new Error('Empty reply');
+    return {text,calls,raw};
+  }catch(e){
+    if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout (120s)');
+    if(e instanceof TypeError)throw new Error('Network/CORS block');
+    throw e;
+  }finally{clearTimeout(to)}
+}
+const buildHistory=c=>{let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
+function agentSys(c){
+  const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. Finish with a short plain summary of what you changed.'+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+}
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message'})[k.name]||k.name};
+async function runAgent(c,list){
+  const history=buildHistory(c),work=[],log=[],fails=[],sys=agentSys(c);
+  let pi=0,final='',by='',done=false,failedAll=false;
+  try{
+    for(let step=0;step<30&&!stopped&&!done&&!failedAll;step++){
+      let res=null;
+      while(pi<list.length&&!stopped){
+        try{res=await agentCall(list[pi],history,work,sys);by=list[pi].name;break}
+        catch(e){if(stopped||e.message==='STOP')break;fails.push(list[pi].name+': '+e.message);pi++}
+      }
+      if(!res){if(!stopped)failedAll=true;break}
+      if(!res.calls.length){final=res.text;done=true;break}
+      work.push({role:'assistant',text:res.text,calls:res.calls,raw:res.raw});
+      for(const k of res.calls){
+        log.push(dlabel(k));live=log.map(l=>'- '+l).join('\n');draw();
+        let out;try{out=await tool(c,k.name,k.args||{})}catch(e){out='Error: '+e.message}
+        work.push({role:'tool',id:k.id,name:k.name,result:String(out).slice(0,30000)});
+      }
+    }
+  }catch(e){fails.push('agent: '+e.message);failedAll=!done&&!stopped}
+  const src=srcOf(c);
+  if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Kaj sesh. Niche draft dekho.':'Done.'),by,skipped:fails.slice(),log,src});
+  else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,skipped:[],log})}
+  else if(failedAll)c.msgs.push({role:'error',content:'Sob provider fail korse. Agent mode e model ke tool calling support korte hobe.\n'+fails.join('\n')});
+  else c.msgs.push({role:'assistant',content:'Step limit e pouchhe gechhi. "continue" likho.',by,skipped:[],log});
+  busy=false;live='';setBusyUI(false);save();render();
+}
+const logHTML=m=>m.log&&m.log.length?'<details class="lg"><summary>🔧 '+m.log.length+' step</summary>'+m.log.map(esc).join('<br>')+'</details>':'';
+function draftHTML(c){
+  let h='';const d=c.draft;
+  if(d&&dcount(c)){
+    const fs=Object.entries(d.files);
+    h+='<div class="dc"><b>📝 Draft: '+fs.length+' file</b><small>'+esc(d.repo)+' · '+esc(d.branch)+'</small>'+
+    fs.map(([p,f])=>'<div class="df"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button>'+(dview[p]&&!f.del?'<pre>'+esc((f.content||'').slice(0,6000))+((f.content||'').length>6000?'\n…':'')+'</pre>':'')+'</div>').join('')+
+    '<input class="f cm" placeholder="Commit message" value="'+qa(d.msg||defMsg(c))+'"><div class="row" style="margin-top:4px"><button class="btn sm" data-act="gpush">⬆ Push korbo</button><button class="btn ghost sm" data-act="gdisc">Discard</button></div></div>';
+  }
+  const u=c.pushed;
+  if(u)h+='<div class="dc">'+(u.undone?'↩️ Undo hoyeche ('+esc(u.repo)+')':'✅ Pushed '+u.n+' file → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/commit/'+qa(u.sha)+'" target="_blank" rel="noopener">'+esc(u.sha.slice(0,7))+'</a>'+(u.prev?' <button class="btn ghost sm" data-act="gundo">↩ Undo</button>':''))+'</div>';
+  return h;
+}
+async function pushDraft(c){
+  const d=c.draft;if(!d||!dcount(c)||pushing)return;
+  const R=d.repo,B=d.branch,msg=(d.msg||'').trim()||defMsg(c),fs=Object.entries(d.files);
+  if(!confirm(R+' ('+B+') e '+fs.length+' ta file push korbe?'))return;
+  pushing=true;toast('Push hocche…');
+  try{
+    const br=enc(B);let head=null,sha,prev=null,modes={};
+    try{head=await gh('/repos/'+R+'/git/ref/heads/'+br)}catch(e){if(!/ 409/.test(e.message))throw e}
+    if(!head){
+      for(const [p,f] of fs){if(f.del)continue;const j=await gh('/repos/'+R+'/contents/'+enc(p),{method:'PUT',body:{message:msg,content:btoa(unescape(encodeURIComponent(f.content))),branch:B}});sha=j.commit.sha}
+      if(!sha)throw new Error('Push korar moto file nai');
+    }else{
+      prev=head.object.sha;
+      if(S.repo&&S.repo.full===R&&S.repo.branch===B){try{modes=(await getTree()).modes}catch(e){}}
+      const cm=await gh('/repos/'+R+'/git/commits/'+prev),tree=[];
+      for(const [p,f] of fs){
+        if(f.del)tree.push({path:p,mode:modes[p]||'100644',type:'blob',sha:null});
+        else{const b=await gh('/repos/'+R+'/git/blobs',{method:'POST',body:{content:f.content,encoding:'utf-8'}});tree.push({path:p,mode:modes[p]||'100644',type:'blob',sha:b.sha})}
+      }
+      const t=await gh('/repos/'+R+'/git/trees',{method:'POST',body:{base_tree:cm.tree.sha,tree}});
+      const nc=await gh('/repos/'+R+'/git/commits',{method:'POST',body:{message:msg,tree:t.sha,parents:[prev]}});
+      await gh('/repos/'+R+'/git/refs/heads/'+br,{method:'PATCH',body:{sha:nc.sha}});sha=nc.sha;
+    }
+    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false};c.draft=null;ghTree=null;save();toast('Pushed ✓');
+  }catch(e){c.msgs.push({role:'error',content:'Push fail: '+e.message});save()}
+  pushing=false;render();
+}
+async function undoPush(c){
+  const u=c.pushed;if(!u||u.undone||!u.prev)return;
+  if(!confirm('Ei push ta undo korbe? ('+u.repo+')'))return;
+  try{
+    const h=await gh('/repos/'+u.repo+'/git/ref/heads/'+enc(u.branch));
+    if(h.object.sha!==u.sha)throw new Error('Er por aro commit hoyeche, undo kora jabe na');
+    await gh('/repos/'+u.repo+'/git/refs/heads/'+enc(u.branch),{method:'PATCH',body:{sha:u.prev,force:true}});
+    u.undone=true;ghTree=null;save();toast('Undo hoyeche');
+  }catch(e){c.msgs.push({role:'error',content:'Undo fail: '+e.message});save()}
+  render();
+}
 function regen(){
   const c=chat();if(!c||busy)return;
   while(c.msgs.length&&c.msgs[c.msgs.length-1].role!=='user')c.msgs.pop();
   if(!c.msgs.length)return;
   if(c.msgs[c.msgs.length-1].gen){if(!imgReady()){toast('Settings e image provider add koro');return}busy=true;stopped=false;setBusyUI(true);save();render(true);runImg(c);return}
   const list=provList();if(!list.length){toast('Age Settings e provider add koro');return}
-  busy=true;stopped=false;setBusyUI(true);save();render(true);run(c,list);
+  busy=true;stopped=false;setBusyUI(true);save();render(true);(agentOn()?runAgent(c,list):run(c,list));
 }
 function editMsg(i){
   const c=chat();if(!c||busy)return;const m=c.msgs[i];if(!m||m.role!=='user')return;
@@ -539,13 +800,13 @@ async function send(){
     if(!(S.search&&S.search.key))toast('Web search er jonno Settings e Tavily key dao');
     else try{const r=await webSearch(txt);if(r.length)um.web={q:txt,r}}catch(e){if(stopped||e.message==='STOP'){busy=false;setBusyUI(false);save();render();return}toast('Web search fail: '+e.message)}
   }
-  await run(c,list);
+  await (agentOn()?runAgent(c,list):run(c,list));
 }
 
 /* ---------- Render ---------- */
 function render(typing){
   const c=chat();
-  updatePill();
+  updatePill();updateChip();
   $('form').style.display=home?'none':'';
   if(home){$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();return}$('title').textContent=c?c.title:'Orin';
   const el=$('msgs');
@@ -555,9 +816,10 @@ function render(typing){
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
     if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r"><button data-edit="'+i+'">Edit</button></div>';
     else if(m.role==='assistant'){
-      h+='<div class="m a">'+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+'</span>'+(m.pic?'<button data-save="'+i+'">Save</button>':'<button data-copy="'+i+'">Copy</button>')+(i===c.msgs.length-1?'<button data-regen="1">Regenerate</button>':'')+'</div>';
+      h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+'</span>'+(m.pic?'<button data-save="'+i+'">Save</button>':'<button data-copy="'+i+'">Copy</button>')+(i===c.msgs.length-1?'<button data-regen="1">Regenerate</button>':'')+'</div>';
     }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta"><button data-regen="1">Retry</button></div>':'');
   });
+  if(!busy)h+=draftHTML(c);
   if(typing||busy)h+='<div class="m a" id="liveb">'+(live?md(live):'<div class="dots"><span></span><span></span><span></span></div>')+'</div>';
   el.innerHTML=h;el.scrollTop=el.scrollHeight;
 }
@@ -571,10 +833,19 @@ function openDrawer(){renderList();$('drawer').classList.add('on');$('ov').class
 function closeDrawer(){$('drawer').classList.remove('on');$('ov').classList.remove('on')}
 
 /* ---------- Settings ---------- */
-let editing=null;
-function openSheet(){drawSheet();$('sheet').classList.add('on')}
+let editing=null,view='';
+function openSheet(){view=view||'';drawSheet();$('sheet').classList.add('on')}
 function drawSheet(){
-  const b=$('sbody');
+  const b=$('sbody');$('sheet').querySelector('h1').textContent=view==='repo'?'GitHub':'Settings';
+  if(view==='repo'){
+    const has=!!(S.gh&&S.gh.token);
+    b.innerHTML='<div class="sec"><h3>GitHub token</h3>'+(has?'<p class="h">Token save ache. Bodlate chaile notun ta paste koro.</p>':GH_HELP)+'<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn sm" data-act="gsave">'+(has?'Reload repos':'Connect')+'</button></div></div>'+
+    (has?'<div class="sec"><h3>Repo bechhe nao</h3>'+(S.repo?'<p class="h">Ekhon: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Bondho koro</button></p>':'')+'<input class="f" id="rq" placeholder="Search repo…" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
+    '<div class="sec"><h3>Notun repo banao</h3><label>Name</label><input class="f" id="nn" placeholder="my-project"><label>Description (optional)</label><input class="f" id="nd"><label><input type="checkbox" id="np" checked> Private</label><div class="row"><button class="btn sm" data-act="rnew">Create repo</button></div></div>':'');
+    const gt=$('gt');if(gt)gt.oninput=()=>{S.gh={token:gt.value.trim()};save()};
+    if(has&&ghRepos===undefined)loadRepos();
+    return;
+  }
   if(editing){
     const p=editing;
     b.innerHTML='<div class="sec"><h3>'+(p._new?'Add provider':'Edit provider')+'</h3>'+
@@ -594,9 +865,10 @@ function drawSheet(){
    '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>'+
    '<div class="sec"><h3>System prompt</h3><p class="h">Prothom e AI ke ki bole dibe (optional).</p><textarea class="f" id="sp" rows="3">'+esc(S.system)+'</textarea></div>'+
    '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+t+'</button>').join('')+'</div></div>'+
-   webHTML()+imgHTML()+voiceHTML()+cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
+   webHTML()+imgHTML()+ghHTML()+voiceHTML()+cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
    '<p class="h" style="margin-top:10px">API key shudhu ei browser e save thake. Backup file onno kauke dio na.</p></div>';
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
+  const gt2=$('gt');if(gt2)gt2.oninput=()=>{S.gh={token:gt2.value.trim()};save()};
   const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
   ['iu','ik','im','is'].forEach((id,n)=>{const e=$(id);if(e)e.oninput=()=>{S.imgcfg=Object.assign({},S.imgcfg,{[['url','key','model','size'][n]]:e.value.trim()});save()}});
 }
@@ -610,6 +882,18 @@ document.addEventListener('click',e=>{
   else if(d.add){closePop();$(d.add).click()}
   else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
   else if(d.lang){S.lang=d.lang;rawSave();drawSheet()}
+  else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();}
+  else if(d.rp){const r=(Array.isArray(ghRepos)?ghRepos:[]).find(x=>x.full_name===d.rp);if(!r)return;
+    const c=chat();if(c&&dcount(c)&&c.draft.repo!==r.full_name){if(!confirm('Ei chat er draft muche jabe. Repo bodlabe?'))return;c.draft=null}
+    S.repo={full:r.full_name,branch:r.default_branch||'main'};ghTree=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo: '+r.full_name)}
+  else if(d.act==='ropen'){closePop();editing=null;view='repo';openSheet()}
+  else if(d.act==='gsave'){const g=$('gt');if(g)S.gh={token:g.value.trim()};ghRepos=undefined;ghTree=null;save();drawSheet()}
+  else if(d.act==='rclear'){S.repo=null;ghTree=null;save();if(view==='repo')drawSheet();render()}
+  else if(d.act==='rnew'){const n=$('nn').value.trim();if(!/^[A-Za-z0-9._-]{1,100}$/.test(n)){toast('Repo name e shudhu english okkhor, number, - _ . cholbe');return}
+    t.disabled=true;gh('/user/repos',{method:'POST',body:{name:n,description:$('nd').value.trim().slice(0,300),private:$('np').checked,auto_init:true}}).then(j=>{S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;const c=chat();if(c)c.draft=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo banano hoyeche: '+j.full_name)}).catch(e=>{t.disabled=false;toast(e.message)})}
+  else if(d.act==='gpush'){const c=chat();if(c)pushDraft(c)}
+  else if(d.act==='gundo'){const c=chat();if(c)undoPush(c)}
+  else if(d.act==='gdisc'){const c=chat();if(c&&confirm('Draft discard korbe?')){c.draft=null;save();render()}}
   else if(d.ipre!==undefined){const x=IMGP[+d.ipre];S.imgcfg=Object.assign({},S.imgcfg,{url:x[1],model:x[2],size:x[3]});save();drawSheet()}
   else if(d.save){const m=chat().msgs[+d.save];if(m&&m.pic){const a=document.createElement('a');a.href=m.pic;a.download='orin-image.jpg';a.target='_blank';a.rel='noopener';a.click()}}
   else if(d.more){const c=S.chats.find(x=>x.id===d.more);pop(t,'<button class="pi" data-pin="'+d.more+'"><span>📌 '+(c&&c.pin?'Unpin':'Pin')+'</span></button><button class="pi" data-ren="'+d.more+'"><span>✎ Rename</span></button><button class="pi" data-del="'+d.more+'"><span>🗑 Delete</span></button>')}
@@ -632,21 +916,24 @@ document.addEventListener('click',e=>{
   else if(d.act==='csync')syncNow().then(drawSheet)
   else if(d.act==='cout')logout()
   else if(d.act==='hnew')newChat()
-  else if(d.act==='hset'){editing=null;openSheet()}
+  else if(d.act==='hset'){editing=null;view='';openSheet()}
   else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.assign({},S,{cloud:undefined}),strip)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
-$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files</span></button>');
+$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files</span></button><button class="pi" data-act="ropen"><span>📦 GitHub repo</span></button>');
 $('modelb').onclick=e=>pop(e.currentTarget,modelMenu());
 $('mic').onclick=toggleMic;
 $('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search ON':'Web search ON. Settings e Tavily key dao'):'Web search OFF')};
 $('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode ON':'Image mode ON. Settings e image provider dao'):'Image mode OFF')};
+document.addEventListener('input',e=>{const t=e.target;
+  if(t.classList&&t.classList.contains('cm')){const c=chat();if(c&&c.draft){c.draft.msg=t.value;rawSave()}}
+  else if(t.id==='rq'){rfilter=t.value.toLowerCase();const l=$('rl');if(l)l.innerHTML=repoListHTML()}});
 $('cq').oninput=e=>{q=e.target.value.toLowerCase();renderList()};
 $('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
 $('newc').onclick=$('newc2').onclick=newChat;
-$('gear').onclick=()=>{editing=null;openSheet()};
-$('back').onclick=()=>{if(editing){editing=null;drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
+$('gear').onclick=()=>{editing=null;view='';openSheet()};
+$('back').onclick=()=>{if(view){view='';$('sheet').classList.remove('on');render();return}if(editing){editing=null;drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
 $('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});
