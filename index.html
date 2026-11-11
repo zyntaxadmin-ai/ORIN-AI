@@ -8,6 +8,8 @@
 <meta name="apple-mobile-web-app-title" content="Orin">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0e7c66">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230e7c66'/%3E%3Ccircle cx='32' cy='32' r='14' fill='none' stroke='white' stroke-width='7'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#eef2f1;--sf:#fff;--ink:#16211f;--mute:#6b7a77;--line:#dbe4e1;--ac:#0e7c66;--ac2:#e3f3ee;--acink:#fff;--me:#16211f;--meink:#f4f8f7;--err:#b4382f;--r:18px}
@@ -283,6 +285,7 @@ $('form').onsubmit=e=>{e.preventDefault();send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});
 applyTheme();render();
+try{if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js')}catch(e){}
 </script>
 </body>
 </html>
