@@ -200,7 +200,7 @@ async function syncNow(first){
   }catch(e){cst='error: '+e.message}
   syncing=false;
 }
-const SB_URL='https://qrfetnudthvmcqslxlnp.supabase.co',SB_KEY='';
+const SB_URL='https://qrfetnudthvmcqslxlnp.supabase.co',SB_KEY='sb_publishable_RBh5MV6JmwMtkH9-H8fbEg_V9-Fa9Js';
 let home=true,amode='in';
 function showAuth(on){const a=$('auth');a.classList.toggle('on',on);if(on){$('adv').style.display=SB_KEY?'none':'block';$('au').value=SB_URL||C().url||'';$('ak').value=SB_KEY||C().anon||'';$('ae').value=C().email||''}}
 function setMode(m){amode=m;$('abtn').textContent=m==='in'?'Log in':'Create account';$('aq').textContent=m==='in'?'Account nai?':'Account ache?';$('aswitch').textContent=m==='in'?'Create account':'Log in';$('ap').autocomplete=m==='in'?'current-password':'new-password';$('aerr').textContent=''}
