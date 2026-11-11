@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>My AI</title>
+<title>Orin</title>
+<meta name="application-name" content="Orin">
+<meta name="apple-mobile-web-app-title" content="Orin">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e7c66">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230e7c66'/%3E%3Ccircle cx='32' cy='32' r='14' fill='none' stroke='white' stroke-width='7'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#eef2f1;--sf:#fff;--ink:#16211f;--mute:#6b7a77;--line:#dbe4e1;--ac:#0e7c66;--ac2:#e3f3ee;--acink:#fff;--me:#16211f;--meink:#f4f8f7;--err:#b4382f;--r:18px}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0d1514;--sf:#16211f;--ink:#e6efed;--mute:#8a9c98;--line:#26352f;--ac:#3fc6a5;--ac2:#173a32;--acink:#06201a;--me:#e6efed;--meink:#0d1514;--err:#ff8a7e}}
@@ -79,7 +84,7 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 <div id="app">
   <header>
     <button class="ib" id="menu" aria-label="Chats">☰</button>
-    <h1 id="title">My AI</h1>
+    <h1 id="title">Orin</h1>
     <button class="ib" id="newc" aria-label="New chat">✎</button>
     <button class="ib" id="gear" aria-label="Settings">⚙</button>
   </header>
@@ -201,7 +206,7 @@ async function send(){
 
 /* ---------- Render ---------- */
 function render(typing){
-  const c=chat();$('title').textContent=c?c.title:'My AI';
+  const c=chat();$('title').textContent=c?c.title:'Orin';
   const el=$('msgs');
   if(!c||!c.msgs.length&&!typing){
     el.innerHTML='<div class="empty"><h2>Ki jante chao?</h2><p>'+(S.providers.length?'Prothom provider fail korle porer ta te auto cole jabe.':'Shuru korar age ⚙ Settings e akta provider add koro.')+'</p></div>';return}
@@ -267,7 +272,7 @@ document.addEventListener('click',e=>{
   else if(d.act==='psave'){const f=readForm();if(!f.name||!f.url||!f.model){toast('Name, URL ar model dorkar');return}
     if(editing._new)S.providers.push(Object.assign({id:uid(),on:true},f));else Object.assign(S.providers[editing._idx],f);
     editing=null;save();drawSheet();toast('Saved')}
-  else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='my-ai-backup.json';a.click()}
+  else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
 $('menu').onclick=openDrawer;$('ov').onclick=closeDrawer;
@@ -280,5 +285,4 @@ let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationF
 applyTheme();render();
 </script>
 </body>
-  </html>
-  
+</html>
