@@ -124,12 +124,74 @@ try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catc
 const $=id=>document.getElementById(id);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){S.ts=Date.now();rawSave();schedPush()}
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1800)}
 function md(t){return esc(t).split('```').map((p,i)=>i%2?'<pre><code>'+p.replace(/^[\w-]*\n/,'')+'</code></pre>':p.replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')).join('')}
 function applyTheme(){if(S.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=S.theme}
 function chat(){return S.chats.find(c=>c.id===S.cur)}
 function newChat(){const c={id:uid(),title:'New chat',msgs:[]};S.chats.unshift(c);S.cur=c.id;save();closeDrawer();render();$('box').focus()}
+
+
+/* ---------- Cloud sync (Supabase) ---------- */
+let cst='',syncing=false,pt=0;
+const C=()=>S.cloud||{};
+async function sb(path,opt={},auth=true){
+  const c=C();const h=Object.assign({apikey:c.anon,'Content-Type':'application/json'},opt.headers||{});
+  if(auth){await refreshTok();h.Authorization='Bearer '+C().session.at}
+  const r=await fetch(c.url.replace(/\/+$/,'')+path,Object.assign({},opt,{headers:h}));
+  const j=await r.json().catch(()=>null);
+  if(!r.ok)throw new Error((j&&(j.msg||j.message||j.error_description||j.error))||r.status);
+  return j;
+}
+function setSession(j){S.cloud.session={at:j.access_token,rt:j.refresh_token,exp:Math.floor(Date.now()/1000)+(j.expires_in||3600),uid:j.user.id};rawSave()}
+async function refreshTok(){
+  const c=C();if(!c.session)throw new Error('Not logged in');
+  if(c.session.exp-60>Date.now()/1000)return;
+  setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:c.session.rt})},false));
+}
+async function push(){
+  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,ts:S.ts||Date.now()};
+  await sb('/rest/v1/orin_data?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:C().session.uid,data:d,updated_at:new Date().toISOString()})});
+  cst='synced '+new Date().toLocaleTimeString();
+}
+function schedPush(){if(!C().session)return;clearTimeout(pt);pt=setTimeout(()=>push().catch(e=>{cst='error: '+e.message}),1500)}
+function applyRemote(rd){
+  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.ts=rd.ts||0;
+  if(!chat())S.cur=S.chats[0]?S.chats[0].id:null;
+  rawSave();applyTheme();render();
+}
+async function syncNow(first){
+  if(!C().session||syncing||busy)return;syncing=true;
+  try{
+    const rows=await sb('/rest/v1/orin_data?select=data');
+    const rd=rows&&rows[0]&&rows[0].data;
+    if(!rd)await push();
+    else if(first){
+      if(!S.providers.length||confirm('Cloud e data ache. OK = ei device er data replace hobe. Cancel = ei device er data cloud e jabe.'))applyRemote(rd);else await push();
+      cst='synced '+new Date().toLocaleTimeString();
+    }else if((rd.ts||0)>(S.ts||0)){applyRemote(rd);cst='synced '+new Date().toLocaleTimeString()}
+    else if((rd.ts||0)<(S.ts||0))await push();
+    else cst='synced '+new Date().toLocaleTimeString();
+  }catch(e){cst='error: '+e.message}
+  syncing=false;
+}
+async function authGo(kind){
+  const url=$('cu').value.trim(),anon=$('ca').value.trim(),email=$('ce').value.trim(),pw=$('cp').value;
+  if(!url||!anon||!email||!pw){toast('Sob field dorkar');return}
+  S.cloud={url,anon,email};rawSave();
+  try{
+    const j=await sb(kind==='up'?'/auth/v1/signup':'/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password:pw})},false);
+    if(!j.access_token){toast('Email e confirm link giyeche. Confirm kore Log in koro');return}
+    setSession(j);await syncNow(true);drawSheet();toast('Logged in')
+  }catch(e){toast(e.message)}
+}
+function cloudHTML(){
+  const c=C();
+  return '<div class="sec"><h3>Cloud sync</h3>'+(c.session?
+  '<p class="h">Logged in: '+esc(c.email)+'<br>'+esc(cst||'ready')+'</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div>':
+  '<p class="h">Supabase diye sob device e same provider, API key ar chat.</p><label>Supabase URL</label><input class="f" id="cu" value="'+esc(c.url||'')+'" placeholder="https://xxxx.supabase.co"><label>Anon (public) key</label><input class="f" id="ca" value="'+esc(c.anon||'')+'"><label>Email</label><input class="f" id="ce" type="email" value="'+esc(c.email||'')+'"><label>Password</label><input class="f" id="cp" type="password" autocomplete="current-password"><div class="row"><button class="btn sm" data-act="cin">Log in</button><button class="btn ghost sm" data-act="cup">Sign up</button></div>')+'</div>';
+}
 
 /* ---------- Providers ---------- */
 async function callProvider(p,history,onDelta){
@@ -252,7 +314,7 @@ function drawSheet(){
    '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>'+
    '<div class="sec"><h3>System prompt</h3><p class="h">Prothom e AI ke ki bole dibe (optional).</p><textarea class="f" id="sp" rows="3">'+esc(S.system)+'</textarea></div>'+
    '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+t+'</button>').join('')+'</div></div>'+
-   '<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
+   cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
    '<p class="h" style="margin-top:10px">API key shudhu ei browser e save thake. Backup file onno kauke dio na.</p></div>';
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
 }
@@ -274,7 +336,11 @@ document.addEventListener('click',e=>{
   else if(d.act==='psave'){const f=readForm();if(!f.name||!f.url||!f.model){toast('Name, URL ar model dorkar');return}
     if(editing._new)S.providers.push(Object.assign({id:uid(),on:true},f));else Object.assign(S.providers[editing._idx],f);
     editing=null;save();drawSheet();toast('Saved')}
-  else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
+  else if(d.act==='cin')authGo('in')
+  else if(d.act==='cup')authGo('up')
+  else if(d.act==='csync')syncNow().then(drawSheet)
+  else if(d.act==='cout'){if(S.cloud)S.cloud.session=null;rawSave();drawSheet();toast('Logged out')}
+  else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.assign({},S,{cloud:undefined}))],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
 $('menu').onclick=openDrawer;$('ov').onclick=closeDrawer;
@@ -285,6 +351,8 @@ $('form').onsubmit=e=>{e.preventDefault();send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});
 applyTheme();render();
+syncNow(false);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow(false)});
 try{if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js')}catch(e){}
 </script>
 </body>
