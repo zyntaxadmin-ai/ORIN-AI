@@ -13,6 +13,8 @@ No build step, no framework, no server. The whole app is a single `index.html` f
 - **Model picker.** Choose **Auto** or pin one specific provider from the composer.
 - **Streaming replies** with a **Stop** button.
 - **Attachments.** Images, text/code files, and PDFs (PDFs work with Gemini and Anthropic).
+- **Web search.** Turn on the 🌐 button and Orin searches the web (via Tavily) before answering, then shows source links under the reply. Add your Tavily key in Settings.
+- **Image generation.** Turn on the 🎨 button to send your message as an image prompt to any OpenAI-compatible `/images/generations` API (OpenAI, Together, ...). Configure it in Settings.
 - **Voice input** (Web Speech API) in Bangla, English, or Hindi.
 - **Markdown rendering.** Headings, lists, tables, code blocks, links.
 - **Accounts and cloud sync.** Email and password login via Supabase. Providers, API keys, system prompt, and chat history follow you to every device.

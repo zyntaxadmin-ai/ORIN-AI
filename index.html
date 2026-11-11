@@ -52,7 +52,10 @@ form.in textarea{display:block;width:100%;resize:none;max-height:140px;border:0;
 .cb{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:24px;line-height:1;border:1px solid var(--line)}
 .cb:hover{background:var(--ac2)}
 .cb.rec{background:var(--err);color:#fff;border-color:transparent}
-.pill{height:38px;padding:0 14px;border-radius:99px;border:1px solid var(--line);font-size:14.5px;max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb.t{font-size:17px}.cb.on{background:var(--ac);color:#fff;border-color:transparent}
+.src{align-self:flex-start;font-size:12px;color:var(--mute);margin-top:-8px;display:flex;flex-wrap:wrap;gap:2px 10px;max-width:88%}.src a{color:var(--ac)}
+.gi{display:block;max-width:100%;max-height:420px;border-radius:12px}
+.pill{height:38px;padding:0 14px;border-radius:99px;border:1px solid var(--line);font-size:14.5px;max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill:hover{background:var(--ac2)}
 #pov{position:fixed;inset:0;z-index:34}
 #pop{position:fixed;z-index:35;background:var(--sf);border:1px solid var(--line);border-radius:18px;padding:6px;min-width:230px;max-width:86vw;max-height:60vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,.28)}
@@ -147,6 +150,8 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
       <div class="bar">
         <button type="button" class="cb" id="plus" aria-label="Add">+</button>
         <button type="button" class="pill" id="modelb">Auto ▾</button>
+        <button type="button" class="cb t" id="webb" aria-label="Web search" title="Web search">🌐</button>
+        <button type="button" class="cb t" id="imgb" aria-label="Image generation" title="Image generation">🎨</button>
         <span class="sp1"></span>
         <button type="button" class="cb" id="mic" aria-label="Voice input"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
         <button class="send" id="sendb" aria-label="Send">↑</button>
@@ -249,13 +254,13 @@ async function refreshTok(){
   setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:c.session.rt})},false));
 }
 async function push(){
-  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,ts:S.ts||Date.now()};
+  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,search:S.search,imgcfg:S.imgcfg,ts:S.ts||Date.now()};
   await sb('/rest/v1/orin_data?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:C().session.uid,data:d,updated_at:new Date().toISOString()},strip)});
   cst='synced '+new Date().toLocaleTimeString();
 }
 function schedPush(){if(!C().session)return;clearTimeout(pt);pt=setTimeout(()=>push().catch(e=>{cst='error: '+e.message}),1500)}
 function applyRemote(rd){
-  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.ts=rd.ts||0;
+  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.search=rd.search||S.search;S.imgcfg=rd.imgcfg||S.imgcfg;S.ts=rd.ts||0;
   if(!chat())S.cur=S.chats[0]?S.chats[0].id:null;
   rawSave();applyTheme();render();
 }
@@ -415,20 +420,81 @@ function toggleMic(){
   rec.onend=()=>{recOn=false;$('mic').classList.remove('rec')};
   try{rec.start()}catch(e){toast('Mic chalu hoy ni')}
 }
+function webHTML(){return '<div class="sec"><h3>Web search</h3><p class="h">Composer er 🌐 chalu korle message pathanor age web e khuje AI ke dewa hobe. <b>Tavily</b> API key lagbe (tavily.com e free plan ache).</p><input class="f" id="tk" type="password" autocomplete="off" placeholder="tvly-…" value="'+qa((S.search||{}).key)+'"></div>'}
+function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image generation</h3><p class="h">Composer er 🎨 chalu korle message ta chobir prompt hishebe jabe. OpenAI-compatible <code>/images/generations</code> API lagbe.</p><div class="chips">'+IMGP.map((x,i)=>'<button type="button" class="chip" data-ipre="'+i+'">'+x[0]+'</button>').join('')+'</div>'+
+ '<label>Base URL</label><input class="f" id="iu" value="'+qa(g.url)+'" placeholder="https://api.openai.com/v1">'+
+ '<label>API key</label><input class="f" id="ik" type="password" autocomplete="off" value="'+qa(g.key)+'">'+
+ '<label>Model</label><input class="f" id="im" value="'+qa(g.model)+'" placeholder="gpt-image-1">'+
+ '<label>Size (optional)</label><input class="f" id="is" value="'+qa(g.size)+'" placeholder="1024x1024"></div>'}
+const IMGP=[['OpenAI','https://api.openai.com/v1','gpt-image-1',''],['Together','https://api.together.xyz/v1','black-forest-labs/FLUX.1-schnell','']];
 function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">Mic er bhasha. Chrome e bhalo kaj kore.</p><div class="row" style="margin-top:0">'+[['bn-BD','Bangla'],['en-US','English'],['hi-IN','Hindi']].map(x=>'<button class="btn '+((S.lang||'bn-BD')===x[0]?'':'ghost')+' sm" data-lang="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>'}
 let curCtl=null,stopped=false;
 function setBusyUI(on){const b=$('sendb');b.textContent=on?'■':'↑';b.setAttribute('aria-label',on?'Stop':'Send')}
 function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>ok(r.result.split(',')[1]);r.readAsDataURL(f)})}
 function provList(){let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=[o]}return l}
+const qa=t=>esc(t||'').replace(/"/g,'&quot;');
+const srcOf=c=>{const u=c.msgs[c.msgs.length-1];return u&&u.web&&u.web.r?u.web.r.map(x=>({title:x.title,url:x.url})):undefined};
+const webCtx=m=>m.web&&m.web.r&&m.web.r.length?'\n\n[Web search results for "'+m.web.q+'" (today: '+new Date().toDateString()+'). Use them if helpful and cite as [n].]\n'+m.web.r.map((x,i)=>'['+(i+1)+'] '+x.title+' ('+x.url+')\n'+x.content).join('\n\n'):'';
+const srcHTML=s=>s&&s.length?'<div class="src">🌐 '+s.map((x,i)=>/^https?:\/\//.test(x.url)?'<a href="'+qa(x.url)+'" target="_blank" rel="noopener">['+(i+1)+'] '+esc((x.title||x.url).slice(0,50))+'</a>':'').join('')+'</div>':'';
+async function webSearch(qry){
+  const ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),20000);
+  try{
+    const r=await fetch('https://api.tavily.com/search',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+S.search.key},body:JSON.stringify({query:qry.slice(0,400),max_results:5,search_depth:'basic'}),signal:ctl.signal});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error((j.detail&&(j.detail.error||j.detail))||j.error||r.status);
+    return (j.results||[]).map(x=>({title:x.title||x.url,url:x.url,content:(x.content||'').slice(0,700)}));
+  }catch(e){
+    if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout');
+    if(e instanceof TypeError)throw new Error('Network/CORS block');
+    throw e;
+  }finally{clearTimeout(to)}
+}
+function shrink(src){
+  return new Promise((ok,no)=>{
+    const im=new Image();if(!src.startsWith('data:'))im.crossOrigin='anonymous';
+    im.onerror=()=>src.startsWith('data:')?no(new Error('Bad image')):ok(src);
+    im.onload=()=>{try{const k=Math.min(1,896/Math.max(im.width,im.height)),cn=document.createElement('canvas');cn.width=Math.round(im.width*k);cn.height=Math.round(im.height*k);const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cn.width,cn.height);x.drawImage(im,0,0,cn.width,cn.height);ok(cn.toDataURL('image/jpeg',.85))}catch(e){ok(src)}};
+    im.src=src;
+  });
+}
+const imgReady=()=>{const g=S.imgcfg||{};return !!(g.url&&g.key&&g.model)};
+async function genImage(prompt){
+  const g=S.imgcfg,ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),120000);
+  try{
+    const body={model:g.model,prompt,n:1};
+    if(g.size)body.size=g.size;
+    if(/dall-e/i.test(g.model))body.response_format='b64_json';
+    const r=await fetch(g.url.replace(/\/+$/,'')+'/images/generations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+g.key},body:JSON.stringify(body),signal:ctl.signal});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error((j.error&&(j.error.message||j.error))||j.message||r.status+' '+r.statusText);
+    const d=j.data&&j.data[0],src=d&&(d.b64_json?'data:image/png;base64,'+d.b64_json:d.url);
+    if(!src)throw new Error('Empty reply');
+    return await shrink(src);
+  }catch(e){
+    if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout (120s)');
+    if(e instanceof TypeError)throw new Error('Network/CORS block');
+    throw e;
+  }finally{clearTimeout(to)}
+}
+async function runImg(c){
+  const um=c.msgs[c.msgs.length-1];
+  try{
+    const pic=await genImage(um.content);
+    c.msgs.push({role:'assistant',content:'[Generated image: '+um.content+']',by:S.imgcfg.model,pic});
+  }catch(e){if(!stopped&&e.message!=='STOP')c.msgs.push({role:'error',content:'Image fail: '+e.message})}
+  busy=false;setBusyUI(false);save();render();
+}
+let imgMode=false;
+function updateModes(){$('webb').classList.toggle('on',!!S.web);$('imgb').classList.toggle('on',imgMode);$('box').placeholder=imgMode?'Ki chobi banabe likho…':'Message likho…'}
 async function run(c,list){
-  const history=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m):m.content,imgs:m.imgs}));
+  const history=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m)+webCtx(m):m.content,imgs:m.imgs}));
   const fails=[];let done=false;
   for(const p of list){
     if(stopped)break;
     try{
       live='';const out=await callProvider(p,history,t=>{live=t;draw()});
-      c.msgs.push({role:'assistant',content:out,by:p.name,skipped:fails.slice()});done=true;break;
-    }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,skipped:[]});done=true;break}fails.push(p.name+': '+e.message)}
+      c.msgs.push({role:'assistant',content:out,by:p.name,skipped:fails.slice(),src:srcOf(c)});done=true;break;
+    }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,skipped:[],src:srcOf(c)});done=true;break}fails.push(p.name+': '+e.message)}
   }
   if(!done&&!stopped)c.msgs.push({role:'error',content:'Sob provider fail korse.\n'+fails.join('\n')});
   busy=false;live='';setBusyUI(false);save();render();
@@ -437,6 +503,7 @@ function regen(){
   const c=chat();if(!c||busy)return;
   while(c.msgs.length&&c.msgs[c.msgs.length-1].role!=='user')c.msgs.pop();
   if(!c.msgs.length)return;
+  if(c.msgs[c.msgs.length-1].gen){if(!imgReady()){toast('Settings e image provider add koro');return}busy=true;stopped=false;setBusyUI(true);save();render(true);runImg(c);return}
   const list=provList();if(!list.length){toast('Age Settings e provider add koro');return}
   busy=true;stopped=false;setBusyUI(true);save();render(true);run(c,list);
 }
@@ -454,7 +521,8 @@ async function send(){
   let list=S.providers.filter(p=>p.on&&p.model&&p.url);
   if(S.pick){const o=list.find(p=>p.id===S.pick);if(o)list=[o]}
   if(recOn&&rec)rec.stop();
-  if(!list.length){toast('Age Settings e provider add koro');openSheet();return}
+  if(imgMode){if(!txt){toast('Chobir description likho');return}if(!imgReady()){toast('Age Settings e image provider add koro');openSheet();return}}
+  else if(!list.length){toast('Age Settings e provider add koro');openSheet();return}
   if(!chat())newChat();
   const c=chat();const um={role:'user',content:txt};
   const ims=pend.filter(a=>a.kind==='image'||a.kind==='pdf'),fl=pend.filter(a=>a.kind==='text');
@@ -463,6 +531,11 @@ async function send(){
   if(c.title==='New chat')c.title=(txt||(pend[0]&&pend[0].name)||'File').slice(0,32);
   c.msgs.push(um);pend=[];renderTray();
   $('box').value='';$('box').style.height='auto';busy=true;stopped=false;setBusyUI(true);save();render(true);
+  if(imgMode){um.gen=1;await runImg(c);return}
+  if(S.web&&txt){
+    if(!(S.search&&S.search.key))toast('Web search er jonno Settings e Tavily key dao');
+    else try{const r=await webSearch(txt);if(r.length)um.web={q:txt,r}}catch(e){if(stopped||e.message==='STOP'){busy=false;setBusyUI(false);save();render();return}toast('Web search fail: '+e.message)}
+  }
   await run(c,list);
 }
 
@@ -479,7 +552,7 @@ function render(typing){
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
     if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r"><button data-edit="'+i+'">Edit</button></div>';
     else if(m.role==='assistant'){
-      h+='<div class="m a">'+md(m.content)+'</div><div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+'</span><button data-copy="'+i+'">Copy</button>'+(i===c.msgs.length-1?'<button data-regen="1">Regenerate</button>':'')+'</div>';
+      h+='<div class="m a">'+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+'</span>'+(m.pic?'<button data-save="'+i+'">Save</button>':'<button data-copy="'+i+'">Copy</button>')+(i===c.msgs.length-1?'<button data-regen="1">Regenerate</button>':'')+'</div>';
     }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta"><button data-regen="1">Retry</button></div>':'');
   });
   if(typing||busy)h+='<div class="m a" id="liveb">'+(live?md(live):'<div class="dots"><span></span><span></span><span></span></div>')+'</div>';
@@ -518,9 +591,11 @@ function drawSheet(){
    '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>'+
    '<div class="sec"><h3>System prompt</h3><p class="h">Prothom e AI ke ki bole dibe (optional).</p><textarea class="f" id="sp" rows="3">'+esc(S.system)+'</textarea></div>'+
    '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+t+'</button>').join('')+'</div></div>'+
-   voiceHTML()+cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
+   webHTML()+imgHTML()+voiceHTML()+cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
    '<p class="h" style="margin-top:10px">API key shudhu ei browser e save thake. Backup file onno kauke dio na.</p></div>';
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
+  const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
+  ['iu','ik','im','is'].forEach((id,n)=>{const e=$(id);if(e)e.oninput=()=>{S.imgcfg=Object.assign({},S.imgcfg,{[['url','key','model','size'][n]]:e.value.trim()});save()}});
 }
 function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim()}}
 
@@ -532,6 +607,8 @@ document.addEventListener('click',e=>{
   else if(d.add){closePop();$(d.add).click()}
   else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
   else if(d.lang){S.lang=d.lang;rawSave();drawSheet()}
+  else if(d.ipre!==undefined){const x=IMGP[+d.ipre];S.imgcfg=Object.assign({},S.imgcfg,{url:x[1],model:x[2],size:x[3]});save();drawSheet()}
+  else if(d.save){const m=chat().msgs[+d.save];if(m&&m.pic){const a=document.createElement('a');a.href=m.pic;a.download='orin-image.jpg';a.target='_blank';a.rel='noopener';a.click()}}
   else if(d.more){const c=S.chats.find(x=>x.id===d.more);pop(t,'<button class="pi" data-pin="'+d.more+'"><span>📌 '+(c&&c.pin?'Unpin':'Pin')+'</span></button><button class="pi" data-ren="'+d.more+'"><span>✎ Rename</span></button><button class="pi" data-del="'+d.more+'"><span>🗑 Delete</span></button>')}
   else if(d.pin){closePop();const c=S.chats.find(x=>x.id===d.pin);if(c){c.pin=!c.pin;save();renderList()}}
   else if(d.ren){closePop();const c=S.chats.find(x=>x.id===d.ren);const n=c&&prompt('Chat er naam',c.title);if(n&&n.trim()){c.title=n.trim().slice(0,60);save();renderList();render()}}
@@ -560,6 +637,8 @@ document.addEventListener('click',e=>{
 $('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files</span></button>');
 $('modelb').onclick=e=>pop(e.currentTarget,modelMenu());
 $('mic').onclick=toggleMic;
+$('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search ON':'Web search ON. Settings e Tavily key dao'):'Web search OFF')};
+$('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode ON':'Image mode ON. Settings e image provider dao'):'Image mode OFF')};
 $('cq').oninput=e=>{q=e.target.value.toLowerCase();renderList()};
 $('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
 $('newc').onclick=$('newc2').onclick=newChat;
@@ -568,7 +647,7 @@ $('back').onclick=()=>{if(editing){editing=null;drawSheet()}else{$('sheet').clas
 $('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});
-applyTheme();render();
+applyTheme();render();updateModes();
 setMode('in');
 if(!C().session)showAuth(true);else syncNow(false);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow(false)});
