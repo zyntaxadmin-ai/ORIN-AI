@@ -78,6 +78,22 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 .chip{border:1px solid var(--line);border-radius:99px;padding:4px 12px;font-size:13.5px;background:var(--bg)}
 .chip:hover{border-color:var(--ac)}
 .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.auth{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;overflow-y:auto;padding:calc(24px + env(safe-area-inset-top,0px)) 20px 30px}
+.auth.on{display:flex}
+.auth .card{margin:auto;width:100%;max-width:380px;text-align:center}
+.logo{width:72px;height:72px;border-radius:22px;background:var(--ac);display:grid;place-items:center;margin:0 auto 14px}
+.logo i{display:block;width:30px;height:30px;border:7px solid var(--acink);border-radius:50%}
+.auth h1{font-size:30px}.auth p{color:var(--mute);margin:4px 0 18px}
+.auth .f{margin-bottom:10px;text-align:left}
+.auth .btn{width:100%;padding:12px}
+.auth .sw{margin-top:14px;color:var(--mute);font-size:14px}.auth .sw button{color:var(--ac);font-weight:700}
+.err{color:var(--err);font-size:14px;min-height:20px;margin-bottom:8px}
+.home{margin:auto 0;padding:10px 0}
+.home .logo{width:56px;height:56px;border-radius:18px;margin:0 0 14px}
+.home .logo i{width:22px;height:22px;border-width:5px}
+.home h2{font-size:26px}.home p{color:var(--mute)}
+.home>.btn{width:100%;margin:16px 0 8px}
+.rc{display:block;width:100%;text-align:left;background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:8px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:14px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
 #toast.on{opacity:1}
 </style>
@@ -99,6 +115,7 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 
 <div class="ov" id="ov"></div>
 <aside class="drawer" id="drawer">
+  <button class="btn ghost" id="homeb" style="margin-bottom:8px">⌂ Home</button>
   <button class="btn" id="newc2">+ New chat</button>
   <div class="list" id="clist"></div>
 </aside>
@@ -107,6 +124,13 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
   <header><button class="ib" id="back" aria-label="Back">←</button><h1>Settings</h1></header>
   <div class="body" id="sbody"></div>
 </section>
+<div class="auth" id="auth"><div class="card"><div class="logo"><i></i></div><h1>Orin</h1><p>Log in korle sob device e same chat ar API pabe</p>
+<input class="f" id="ae" type="email" placeholder="Email" autocomplete="email">
+<input class="f" id="ap" type="password" placeholder="Password" autocomplete="current-password">
+<div id="adv" style="display:none"><input class="f" id="au" placeholder="Supabase URL"><input class="f" id="ak" placeholder="Publishable key"></div>
+<div class="err" id="aerr"></div>
+<button class="btn" id="abtn">Log in</button>
+<div class="sw"><span id="aq">Account nai?</span> <button id="aswitch">Create account</button></div></div></div>
 <div id="toast"></div>
 
 <script>
@@ -130,7 +154,7 @@ function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');setTi
 function md(t){return esc(t).split('```').map((p,i)=>i%2?'<pre><code>'+p.replace(/^[\w-]*\n/,'')+'</code></pre>':p.replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')).join('')}
 function applyTheme(){if(S.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=S.theme}
 function chat(){return S.chats.find(c=>c.id===S.cur)}
-function newChat(){const c={id:uid(),title:'New chat',msgs:[]};S.chats.unshift(c);S.cur=c.id;save();closeDrawer();render();$('box').focus()}
+function newChat(){const c={id:uid(),title:'New chat',msgs:[]};S.chats.unshift(c);S.cur=c.id;home=false;save();closeDrawer();render();$('box').focus()}
 
 
 /* ---------- Cloud sync (Supabase) ---------- */
@@ -176,21 +200,40 @@ async function syncNow(first){
   }catch(e){cst='error: '+e.message}
   syncing=false;
 }
-async function authGo(kind){
-  const url=$('cu').value.trim(),anon=$('ca').value.trim(),email=$('ce').value.trim(),pw=$('cp').value;
-  if(!url||!anon||!email||!pw){toast('Sob field dorkar');return}
-  S.cloud={url,anon,email};rawSave();
+const SB_URL='https://qrfetnudthvmcqslxlnp.supabase.co',SB_KEY='';
+let home=true,amode='in';
+function showAuth(on){const a=$('auth');a.classList.toggle('on',on);if(on){$('adv').style.display=SB_KEY?'none':'block';$('au').value=SB_URL||C().url||'';$('ak').value=SB_KEY||C().anon||'';$('ae').value=C().email||''}}
+function setMode(m){amode=m;$('abtn').textContent=m==='in'?'Log in':'Create account';$('aq').textContent=m==='in'?'Account nai?':'Account ache?';$('aswitch').textContent=m==='in'?'Create account':'Log in';$('ap').autocomplete=m==='in'?'current-password':'new-password';$('aerr').textContent=''}
+async function authGo(){
+  const url=(SB_URL||$('au').value).trim(),anon=(SB_KEY||$('ak').value).trim(),email=$('ae').value.trim(),pw=$('ap').value,er=$('aerr');
+  if(!url||!anon||!email||!pw){er.textContent='Sob ghor puron koro';return}
+  if(amode==='up'&&pw.length<6){er.textContent='Password kompokkhe 6 okkhor';return}
+  S.cloud={url,anon,email};rawSave();$('abtn').disabled=true;er.textContent='';
   try{
-    const j=await sb(kind==='up'?'/auth/v1/signup':'/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password:pw})},false);
-    if(!j.access_token){toast('Email e confirm link giyeche. Confirm kore Log in koro');return}
-    setSession(j);await syncNow(true);drawSheet();toast('Logged in')
-  }catch(e){toast(e.message)}
+    const j=await sb(amode==='up'?'/auth/v1/signup':'/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password:pw})},false);
+    if(!j.access_token){er.textContent='Email e confirm link pathano hoyeche. Confirm kore Log in koro.';setMode('in');return}
+    setSession(j);showAuth(false);$('ap').value='';home=true;await syncNow(true);render();
+  }catch(e){er.textContent=e.message}
+  finally{$('abtn').disabled=false}
+}
+async function logout(){
+  if(!confirm('Log out korbe? Ei device theke local data muche jabe, cloud e save thakbe.'))return;
+  clearTimeout(pt);
+  try{await push()}catch(e){if(!confirm('Cloud e save hoy nai. Tobu logout korbe? Data hariye jete pare.'))return}
+  const c=C();S={providers:[],chats:[],cur:null,system:'',theme:S.theme,ts:0,cloud:{url:c.url,anon:c.anon,email:c.email}};
+  rawSave();applyTheme();$('sheet').classList.remove('on');closeDrawer();home=true;showAuth(true);setMode('in');render();
 }
 function cloudHTML(){
   const c=C();
-  return '<div class="sec"><h3>Cloud sync</h3>'+(c.session?
-  '<p class="h">Logged in: '+esc(c.email)+'<br>'+esc(cst||'ready')+'</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div>':
-  '<p class="h">Supabase diye sob device e same provider, API key ar chat.</p><label>Supabase URL</label><input class="f" id="cu" value="'+esc(c.url||'')+'" placeholder="https://xxxx.supabase.co"><label>Anon (public) key</label><input class="f" id="ca" value="'+esc(c.anon||'')+'"><label>Email</label><input class="f" id="ce" type="email" value="'+esc(c.email||'')+'"><label>Password</label><input class="f" id="cp" type="password" autocomplete="current-password"><div class="row"><button class="btn sm" data-act="cin">Log in</button><button class="btn ghost sm" data-act="cup">Sign up</button></div>')+'</div>';
+  return '<div class="sec"><h3>Account</h3><p class="h">'+esc(c.email||'')+'<br>'+esc(cst||'ready')+'</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
+}
+function homeHTML(){
+  const c=C(),on=S.providers.filter(p=>p.on&&p.model&&p.url),nm=(c.email||'').split('@')[0];
+  const pv=on.length?'<b>'+esc(on[0].name)+'</b> ('+esc(on[0].model)+')'+(on.length>1?'<br>Fallback: '+on.slice(1).map(p=>esc(p.name)).join(', '):''):'Kono provider chalu nai. Settings e add koro.';
+  return '<div class="home"><div class="logo"><i></i></div><h2>Hello, '+esc(nm)+'</h2><p>'+esc(c.email||'')+'</p><button class="btn" data-act="hnew">+ New chat</button>'+
+  '<div class="sec" style="margin:12px 0 0"><h3>Provider</h3><p class="h" style="margin:0">'+pv+'</p></div>'+
+  '<h3 style="margin-top:18px">Recent chats</h3>'+(S.chats.slice(0,6).map(x=>'<button class="rc" data-open="'+x.id+'">'+esc(x.title)+'</button>').join('')||'<p>Kono chat nai</p>')+
+  '<div class="row"><button class="btn ghost sm" data-act="hset">Settings</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
 }
 
 /* ---------- Providers ---------- */
@@ -270,7 +313,9 @@ async function send(){
 
 /* ---------- Render ---------- */
 function render(typing){
-  const c=chat();$('title').textContent=c?c.title:'Orin';
+  const c=chat();
+  $('form').style.display=home?'none':'';
+  if(home){$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();return}$('title').textContent=c?c.title:'Orin';
   const el=$('msgs');
   if(!c||!c.msgs.length&&!typing){
     el.innerHTML='<div class="empty"><h2>Ki jante chao?</h2><p>'+(S.providers.length?'Prothom provider fail korle porer ta te auto cole jabe.':'Shuru korar age ⚙ Settings e akta provider add koro.')+'</p></div>';return}
@@ -322,7 +367,7 @@ function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('p
 
 document.addEventListener('click',e=>{
   const t=e.target.closest('button');if(!t)return;const d=t.dataset;
-  if(d.open){S.cur=d.open;save();closeDrawer();render()}
+  if(d.open){S.cur=d.open;home=false;save();closeDrawer();render()}
   else if(d.del){S.chats=S.chats.filter(c=>c.id!==d.del);if(S.cur===d.del)S.cur=S.chats[0]?.id||null;save();renderList();render()}
   else if(d.copy){navigator.clipboard?.writeText(chat().msgs[+d.copy].content).then(()=>toast('Copied'))}
   else if(d.preset){const x=PRESETS[+d.preset];editing=Object.assign(readForm(),{_new:true,name:x[0],type:x[1],url:x[2]});drawSheet()}
@@ -336,14 +381,14 @@ document.addEventListener('click',e=>{
   else if(d.act==='psave'){const f=readForm();if(!f.name||!f.url||!f.model){toast('Name, URL ar model dorkar');return}
     if(editing._new)S.providers.push(Object.assign({id:uid(),on:true},f));else Object.assign(S.providers[editing._idx],f);
     editing=null;save();drawSheet();toast('Saved')}
-  else if(d.act==='cin')authGo('in')
-  else if(d.act==='cup')authGo('up')
   else if(d.act==='csync')syncNow().then(drawSheet)
-  else if(d.act==='cout'){if(S.cloud)S.cloud.session=null;rawSave();drawSheet();toast('Logged out')}
+  else if(d.act==='cout')logout()
+  else if(d.act==='hnew')newChat()
+  else if(d.act==='hset'){editing=null;openSheet()}
   else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.assign({},S,{cloud:undefined}))],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
-$('menu').onclick=openDrawer;$('ov').onclick=closeDrawer;
+$('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
 $('newc').onclick=$('newc2').onclick=newChat;
 $('gear').onclick=()=>{editing=null;openSheet()};
 $('back').onclick=()=>{if(editing){editing=null;drawSheet()}else $('sheet').classList.remove('on')};
@@ -351,7 +396,8 @@ $('form').onsubmit=e=>{e.preventDefault();send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});
 applyTheme();render();
-syncNow(false);
+setMode('in');
+if(!C().session)showAuth(true);else syncNow(false);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow(false)});
 try{if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js')}catch(e){}
 </script>
