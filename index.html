@@ -130,6 +130,10 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 .tw{overflow-x:auto;margin:.5em 0}.m table{border-collapse:collapse;font-size:14px}
 .m th,.m td{border:1px solid var(--line);padding:5px 9px;text-align:left;vertical-align:top;overflow-wrap:normal}
 .m th{background:var(--bg)}
+.cw{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:8px 0;background:var(--bg)}
+.cw .cp{display:block;margin-left:auto;font-size:12px;color:var(--mute);padding:4px 12px}.cw .cp:hover{color:var(--ac)}
+.cw pre{border:0;margin:0;border-radius:0;border-top:1px solid var(--line)}
+.m li.tk{list-style:none;margin-left:-1.2em}.m li.tk input{margin-right:4px}.m s{opacity:.7}
 #rchip{display:none;padding:6px 12px 0;background:var(--bg)}#rchip.on{display:flex;gap:6px;align-items:center}
 #rchip button{font-size:13px;border:1px solid var(--line);border-radius:99px;padding:4px 10px;background:var(--sf);max-width:80vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dc{align-self:stretch;background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:12px;font-size:14px;display:flex;flex-direction:column;gap:6px}
@@ -212,7 +216,15 @@ let qw=0;
 function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S,strip))}catch(e){if(Date.now()-qw>30000){qw=Date.now();toast('Storage bhore geche! Purono chat delete koro ba Backup export koro')}}}
 function save(){S.ts=Date.now();rawSave();schedPush()}
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),Math.max(1800,String(t).length*55))}
-function inl(t){const cs=[];t=t.replace(/`([^`\n]+)`/g,(_,c)=>{cs.push(c);return '\u0000'+(cs.length-1)+'\u0000'});return t.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<i>$2</i>').replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\u0000(\d+)\u0000/g,(_,i)=>'<code>'+cs[i]+'</code>')}
+function inl(t){
+  const cs=[],hold=h=>{cs.push(h);return '\u0000'+(cs.length-1)+'\u0000'};
+  t=t.replace(/`([^`\n]+)`/g,(_,c)=>hold('<code>'+c+'</code>'));
+  t=t.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,(_,a,u)=>hold('<a href="'+u+'" target="_blank" rel="noopener">'+a+'</a>'));
+  t=t.replace(/(^|[\s(])(https?:\/\/[^\s<]*[^\s<.,;:!?)])/g,(_,q,u)=>q+hold('<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>'));
+  t=t.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/(^|[^\w])__([^\s_](?:[^_\n]*[^\s_])?)__(?!\w)/g,'$1<b>$2</b>').replace(/~~([^~\n]+)~~/g,'<s>$1</s>').replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<i>$2</i>').replace(/(^|[^\w])_([^\s_](?:[^_\n]*[^\s_])?)_(?!\w)/g,'$1<i>$2</i>');
+  let n=0;while(/\u0000\d+\u0000/.test(t)&&n++<3)t=t.replace(/\u0000(\d+)\u0000/g,(_,i)=>cs[i]);
+  return t;
+}
 function tbl(rows){
   const R=rows.map(r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim()));
   const sep=R[1]&&R[1].every(c=>/^:?-{1,}:?$/.test(c));
@@ -221,25 +233,39 @@ function tbl(rows){
 }
 function md(t){
   return esc(t).split('```').map((p,i)=>{
-    if(i%2)return '<pre><code>'+p.replace(/^[\w-]*\n/,'')+'</code></pre>';
-    let h='',list=null,tb=[];
-    const eL=()=>{if(list){h+='</'+list+'>';list=null}};
+    if(i%2)return '<div class="cw"><button class="cp" data-cc="1">Copy</button><pre><code>'+p.replace(/^[\w-]*\n/,'')+'</code></pre></div>';
+    let h='',tb=[];const stk=[],LI=/^(\s*)([*+-]|\d+[.)])\s+(.*)$/;
+    const eL=()=>{while(stk.length)h+='</'+stk.pop().t+'>'};
     const eT=()=>{if(tb.length){h+=tbl(tb);tb=[]}};
-    for(const ln of p.split('\n')){
-      let m;
+    const L=p.split('\n');
+    for(let k=0;k<L.length;k++){
+      const ln=L[k];let m;
       if(/^\s*\|.*\|\s*$/.test(ln)){eL();tb.push(ln);continue}
       eT();
-      if(m=ln.match(/^(#{1,6})\s+(.*)$/)){eL();const n=m[1].length<=3?3:4;h+='<h'+n+'>'+inl(m[2])+'</h'+n+'>'}
-      else if(/^\s*(-{3,}|\*{3,})\s*$/.test(ln)){eL();h+='<hr>'}
-      else if(m=ln.match(/^\s*[*+-]\s+(.*)$/)){if(list!=='ul'){eL();h+='<ul>';list='ul'}h+='<li>'+inl(m[1])+'</li>'}
-      else if(m=ln.match(/^\s*\d+[.)]\s+(.*)$/)){if(list!=='ol'){eL();h+='<ol>';list='ol'}h+='<li>'+inl(m[1])+'</li>'}
+      if(/^\s*(-{3,}|\*{3,})\s*$/.test(ln)){eL();h+='<hr>'}
+      else if(m=ln.match(/^(#{1,6})\s+(.*)$/)){eL();const n=m[1].length<=3?3:4;h+='<h'+n+'>'+inl(m[2])+'</h'+n+'>'}
+      else if(m=ln.match(LI)){
+        const ind=m[1].replace(/\t/g,'    ').length,ty=/\d/.test(m[2])?'ol':'ul';
+        while(stk.length&&stk[stk.length-1].ind>ind)h+='</'+stk.pop().t+'>';
+        const top=stk[stk.length-1];
+        if(!top||ind>top.ind){h+=ty==='ol'&&parseInt(m[2])>1?'<ol start="'+parseInt(m[2])+'">':'<'+ty+'>';stk.push({t:ty,ind})}
+        else if(top.t!==ty){h+='</'+stk.pop().t+'><'+ty+'>';stk.push({t:ty,ind})}
+        let x=m[3],tk='';const c=x.match(/^\[([ xX])\]\s+(.*)$/);
+        if(c){tk='<input type="checkbox" disabled'+(c[1]===' '?'':' checked')+'> ';x=c[2]}
+        h+='<li'+(c?' class="tk"':'')+'>'+tk+inl(x)+'</li>';
+      }
       else if(m=ln.match(/^&gt;\s?(.*)$/)){eL();h+='<blockquote>'+inl(m[1])+'</blockquote>'}
-      else if(!ln.trim()){eL();h+='<div class="sp"></div>'}
+      else if(!ln.trim()){
+        let j=k+1;while(j<L.length&&!L[j].trim())j++;
+        if(stk.length&&j<L.length&&LI.test(L[j]))continue;
+        eL();h+='<div class="sp"></div>';
+      }
       else{eL();h+='<p>'+inl(ln)+'</p>'}
     }
     eL();eT();return h;
   }).join('');
 }
+function copyText(t){return (navigator.clipboard&&window.isSecureContext?navigator.clipboard.writeText(t):Promise.reject()).catch(()=>{const a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';document.body.append(a);a.select();try{document.execCommand('copy')}catch(e){}a.remove()})}
 function applyTheme(){if(S.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=S.theme}
 function chat(){return S.chats.find(c=>c.id===S.cur)}
 function newChat(){const c={id:uid(),title:'New chat',msgs:[]};S.chats.unshift(c);S.cur=c.id;home=false;save();closeDrawer();render();$('box').focus()}
@@ -335,7 +361,7 @@ function cv(p,m){
   return{role:m.role,content:[{type:'text',text:tx}].concat(im.map(i=>pdf(i)?{type:'file',file:{filename:i.name||'file.pdf',file_data:'data:application/pdf;base64,'+i.data}}:{type:'image_url',image_url:{url:'data:'+i.mime+';base64,'+i.data}}))};
 }
 async function callProvider(p,history,onDelta){
-  const ctl=new AbortController();curCtl=ctl;let to=setTimeout(()=>ctl.abort(),120000);
+  const ctl=new AbortController();curCtl=ctl;lastUsage=null;let to=setTimeout(()=>ctl.abort(),120000);
   const sys=S.system.trim();const base=p.url.replace(/\/+$/,'');
   try{
     let url,headers={'Content-Type':'application/json'},body;
@@ -349,6 +375,7 @@ async function callProvider(p,history,onDelta){
     }else{
       url=base+'/chat/completions';if(p.key)headers.Authorization='Bearer '+p.key;
       body={model:p.model,stream:true,messages:(sys?[{role:'system',content:sys}]:[]).concat(history.map(m=>cv(p,m)))};
+      if(/api\.(openai|groq|deepseek|together)\.|openrouter\.ai/.test(base))body.stream_options={include_usage:true};
     }
     const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
     if(!r.ok){const j=await r.json().catch(()=>({}));const e=Array.isArray(j)?j[0]:j;const x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
@@ -363,6 +390,9 @@ async function callProvider(p,history,onDelta){
         const d=ln.slice(5).trim();if(!d||d==='[DONE]')continue;
         let j;try{j=JSON.parse(d)}catch(_){continue}
         if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
+        if(p.type==='anthropic'){if(j.type==='message_start'&&j.message&&j.message.usage)lastUsage={i:j.message.usage.input_tokens||0,o:j.message.usage.output_tokens||0};else if(j.type==='message_delta'&&j.usage)lastUsage=Object.assign(lastUsage||{i:0,o:0},{o:j.usage.output_tokens||0})}
+        else if(p.type==='gemini'){const u=j.usageMetadata;if(u)lastUsage={i:u.promptTokenCount||0,o:(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0)}}
+        else if(j.usage&&(j.usage.prompt_tokens!=null||j.usage.completion_tokens!=null))lastUsage={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
         const t=p.type==='anthropic'?(j.type==='content_block_delta'?j.delta&&j.delta.text:''):
           p.type==='gemini'?((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(x=>x.text||'').join(''):
           j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content;
@@ -377,7 +407,11 @@ async function callProvider(p,history,onDelta){
     throw e;
   }finally{clearTimeout(to)}
 }
-let live='',raf=0;
+let live='',raf=0,lastUsage=null;
+const fmtTok=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(n||0);
+const fmtCost=c=>'$'+(c<0.01?c.toFixed(4):c.toFixed(2));
+const usageStr=u=>u?' · ↑'+fmtTok(u.i)+' ↓'+fmtTok(u.o)+(u.e?'~':'')+(u.c!=null?' · '+fmtCost(u.c):''):'';
+function mkUsage(p,hist,out){const us=lastUsage;let i,o,e=0;if(us&&(us.i||us.o)){i=us.i||0;o=us.o||0}else{e=1;i=Math.ceil(hist.reduce((a,m)=>a+(m.content||'').length,0)/3);o=Math.ceil(out.length/3)}const r={i,o};if(e)r.e=1;if(p.pin||p.pout)r.c=(i*(+p.pin||0)+o*(+p.pout||0))/1e6;return r}
 let lastT=0;
 const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)return;
   const now=performance.now();if(now-lastT<60){draw();return}lastT=now;
@@ -503,8 +537,8 @@ async function run(c,list){
     if(stopped)break;
     try{
       live='';const out=await callProvider(p,history,t=>{live=t;draw()});
-      c.msgs.push({role:'assistant',content:out,by:p.name,skipped:fails.slice(),src:srcOf(c)});done=true;break;
-    }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,skipped:[],src:srcOf(c)});done=true;break}fails.push(p.name+': '+e.message)}
+      c.msgs.push({role:'assistant',content:out,by:p.name,skipped:fails.slice(),src:srcOf(c),u:mkUsage(p,history,out)});done=true;break;
+    }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,skipped:[],src:srcOf(c),u:mkUsage(p,history,live)});done=true;break}fails.push(p.name+': '+e.message)}
   }
   if(!done&&!stopped)c.msgs.push({role:'error',content:'Sob provider fail korse.\n'+fails.join('\n')});
   busy=false;live='';setBusyUI(false);save();render();
@@ -656,7 +690,7 @@ function agentCall0(p,history,work,sys){
 async function agentCall(p,history,work,sys){
   const ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),120000);
   try{
-    const {url,headers,body}=agentCall0(p,history,work,sys);
+    const {url,headers,body}=agentCall0(p,history,work,sys);const isz=JSON.stringify(body).length;
     const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
     const j=await r.json().catch(()=>({}));
     if(!r.ok){const e=Array.isArray(j)?j[0]:j,x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
@@ -672,7 +706,12 @@ async function agentCall(p,history,work,sys){
       calls=(m.tool_calls||[]).filter(t=>t.function).map(t=>({id:t.id||('c'+Math.random().toString(36).slice(2,9)),name:t.function.name,args:sp(t.function.arguments)}));
     }
     if(!text.trim()&&!calls.length)throw new Error('Empty reply');
-    return {text,calls,raw};
+    let us=null;
+    if(p.type==='anthropic'&&j.usage)us={i:j.usage.input_tokens||0,o:j.usage.output_tokens||0};
+    else if(p.type==='gemini'&&j.usageMetadata)us={i:j.usageMetadata.promptTokenCount||0,o:(j.usageMetadata.candidatesTokenCount||0)+(j.usageMetadata.thoughtsTokenCount||0)};
+    else if(j.usage&&j.usage.prompt_tokens!=null)us={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
+    if(!us)us={i:Math.ceil(isz/3),o:Math.ceil((text.length+JSON.stringify(calls).length)/3),e:1};
+    return {text,calls,raw,us};
   }catch(e){
     if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout (120s)');
     if(e instanceof TypeError)throw new Error('Network/CORS block');
@@ -687,7 +726,7 @@ function agentSys(c){
 const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message'})[k.name]||k.name};
 async function runAgent(c,list){
   const history=buildHistory(c),work=[],log=[],fails=[],sys=agentSys(c);
-  let pi=0,final='',by='',done=false,failedAll=false;
+  let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0};
   try{
     for(let step=0;step<30&&!stopped&&!done&&!failedAll;step++){
       let res=null;
@@ -696,6 +735,7 @@ async function runAgent(c,list){
         catch(e){if(stopped||e.message==='STOP')break;fails.push(list[pi].name+': '+e.message);pi++}
       }
       if(!res){if(!stopped)failedAll=true;break}
+      {const u=res.us,pp=list[pi];tot.i+=u.i;tot.o+=u.o;if(u.e)tot.e=1;if(pp.pin||pp.pout){tot.c+=(u.i*(+pp.pin||0)+u.o*(+pp.pout||0))/1e6;tot.hc=1}}
       if(!res.calls.length){final=res.text;done=true;break}
       work.push({role:'assistant',text:res.text,calls:res.calls,raw:res.raw});
       for(const k of res.calls){
@@ -705,11 +745,11 @@ async function runAgent(c,list){
       }
     }
   }catch(e){fails.push('agent: '+e.message);failedAll=!done&&!stopped}
-  const src=srcOf(c);
-  if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Kaj sesh. Niche draft dekho.':'Done.'),by,skipped:fails.slice(),log,src});
-  else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,skipped:[],log})}
+  const src=srcOf(c),u=tot.i||tot.o?{i:tot.i,o:tot.o,e:tot.e||undefined,c:tot.hc?tot.c:undefined}:undefined;
+  if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Kaj sesh. Niche draft dekho.':'Done.'),by,skipped:fails.slice(),log,src,u});
+  else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,skipped:[],log,u})}
   else if(failedAll)c.msgs.push({role:'error',content:'Sob provider fail korse. Agent mode e model ke tool calling support korte hobe.\n'+fails.join('\n')});
-  else c.msgs.push({role:'assistant',content:'Step limit e pouchhe gechhi. "continue" likho.',by,skipped:[],log});
+  else c.msgs.push({role:'assistant',content:'Step limit e pouchhe gechhi. "continue" likho.',by,skipped:[],log,u});
   busy=false;live='';setBusyUI(false);save();render();
 }
 const logHTML=m=>m.log&&m.log.length?'<details class="lg"><summary>🔧 '+m.log.length+' step</summary>'+m.log.map(esc).join('<br>')+'</details>':'';
@@ -816,9 +856,11 @@ function render(typing){
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
     if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r"><button data-edit="'+i+'">Edit</button></div>';
     else if(m.role==='assistant'){
-      h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+'</span>'+(m.pic?'<button data-save="'+i+'">Save</button>':'<button data-copy="'+i+'">Copy</button>')+(i===c.msgs.length-1?'<button data-regen="1">Regenerate</button>':'')+'</div>';
+      h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+usageStr(m.u)+'</span>'+(m.pic?'<button data-save="'+i+'">Save</button>':'<button data-copy="'+i+'">Copy</button>')+(i===c.msgs.length-1?'<button data-regen="1">Regenerate</button>':'')+'</div>';
     }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta"><button data-regen="1">Retry</button></div>':'');
   });
+  {const tu=c.msgs.reduce((a,m)=>{if(m.u){a.i+=m.u.i;a.o+=m.u.o;if(m.u.c!=null){a.c+=m.u.c;a.hc=1}if(m.u.e)a.e=1;a.n++}return a},{i:0,o:0,c:0,n:0});
+  if(tu.n>1)h+='<div class="src" style="align-self:center;margin-top:0">Total: ↑'+fmtTok(tu.i)+' ↓'+fmtTok(tu.o)+(tu.e?'~':'')+(tu.hc?' · '+fmtCost(tu.c):'')+'</div>'}
   if(!busy)h+=draftHTML(c);
   if(typing||busy)h+='<div class="m a" id="liveb">'+(live?md(live):'<div class="dots"><span></span><span></span><span></span></div>')+'</div>';
   el.innerHTML=h;el.scrollTop=el.scrollHeight;
@@ -855,6 +897,8 @@ function drawSheet(){
     '<label>Base URL</label><input class="f" id="pu" value="'+esc(p.url||'')+'" placeholder="https://…/v1">'+
     '<label>API key</label><input class="f" id="pk" type="password" value="'+esc(p.key||'')+'" autocomplete="off">'+
     '<label>Model name</label><input class="f" id="pm" value="'+esc(p.model||'')+'" placeholder="e.g. llama-3.3-70b-versatile">'+
+    '<label>Price per 1M input tokens $ (optional)</label><input class="f" id="pci" inputmode="decimal" value="'+qa(p.pin||'')+'">'+
+    '<label>Price per 1M output tokens $ (optional)</label><input class="f" id="pco" inputmode="decimal" value="'+qa(p.pout||'')+'">'+
     '<div class="row"><button class="btn" data-act="psave">Save</button><button class="btn ghost" data-act="pcancel">Cancel</button></div></div>';
     $('pt').value=p.type||'openai';return;
   }
@@ -872,7 +916,7 @@ function drawSheet(){
   const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
   ['iu','ik','im','is'].forEach((id,n)=>{const e=$(id);if(e)e.oninput=()=>{S.imgcfg=Object.assign({},S.imgcfg,{[['url','key','model','size'][n]]:e.value.trim()});save()}});
 }
-function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim()}}
+function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim(),pin:parseFloat($('pci').value)||0,pout:parseFloat($('pco').value)||0}}
 
 document.addEventListener('click',e=>{
   const t=e.target.closest('button');if(!t)return;const d=t.dataset;
@@ -883,6 +927,7 @@ document.addEventListener('click',e=>{
   else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
   else if(d.lang){S.lang=d.lang;rawSave();drawSheet()}
   else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();}
+  else if(d.cc){const code=t.parentElement.querySelector('code');if(code)copyText(code.textContent).then(()=>{t.textContent='Copied ✓';setTimeout(()=>{t.textContent='Copy'},1200)})}
   else if(d.rp){const r=(Array.isArray(ghRepos)?ghRepos:[]).find(x=>x.full_name===d.rp);if(!r)return;
     const c=chat();if(c&&dcount(c)&&c.draft.repo!==r.full_name){if(!confirm('Ei chat er draft muche jabe. Repo bodlabe?'))return;c.draft=null}
     S.repo={full:r.full_name,branch:r.default_branch||'main'};ghTree=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo: '+r.full_name)}
@@ -901,7 +946,7 @@ document.addEventListener('click',e=>{
   else if(d.ren){closePop();const c=S.chats.find(x=>x.id===d.ren);const n=c&&prompt('Chat er naam',c.title);if(n&&n.trim()){c.title=n.trim().slice(0,60);save();renderList();render()}}
   else if(d.regen)regen()
   else if(d.edit!==undefined)editMsg(+d.edit)
-  else if(d.copy){navigator.clipboard?.writeText(chat().msgs[+d.copy].content).then(()=>toast('Copied'))}
+  else if(d.copy){copyText(chat().msgs[+d.copy].content).then(()=>toast('Copied'))}
   else if(d.preset){const x=PRESETS[+d.preset];editing=Object.assign(readForm(),{_new:true,name:x[0],type:x[1],url:x[2]});drawSheet()}
   else if(d.up!==undefined||d.dn!==undefined){const i=+(d.up??d.dn),j=d.up!==undefined?i-1:i+1;if(S.providers[j]){[S.providers[i],S.providers[j]]=[S.providers[j],S.providers[i]];save();drawSheet()}}
   else if(d.tg){S.providers[+d.tg].on=!S.providers[+d.tg].on;save();drawSheet()}
@@ -937,6 +982,9 @@ $('back').onclick=()=>{if(view){view='';$('sheet').classList.remove('on');render
 $('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});
+$('box').addEventListener('paste',e=>{const fs=[...((e.clipboardData&&e.clipboardData.files)||[])].filter(f=>/^image\//.test(f.type)||f.type==='application/pdf');if(fs.length){e.preventDefault();addFiles(fs)}});
+document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault()});
+document.addEventListener('drop',e=>{if(e.dataTransfer&&e.dataTransfer.files.length&&!home){e.preventDefault();addFiles([...e.dataTransfer.files])}});
 applyTheme();render();updateModes();
 setMode('in');
 if(!C().session)showAuth(true);else syncNow(false);
