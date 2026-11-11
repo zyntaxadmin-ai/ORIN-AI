@@ -285,4 +285,294 @@ async function authGo(){
   S.cloud={url,anon,email};rawSave();$('abtn').disabled=true;er.textContent='';
   try{
     const j=await sb(amode==='up'?'/auth/v1/signup':'/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password:pw})},false);
-    if(!j.access_token){er.textContent='Email e 
+    if(!j.access_token){er.textContent='Email e confirm link pathano hoyeche. Confirm kore Log in koro.';setMode('in');return}
+    setSession(j);showAuth(false);$('ap').value='';home=true;await syncNow(true);render();
+  }catch(e){er.textContent=e.message}
+  finally{$('abtn').disabled=false}
+}
+async function logout(){
+  if(!confirm('Log out korbe? Ei device theke local data muche jabe, cloud e save thakbe.'))return;
+  clearTimeout(pt);
+  try{await push()}catch(e){if(!confirm('Cloud e save hoy nai. Tobu logout korbe? Data hariye jete pare.'))return}
+  const c=C();S={providers:[],chats:[],cur:null,system:'',theme:S.theme,ts:0,cloud:{url:c.url,anon:c.anon,email:c.email}};
+  rawSave();applyTheme();$('sheet').classList.remove('on');closeDrawer();home=true;showAuth(true);setMode('in');render();
+}
+function cloudHTML(){
+  const c=C();
+  return '<div class="sec"><h3>Account</h3><p class="h">'+esc(c.email||'')+'<br>'+esc(cst||'ready')+'</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
+}
+function homeHTML(){
+  const c=C(),on=S.providers.filter(p=>p.on&&p.model&&p.url),nm=(c.email||'').split('@')[0];
+  const pv=on.length?'<b>'+esc(on[0].name)+'</b> ('+esc(on[0].model)+')'+(on.length>1?'<br>Fallback: '+on.slice(1).map(p=>esc(p.name)).join(', '):''):'Kono provider chalu nai. Settings e add koro.';
+  return '<div class="home"><div class="logo"><i></i></div><h2>Hello, '+esc(nm)+'</h2><p>'+esc(c.email||'')+'</p><button class="btn" data-act="hnew">+ New chat</button>'+
+  '<div class="sec" style="margin:12px 0 0"><h3>Provider</h3><p class="h" style="margin:0">'+pv+'</p></div>'+
+  '<h3 style="margin-top:18px">Recent chats</h3>'+(S.chats.slice(0,6).map(x=>'<button class="rc" data-open="'+x.id+'">'+esc(x.title)+'</button>').join('')||'<p>Kono chat nai</p>')+
+  '<div class="row"><button class="btn ghost sm" data-act="hset">Settings</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
+}
+
+/* ---------- Providers ---------- */
+function cv(p,m){
+  const im=m.imgs&&m.imgs.length?m.imgs:null,pdf=i=>i.mime==='application/pdf';
+  const tx=m.content||(im?(im.some(pdf)?'Summarize this document.':'Describe this image.'):' ');
+  if(p.type==='gemini')return{role:m.role==='assistant'?'model':'user',parts:(im||[]).map(i=>({inlineData:{mimeType:i.mime,data:i.data}})).concat([{text:tx}])};
+  if(!im)return{role:m.role,content:m.content};
+  if(p.type==='anthropic')return{role:m.role,content:im.map(i=>pdf(i)?{type:'document',source:{type:'base64',media_type:i.mime,data:i.data}}:{type:'image',source:{type:'base64',media_type:i.mime,data:i.data}}).concat([{type:'text',text:tx}])};
+  return{role:m.role,content:[{type:'text',text:tx}].concat(im.map(i=>pdf(i)?{type:'file',file:{filename:i.name||'file.pdf',file_data:'data:application/pdf;base64,'+i.data}}:{type:'image_url',image_url:{url:'data:'+i.mime+';base64,'+i.data}}))};
+}
+async function callProvider(p,history,onDelta){
+  const ctl=new AbortController();curCtl=ctl;let to=setTimeout(()=>ctl.abort(),60000);
+  const sys=S.system.trim();const base=p.url.replace(/\/+$/,'');
+  try{
+    let url,headers={'Content-Type':'application/json'},body;
+    if(p.type==='anthropic'){
+      url=base+'/v1/messages';headers['x-api-key']=p.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
+      body={model:p.model,max_tokens:4096,stream:true,messages:history.map(m=>cv(p,m))};if(sys)body.system=sys;
+    }else if(p.type==='gemini'){
+      url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':streamGenerateContent?alt=sse&key='+encodeURIComponent(p.key);
+      body={contents:history.map(m=>cv(p,m))};
+      if(sys)body.systemInstruction={parts:[{text:sys}]};
+    }else{
+      url=base+'/chat/completions';if(p.key)headers.Authorization='Bearer '+p.key;
+      body={model:p.model,stream:true,messages:(sys?[{role:'system',content:sys}]:[]).concat(history.map(m=>cv(p,m)))};
+    }
+    const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
+    if(!r.ok){const j=await r.json().catch(()=>({}));const e=Array.isArray(j)?j[0]:j;throw new Error((e&&e.error&&(e.error.message||e.error))||r.status+' '+r.statusText)}
+    const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
+    for(;;){
+      clearTimeout(to);to=setTimeout(()=>ctl.abort(),60000);
+      const {done,value}=await rd.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop();
+      for(const ln of lines){
+        if(!ln.startsWith('data:'))continue;
+        const d=ln.slice(5).trim();if(!d||d==='[DONE]')continue;
+        let j;try{j=JSON.parse(d)}catch(_){continue}
+        if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
+        const t=p.type==='anthropic'?(j.type==='content_block_delta'?j.delta&&j.delta.text:''):
+          p.type==='gemini'?((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(x=>x.text||'').join(''):
+          j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content;
+        if(t){out+=t;onDelta(out)}
+      }
+    }
+    if(!out)throw new Error('Empty reply');
+    return out;
+  }catch(e){
+    if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout (60s)');
+    if(e instanceof TypeError)throw new Error('Network/CORS block');
+    throw e;
+  }finally{clearTimeout(to)}
+}
+let live='',raf=0;
+let lastT=0;
+const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)return;
+  const now=performance.now();if(now-lastT<60){draw();return}lastT=now;
+  const el=$('liveb'),m=$('msgs');
+  if(!el){render(true);return}
+  const near=m.scrollHeight-m.scrollTop-m.clientHeight<140;
+  el.innerHTML=md(live);
+  if(near)m.scrollTop=m.scrollHeight;
+})};
+let pend=[];
+function fullText(m){return (m.content||'')+(m.files||[]).map(f=>'\n\n[File: '+f.name+']\n'+f.text).join('')}
+function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?'📕':'📄')+'<span>'+esc(a.name)+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
+function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
+async function addFiles(list){
+  for(const f of list){
+    if(pend.length>=6){toast('Max 6 ta file');break}
+    try{
+      if(f.type.startsWith('image/'))pend.push({kind:'image',name:f.name,mime:'image/jpeg',data:await readImg(f)});
+      else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){if(f.size>10e6)toast(f.name+' onek boro (max 10MB)');else pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)})}
+      else if(f.size>200000)toast(f.name+' onek boro (max 200KB)');
+      else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': ei file support kore na');continue}pend.push({kind:'text',name:f.name,text:t.slice(0,60000)})}
+    }catch(e){toast(f.name+' porte parlam na')}
+  }
+  renderTray();
+}
+function updatePill(){const p=S.pick&&S.providers.find(x=>x.id===S.pick&&x.on);$('modelb').textContent=(p?p.name:'Auto')+' ▾'}
+function closePop(){['pov','pop'].forEach(i=>{const e=$(i);if(e)e.remove()})}
+function pop(anchor,html){
+  closePop();const r=anchor.getBoundingClientRect();
+  const o=document.createElement('div');o.id='pov';o.onclick=closePop;
+  const p=document.createElement('div');p.id='pop';p.innerHTML=html;
+  p.style.left=Math.max(8,Math.min(r.left,innerWidth-250))+'px';if(r.top<260)p.style.top=(r.bottom+8)+'px';else p.style.bottom=(innerHeight-r.top+8)+'px';
+  document.body.append(o,p);
+}
+function modelMenu(){
+  const l=S.providers.filter(p=>p.on&&p.model&&p.url);
+  return '<button class="pi" data-pk="auto"><span><b>Auto</b><small>Fallback order e cholbe</small></span>'+(!S.pick?'<i>✓</i>':'')+'</button>'+
+  l.map(p=>'<button class="pi" data-pk="'+p.id+'"><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></span>'+(S.pick===p.id?'<i>✓</i>':'')+'</button>').join('');
+}
+let rec=null,recOn=false;
+function toggleMic(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('Ei browser e voice nai. Chrome e try koro');return}
+  if(recOn){rec&&rec.stop();return}
+  const box=$('box'),base=box.value;
+  rec=new SR();rec.lang=S.lang||'bn-BD';rec.interimResults=true;rec.continuous=false;
+  rec.onstart=()=>{recOn=true;$('mic').classList.add('rec')};
+  rec.onresult=e=>{let t='';for(const r of e.results)t+=r[0].transcript;box.value=base+(base&&!/\s$/.test(base)?' ':'')+t;box.dispatchEvent(new Event('input'))};
+  rec.onerror=e=>{toast(e.error==='not-allowed'||e.error==='service-not-allowed'?'Mic permission dao':e.error==='no-speech'?'Kichu shunte pai ni':'Voice error: '+e.error)};
+  rec.onend=()=>{recOn=false;$('mic').classList.remove('rec')};
+  try{rec.start()}catch(e){toast('Mic chalu hoy ni')}
+}
+function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">Mic er bhasha. Chrome e bhalo kaj kore.</p><div class="row" style="margin-top:0">'+[['bn-BD','Bangla'],['en-US','English'],['hi-IN','Hindi']].map(x=>'<button class="btn '+((S.lang||'bn-BD')===x[0]?'':'ghost')+' sm" data-lang="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>'}
+let curCtl=null,stopped=false;
+function setBusyUI(on){const b=$('sendb');b.textContent=on?'■':'↑';b.setAttribute('aria-label',on?'Stop':'Send')}
+function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>ok(r.result.split(',')[1]);r.readAsDataURL(f)})}
+function provList(){let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=[o]}return l}
+async function run(c,list){
+  const history=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m):m.content,imgs:m.imgs}));
+  const fails=[];let done=false;
+  for(const p of list){
+    if(stopped)break;
+    try{
+      live='';const out=await callProvider(p,history,t=>{live=t;draw()});
+      c.msgs.push({role:'assistant',content:out,by:p.name,skipped:fails.slice()});done=true;break;
+    }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,skipped:[]});done=true;break}fails.push(p.name+': '+e.message)}
+  }
+  if(!done&&!stopped)c.msgs.push({role:'error',content:'Sob provider fail korse.\n'+fails.join('\n')});
+  busy=false;live='';setBusyUI(false);save();render();
+}
+function regen(){
+  const c=chat();if(!c||busy)return;
+  while(c.msgs.length&&c.msgs[c.msgs.length-1].role!=='user')c.msgs.pop();
+  if(!c.msgs.length)return;
+  const list=provList();if(!list.length){toast('Age Settings e provider add koro');return}
+  busy=true;stopped=false;setBusyUI(true);save();render(true);run(c,list);
+}
+function editMsg(i){
+  const c=chat();if(!c||busy)return;const m=c.msgs[i];if(!m||m.role!=='user')return;
+  if(i<c.msgs.length-1&&!confirm('Ei message er por er sob message muche jabe. Edit korbe?'))return;
+  $('box').value=m.content||'';pend=[];
+  (m.imgs||[]).forEach(x=>pend.push({kind:x.mime==='application/pdf'?'pdf':'image',name:x.name||'image',mime:x.mime,data:x.data}));
+  (m.files||[]).forEach(f=>pend.push({kind:'text',name:f.name,text:f.text}));
+  c.msgs.splice(i);save();render();renderTray();$('box').dispatchEvent(new Event('input'));$('box').focus();
+}
+let busy=false;
+async function send(){
+  const txt=$('box').value.trim();if((!txt&&!pend.length)||busy)return;
+  let list=S.providers.filter(p=>p.on&&p.model&&p.url);
+  if(S.pick){const o=list.find(p=>p.id===S.pick);if(o)list=[o]}
+  if(recOn&&rec)rec.stop();
+  if(!list.length){toast('Age Settings e provider add koro');openSheet();return}
+  if(!chat())newChat();
+  const c=chat();const um={role:'user',content:txt};
+  const ims=pend.filter(a=>a.kind==='image'||a.kind==='pdf'),fl=pend.filter(a=>a.kind==='text');
+  if(ims.length){um.imgs=ims.map(a=>({mime:a.mime,data:a.data,name:a.name}));um.atts=ims.map(a=>({name:a.name,pdf:a.kind==='pdf'}))}
+  if(fl.length)um.files=fl.map(a=>({name:a.name,text:a.text}));
+  if(c.title==='New chat')c.title=(txt||(pend[0]&&pend[0].name)||'File').slice(0,32);
+  c.msgs.push(um);pend=[];renderTray();
+  $('box').value='';$('box').style.height='auto';busy=true;stopped=false;setBusyUI(true);save();render(true);
+  await run(c,list);
+}
+
+/* ---------- Render ---------- */
+function render(typing){
+  const c=chat();
+  updatePill();
+  $('form').style.display=home?'none':'';
+  if(home){$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();return}$('title').textContent=c?c.title:'Orin';
+  const el=$('msgs');
+  if(!c||!c.msgs.length&&!typing){
+    el.innerHTML='<div class="empty"><h2>Ki jante chao?</h2><p>'+(S.providers.length?'Prothom provider fail korle porer ta te auto cole jabe.':'Shuru korar age ⚙ Settings e akta provider add koro.')+'</p></div>';return}
+  let h='';
+  const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
+    if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r"><button data-edit="'+i+'">Edit</button></div>';
+    else if(m.role==='assistant'){
+      h+='<div class="m a">'+md(m.content)+'</div><div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+'</span><button data-copy="'+i+'">Copy</button>'+(i===c.msgs.length-1?'<button data-regen="1">Regenerate</button>':'')+'</div>';
+    }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta"><button data-regen="1">Retry</button></div>':'');
+  });
+  if(typing||busy)h+='<div class="m a" id="liveb">'+(live?md(live):'<div class="dots"><span></span><span></span><span></span></div>')+'</div>';
+  el.innerHTML=h;el.scrollTop=el.scrollHeight;
+}
+let q='';
+function renderList(){
+  const l=S.chats.filter(c=>!q||c.title.toLowerCase().includes(q)||c.msgs.some(m=>(m.content||'').toLowerCase().includes(q)));
+  const o=l.filter(c=>c.pin).concat(l.filter(c=>!c.pin));
+  $('clist').innerHTML=o.map(c=>'<div class="ci '+(c.id===S.cur?'cur':'')+'"><button class="t" data-open="'+c.id+'">'+(c.pin?'📌 ':'')+esc(c.title)+'</button><button class="x" data-more="'+c.id+'" aria-label="Options">⋯</button></div>').join('')||'<p class="empty">Kono chat nai</p>';
+}
+function openDrawer(){renderList();$('drawer').classList.add('on');$('ov').classList.add('on')}
+function closeDrawer(){$('drawer').classList.remove('on');$('ov').classList.remove('on')}
+
+/* ---------- Settings ---------- */
+let editing=null;
+function openSheet(){drawSheet();$('sheet').classList.add('on')}
+function drawSheet(){
+  const b=$('sbody');
+  if(editing){
+    const p=editing;
+    b.innerHTML='<div class="sec"><h3>'+(p._new?'Add provider':'Edit provider')+'</h3>'+
+    (p._new?'<label>Quick fill</label><div class="chips">'+PRESETS.map((x,i)=>'<button type="button" class="chip" data-preset="'+i+'">'+x[0]+'</button>').join('')+'</div>':'')+
+    '<label>Name</label><input class="f" id="pn" value="'+esc(p.name||'')+'">'+
+    '<label>Format</label><select class="f" id="pt"><option value="openai">OpenAI-compatible (most providers)</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option></select>'+
+    '<label>Base URL</label><input class="f" id="pu" value="'+esc(p.url||'')+'" placeholder="https://…/v1">'+
+    '<label>API key</label><input class="f" id="pk" type="password" value="'+esc(p.key||'')+'" autocomplete="off">'+
+    '<label>Model name</label><input class="f" id="pm" value="'+esc(p.model||'')+'" placeholder="e.g. llama-3.3-70b-versatile">'+
+    '<div class="row"><button class="btn" data-act="psave">Save</button><button class="btn ghost" data-act="pcancel">Cancel</button></div></div>';
+    $('pt').value=p.type||'openai';return;
+  }
+  b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Upor theke nichey order e try hobe. Fail korle porer ta.</p>'+
+   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></div>'+
+   '<button class="sm-ib" data-up="'+i+'" aria-label="Move up">▲</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">▼</button>'+
+   '<button class="sm-ib" data-tg="'+i+'" aria-label="Toggle">'+(p.on?'●':'○')+'</button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">✎</button><button class="sm-ib" data-rm="'+i+'" aria-label="Delete">✕</button></div>').join('')||'<p class="h">Kono provider nai.</p>')+
+   '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>'+
+   '<div class="sec"><h3>System prompt</h3><p class="h">Prothom e AI ke ki bole dibe (optional).</p><textarea class="f" id="sp" rows="3">'+esc(S.system)+'</textarea></div>'+
+   '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+t+'</button>').join('')+'</div></div>'+
+   voiceHTML()+cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
+   '<p class="h" style="margin-top:10px">API key shudhu ei browser e save thake. Backup file onno kauke dio na.</p></div>';
+  const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
+}
+function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim()}}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;const d=t.dataset;
+  if(d.open){S.cur=d.open;home=false;save();closeDrawer();render()}
+  else if(d.del){closePop();S.chats=S.chats.filter(c=>c.id!==d.del);if(S.cur===d.del)S.cur=S.chats[0]?.id||null;save();renderList();render()}
+  else if(d.rmp!==undefined){pend.splice(+d.rmp,1);renderTray()}
+  else if(d.add){closePop();$(d.add).click()}
+  else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
+  else if(d.lang){S.lang=d.lang;rawSave();drawSheet()}
+  else if(d.more){const c=S.chats.find(x=>x.id===d.more);pop(t,'<button class="pi" data-pin="'+d.more+'"><span>📌 '+(c&&c.pin?'Unpin':'Pin')+'</span></button><button class="pi" data-ren="'+d.more+'"><span>✎ Rename</span></button><button class="pi" data-del="'+d.more+'"><span>🗑 Delete</span></button>')}
+  else if(d.pin){closePop();const c=S.chats.find(x=>x.id===d.pin);if(c){c.pin=!c.pin;save();renderList()}}
+  else if(d.ren){closePop();const c=S.chats.find(x=>x.id===d.ren);const n=c&&prompt('Chat er naam',c.title);if(n&&n.trim()){c.title=n.trim().slice(0,60);save();renderList();render()}}
+  else if(d.regen)regen()
+  else if(d.edit!==undefined)editMsg(+d.edit)
+  else if(d.copy){navigator.clipboard?.writeText(chat().msgs[+d.copy].content).then(()=>toast('Copied'))}
+  else if(d.preset){const x=PRESETS[+d.preset];editing=Object.assign(readForm(),{_new:true,name:x[0],type:x[1],url:x[2]});drawSheet()}
+  else if(d.up!==undefined||d.dn!==undefined){const i=+(d.up??d.dn),j=d.up!==undefined?i-1:i+1;if(S.providers[j]){[S.providers[i],S.providers[j]]=[S.providers[j],S.providers[i]];save();drawSheet()}}
+  else if(d.tg){S.providers[+d.tg].on=!S.providers[+d.tg].on;save();drawSheet()}
+  else if(d.ed){editing=Object.assign({},S.providers[+d.ed],{_idx:+d.ed});drawSheet()}
+  else if(d.rm){if(confirm('Delete this provider?')){S.providers.splice(+d.rm,1);save();drawSheet()}}
+  else if(d.theme){S.theme=d.theme;save();applyTheme();drawSheet()}
+  else if(d.act==='padd'){editing={_new:true,type:'openai'};drawSheet()}
+  else if(d.act==='pcancel'){editing=null;drawSheet()}
+  else if(d.act==='psave'){const f=readForm();if(!f.name||!f.url||!f.model){toast('Name, URL ar model dorkar');return}
+    if(editing._new)S.providers.push(Object.assign({id:uid(),on:true},f));else Object.assign(S.providers[editing._idx],f);
+    editing=null;save();drawSheet();toast('Saved')}
+  else if(d.act==='csync')syncNow().then(drawSheet)
+  else if(d.act==='cout')logout()
+  else if(d.act==='hnew')newChat()
+  else if(d.act==='hset'){editing=null;openSheet()}
+  else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.assign({},S,{cloud:undefined}),strip)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
+  else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
+});
+['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
+$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files</span></button>');
+$('modelb').onclick=e=>pop(e.currentTarget,modelMenu());
+$('mic').onclick=toggleMic;
+$('cq').oninput=e=>{q=e.target.value.toLowerCase();renderList()};
+$('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
+$('newc').onclick=$('newc2').onclick=newChat;
+$('gear').onclick=()=>{editing=null;openSheet()};
+$('back').onclick=()=>{if(editing){editing=null;drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
+$('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};
+$('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>700){e.preventDefault();send()}});
+let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});
+applyTheme();render();
+setMode('in');
+if(!C().session)showAuth(true);else syncNow(false);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow(false)});
+try{if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js')}catch(e){}
+</script>
+</body>
+</html>
