@@ -845,13 +845,17 @@ async function tool(c,name,a){
   if(name==='write_file'){
     if(typeof a.content!=='string')throw new Error('content dorkar');
     if(a.content.length>300000)throw new Error('File onek boro (max 300KB)');
-    const t=await getTree();d.files[p]={content:a.content,ex:t.paths.has(p)};rawSave();
+    const t=await getTree();
+    if(t.paths.has(p)){let o=null;try{o=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true})}catch(e){}
+      if(o!==null&&o.trimEnd()===a.content.trimEnd()){delete d.files[p];rawSave();return 'NO CHANGE: new content is identical to the current file, nothing staged. Tell the user the file already looks like this.'}}
+    d.files[p]={content:a.content,ex:t.paths.has(p)};rawSave();
     return 'Staged '+p+' ('+a.content.split('\n').length+' lines)';
   }
   if(name==='edit_file'){
     const o=String(a.old_text||'');if(!o)throw new Error('old_text khali');
     const cur=await readFull(c,p),n=cur.split(o).length-1;
     if(n!==1)throw new Error(n?'old_text '+n+' jaygay ache, aro boro kore dao':'old_text file e nai');
+    if(o===String(a.new_text||''))throw new Error('old_text ar new_text same, kono change nai');
     const t=await getTree();d.files[p]={content:cur.replace(o,()=>String(a.new_text||'')),ex:t.paths.has(p)};rawSave();
     return 'Edited '+p;
   }
@@ -1073,16 +1077,17 @@ async function pushDraft(c){
       prev=head.object.sha;
       if(S.repo&&S.repo.full===R&&S.repo.branch===B){try{modes=(await getTree()).modes}catch(e){}}
       let target=B;
-      if(wantPR){
-        target='orin/'+(msg.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30)||'update')+'-'+Math.random().toString(36).slice(2,6);
-        await gh('/repos/'+R+'/git/refs',{method:'POST',body:{ref:'refs/heads/'+target,sha:prev}});
-      }
       const cm=await gh('/repos/'+R+'/git/commits/'+prev),tree=[];
       for(const [p,f] of fs){
         if(f.del)tree.push({path:p,mode:modes[p]||'100644',type:'blob',sha:null});
         else{const b=await gh('/repos/'+R+'/git/blobs',{method:'POST',body:f.bin?{content:f.bin,encoding:'base64'}:{content:f.content,encoding:'utf-8'}});tree.push({path:p,mode:modes[p]||'100644',type:'blob',sha:b.sha})}
       }
       const t=await gh('/repos/'+R+'/git/trees',{method:'POST',body:{base_tree:cm.tree.sha,tree}});
+      if(t.sha===cm.tree.sha)throw new Error('Kono change nai: file gulo ager motoi. Push lagbe na.');
+      if(wantPR){
+        target='orin/'+(msg.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30)||'update')+'-'+Math.random().toString(36).slice(2,6);
+        await gh('/repos/'+R+'/git/refs',{method:'POST',body:{ref:'refs/heads/'+target,sha:prev}});
+      }
       const nc=await gh('/repos/'+R+'/git/commits',{method:'POST',body:{message:msg,tree:t.sha,parents:[prev]}});
       await gh('/repos/'+R+'/git/refs/heads/'+enc(target),{method:'PATCH',body:{sha:nc.sha}});sha=nc.sha;
       if(wantPR){
