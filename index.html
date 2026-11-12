@@ -212,15 +212,16 @@ form.in{padding:4px 12px 10px}
 .mrow:active{background:var(--ac2)}.mrow .mi{font-size:22px;width:36px;height:36px;display:grid;place-items:center;background:var(--ac2);border-radius:10px;flex:none}
 .mrow .mt{flex:1;min-width:0}.mrow .mt b{display:block;font-size:15.5px}.mrow .mt small{display:block;color:var(--mute);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mrow .ar{color:var(--mute);font-size:20px}
 .pc>span{display:flex;flex-direction:column;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pcs{font-size:11px;color:var(--mute)}
+svg.ic{vertical-align:-3px;margin-right:6px;flex:none}.mi svg.ic,.pc svg.ic,.pc button svg.ic,.ib svg.ic{margin:0}.pi span{display:flex;align-items:center}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <button class="ib" id="menu" aria-label="Chats">☰</button>
+    <button class="ib" id="menu" aria-label="Chats"></button>
     <h1 id="title">Orin</h1>
-    <button class="ib" id="newc" aria-label="New chat">✎</button>
-    <button class="ib" id="gear" aria-label="Settings">⚙</button>
+    <button class="ib" id="newc" aria-label="New chat"></button>
+    <button class="ib" id="gear" aria-label="Settings"></button>
   </header>
   <div id="msgs"></div>
   <div id="rchip"></div>
@@ -231,8 +232,8 @@ form.in{padding:4px 12px 10px}
       <div class="bar">
         <button type="button" class="cb" id="plus" aria-label="Add">+</button>
         <button type="button" class="pill" id="modelb">Auto ▾</button>
-        <button type="button" class="cb t" id="webb" aria-label="Web search" title="Web search">🌐</button>
-        <button type="button" class="cb t" id="imgb" aria-label="Image generation" title="Image generation">🎨</button>
+        <button type="button" class="cb t" id="webb" aria-label="Web search" title="Web search"></button>
+        <button type="button" class="cb t" id="imgb" aria-label="Image generation" title="Image generation"></button>
         <span class="sp1"></span>
         <button type="button" class="cb" id="mic" aria-label="Voice input"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
         <button class="send" id="sendb" aria-label="Send">↑</button>
@@ -248,7 +249,7 @@ form.in{padding:4px 12px 10px}
 
 <div class="ov" id="ov"></div>
 <aside class="drawer" id="drawer">
-  <div class="dh"><button class="brand" id="homeb" aria-label="Home"><i></i>Orin</button><button class="ib" id="dclose" aria-label="Close">✕</button></div>
+  <div class="dh"><button class="brand" id="homeb" aria-label="Home"><i></i>Orin</button><button class="ib" id="dclose" aria-label="Close"></button></div>
   <button class="btn" id="newc2">+ New chat</button>
   <input class="f" id="cq" placeholder="Search chats…" style="margin-top:10px"><div class="list" id="clist"></div>
   <div class="dfoot"><button id="dset">Settings</button></div>
@@ -305,6 +306,45 @@ const IC={
  x:_s('<path d="M6 6l12 12M18 6L6 18"/>'),
  dn:_s('<path d="M12 5v14M5 12l7 7 7-7"/>')
 };
+const IX={
+ check:'<path d="M20 6L9 17l-5-5"/>',
+ file:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>',
+ pdf:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
+ note:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
+ folder:'<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>',
+ search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+ branch:'<path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>',
+ pr:'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7M6 9v12"/>',
+ trash:'<path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6"/>',
+ undo:'<path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 00-4-4H4"/>',
+ scissors:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>',
+ plusc:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+ issue:'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ okc:'<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
+ xc:'<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+ spark:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7z"/>',
+ bot:'<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V5M9 13.5v1.5M15 13.5v1.5"/><circle cx="12" cy="3.8" r="1.2"/>',
+ github:'<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/>',
+ cloud:'<path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/>',
+ save:'<path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+ hist:'<path d="M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
+ clip:'<path d="M21 11.5l-9 9a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.4-8.4"/>',
+ camera:'<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
+ chat:'<path d="M21 12a8 8 0 01-11.6 7.1L3 21l1.9-5.4A8 8 0 1121 12z"/>',
+ palette:'<path d="M12 3a9 9 0 100 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.8 1.8-1.8H17a4 4 0 004-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/>',
+ lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+ wrench:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>',
+ box:'<path d="M21 8l-9-5-9 5v8l9 5 9-5zM3.3 7.5L12 12.5l8.7-5M12 22V12.5"/>',
+ edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>',
+ pin:'<path d="M12 17v5M8 3h8l-1 6 3 4H6l3-4z"/>',
+ up:'<path d="M12 19V5M5 12l7-7 7 7"/>',
+ x:'<path d="M6 6l12 12M18 6L6 18"/>',
+ refresh:'<path d="M20 11a8 8 0 10-2.2 5.6M20 4v7h-7"/>',
+ globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/>',
+ image:'<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-9 9"/>'
+};
+const ico=(k,w)=>_s(IX[k]||'',w||16).replace('<svg','<svg class="ic"');
 const ibtn=(a,l,k)=>'<button '+a+' aria-label="'+l+'" title="'+l+'">'+IC[k]+'</button>';
 function initIcons(){const m={menu:'menu',newc:'edit',gear:'gear',plus:'plus',webb:'globe',imgb:'image',mic:'mic',dclose:'x',tobot:'dn'};for(const k in m){const e=$(k);if(e)e.innerHTML=IC[m[k]]}$('dset').innerHTML=IC.gear+'<span>Settings</span>';setBusyUI(false)}
 const SUG=[['Email likho','Professional email draft','Ekta professional email likhte help koro: '],['Code bujhao','Step by step explain','Ei code ta step by step bujhiye dao:\n'],['Idea dao','Notun project er idea','Amake ekta project er jonno 5 ta notun idea dao.'],['Bangla te likho','Golpo, kobita, lekha','Bangla te ekta chotto golpo likho.']];
@@ -571,7 +611,7 @@ function smartPlan(c){
   return {res,n};
 }
 const ctxOf=p=>+p.ctx||(p.type==='gemini'?1e6:p.type==='anthropic'?2e5:128e3);
-function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?'📕':'📄')+'<span>'+esc(a.name)+(a.kind==='text'&&a.tok?'<small class="pcs">'+fmtSz(a.size||a.text.length)+' · ~'+fmtTok(a.tok)+' token'+(a.tok>fbudget(curCtx())?' · 🔎 Smart':'')+'</small>':'')+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
+function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?ico('pdf'):ico('file'))+'<span>'+esc(a.name)+(a.kind==='text'&&a.tok?'<small class="pcs">'+fmtSz(a.size||a.text.length)+' · ~'+fmtTok(a.tok)+' token'+(a.tok>fbudget(curCtx())?' · Smart':'')+'</small>':'')+'</span><button data-rmp="'+i+'" aria-label="Remove">'+ico('x',14)+'</button></div>').join('')}
 function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
 async function addFiles(list){
   for(const f of list){
@@ -679,8 +719,8 @@ function pop(anchor,html){
 }
 function modelMenu(){
   const l=S.providers.filter(p=>p.on&&p.model&&p.url);
-  return '<button class="pi" data-pk="auto"><span><b>Auto</b><small>Fallback order e cholbe</small></span>'+(!S.pick?'<i>✓</i>':'')+'</button>'+
-  l.map(p=>'<button class="pi" data-pk="'+p.id+'"><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></span>'+(S.pick===p.id?'<i>✓</i>':'')+'</button>').join('');
+  return '<button class="pi" data-pk="auto"><span><b>Auto</b><small>Fallback order e cholbe</small></span>'+(!S.pick?'<i>'+ico('check',16)+'</i>':'')+'</button>'+
+  l.map(p=>'<button class="pi" data-pk="'+p.id+'"><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></span>'+(S.pick===p.id?'<i>'+ico('check',16)+'</i>':'')+'</button>').join('');
 }
 let rec=null,recOn=false;
 function toggleMic(){
@@ -697,8 +737,8 @@ function toggleMic(){
 }
 const gl=t=>'<div class="gl">'+t+'</div>';
 function themeHTML(){return '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+t+'</button>').join('')+'</div></div>'}
-function webHTML(){return '<div class="sec"><h3>Web search</h3><p class="h">Composer er 🌐 chalu korle message pathanor age web e khuje AI ke dewa hobe. <b>Tavily</b> API key lagbe (tavily.com e free plan ache).</p><input class="f" id="tk" type="password" autocomplete="off" placeholder="tvly-…" value="'+qa((S.search||{}).key)+'"></div>'}
-function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image generation</h3><p class="h">Composer er 🎨 chalu korle message ta chobir prompt hishebe jabe. OpenAI-compatible <code>/images/generations</code> API lagbe.</p><div class="chips">'+IMGP.map((x,i)=>'<button type="button" class="chip" data-ipre="'+i+'">'+x[0]+'</button>').join('')+'</div>'+
+function webHTML(){return '<div class="sec"><h3>Web search</h3><p class="h">Composer er globe icon chalu korle message pathanor age web e khuje AI ke dewa hobe. <b>Tavily</b> API key lagbe (tavily.com e free plan ache).</p><input class="f" id="tk" type="password" autocomplete="off" placeholder="tvly-…" value="'+qa((S.search||{}).key)+'"></div>'}
+function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image generation</h3><p class="h">Composer er image icon chalu korle message ta chobir prompt hishebe jabe. OpenAI-compatible <code>/images/generations</code> API lagbe.</p><div class="chips">'+IMGP.map((x,i)=>'<button type="button" class="chip" data-ipre="'+i+'">'+x[0]+'</button>').join('')+'</div>'+
  '<label>Base URL</label><input class="f" id="iu" value="'+qa(g.url)+'" placeholder="https://api.openai.com/v1">'+
  '<label>API key</label><input class="f" id="ik" type="password" autocomplete="off" value="'+qa(g.key)+'">'+
  '<label>Model</label><input class="f" id="im" value="'+qa(g.model)+'" placeholder="gpt-image-1">'+
@@ -712,7 +752,7 @@ function provList(){let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick)
 const qa=t=>esc(t||'').replace(/"/g,'&quot;');
 const srcOf=c=>{const u=c.msgs[c.msgs.length-1];return u&&u.web&&u.web.r?u.web.r.map(x=>({title:x.title,url:x.url})):undefined};
 const webCtx=m=>m.web&&m.web.r&&m.web.r.length?'\n\n[Web search results for "'+m.web.q+'" (today: '+new Date().toDateString()+'). Use them if helpful and cite as [n].]\n'+m.web.r.map((x,i)=>'['+(i+1)+'] '+x.title+' ('+x.url+')\n'+x.content).join('\n\n'):'';
-const srcHTML=s=>s&&s.length?'<div class="src">🌐 '+s.map((x,i)=>/^https?:\/\//.test(x.url)?'<a href="'+qa(x.url)+'" target="_blank" rel="noopener">['+(i+1)+'] '+esc((x.title||x.url).slice(0,50))+'</a>':'').join('')+'</div>':'';
+const srcHTML=s=>s&&s.length?'<div class="src">'+ico('globe',14)+' '+s.map((x,i)=>/^https?:\/\//.test(x.url)?'<a href="'+qa(x.url)+'" target="_blank" rel="noopener">['+(i+1)+'] '+esc((x.title||x.url).slice(0,50))+'</a>':'').join('')+'</div>':'';
 async function webSearch(qry){
   const ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),20000);
   try{
@@ -812,12 +852,12 @@ function repoListHTML(){
   if(ghRepos===undefined)return '<p class="h">Loading…</p>';
   if(typeof ghRepos==='string')return '<p class="h" style="color:var(--err)">'+esc(ghRepos)+'</p>';
   const l=ghRepos.filter(r=>!rfilter||r.full_name.toLowerCase().includes(rfilter));
-  return l.map(r=>'<button class="rc" data-rp="'+qa(r.full_name)+'">'+(S.repo&&S.repo.full===r.full_name?'✓ ':'')+esc(r.full_name)+(r.private?' 🔒':'')+'</button>').join('')||'<p class="h">Kono repo pailam na</p>';
+  return l.map(r=>'<button class="rc" data-rp="'+qa(r.full_name)+'">'+(S.repo&&S.repo.full===r.full_name?ico('check',14):'')+esc(r.full_name)+(r.private?' '+ico('lock',13):'')+'</button>').join('')||'<p class="h">Kono repo pailam na</p>';
 }
 function loadHist(){const R=S.repo.full,B=S.repo.branch;hist={repo:R,branch:B,loading:1};gh('/repos/'+R+'/commits?sha='+encodeURIComponent(B)+'&per_page=25').then(j=>{hist={repo:R,branch:B,list:j}}).catch(e=>{hist={repo:R,branch:B,err:e.message}}).finally(()=>{if(view==='repo'&&rsub==='hist'&&$('rsub'))$('rsub').innerHTML=histHTML()})}
 function histHTML(){
   if(!hist||hist.loading)return '<p class="h">Loading…</p>';if(hist.err)return '<p class="h">'+esc(hist.err)+'</p>';
-  return '<p class="h">Restore = notun commit ja purono state e fire jay. Kono history mushe jay na (abar restore kore ferot ana jay).</p>'+hist.list.map((x,i)=>'<div class="hi"><b>'+esc(String((x.commit&&x.commit.message)||'').split('\n')[0].slice(0,80))+'</b><small>'+esc(x.sha.slice(0,7))+' · '+esc(new Date(x.commit.author.date).toLocaleString())+' · '+esc(x.commit.author.name||'')+'</small>'+(i?'<button class="chip" data-hrest="'+qa(x.sha)+'">↩ Ekhane restore koro</button>':'<span class="chip">ekhon</span>')).join('</div>')+'</div>';
+  return '<p class="h">Restore = notun commit ja purono state e fire jay. Kono history mushe jay na (abar restore kore ferot ana jay).</p>'+hist.list.map((x,i)=>'<div class="hi"><b>'+esc(String((x.commit&&x.commit.message)||'').split('\n')[0].slice(0,80))+'</b><small>'+esc(x.sha.slice(0,7))+' · '+esc(new Date(x.commit.author.date).toLocaleString())+' · '+esc(x.commit.author.name||'')+'</small>'+(i?'<button class="chip" data-hrest="'+qa(x.sha)+'">'+ico('undo',14)+'Ekhane restore koro</button>':'<span class="chip">ekhon</span>')).join('</div>')+'</div>';
 }
 async function restoreTo(sha){
   const R=S.repo.full,B=S.repo.branch;
@@ -826,13 +866,13 @@ async function restoreTo(sha){
     const head=await gh('/repos/'+R+'/git/ref/heads/'+enc(B)),cm=await gh('/repos/'+R+'/git/commits/'+sha);
     const nc=await gh('/repos/'+R+'/git/commits',{method:'POST',body:{message:'Restore to '+sha.slice(0,7)+' (via Orin)',tree:cm.tree.sha,parents:[head.object.sha]}});
     await gh('/repos/'+R+'/git/refs/heads/'+enc(B),{method:'PATCH',body:{sha:nc.sha}});
-    ghTree=null;toast('Restore hoyeche ✓');loadHist();if(view==='repo')drawSheet();
+    ghTree=null;toast('Restore hoyeche');loadHist();if(view==='repo')drawSheet();
   }catch(e){toast(e.message)}
 }
 function fileListHTML(){
   if(flist===undefined)return '<p class="h">Loading…</p>';if(typeof flist==='string')return '<p class="h">'+esc(flist)+'</p>';
   const q=fq.toLowerCase(),l=flist.filter(x=>!q||x.toLowerCase().includes(q));
-  return '<div class="fl">'+l.slice(0,80).map(x=>'<button data-fatt="'+qa(x)+'">📄 '+esc(x)+'</button>').join('')+'</div>'+(l.length>80?'<p class="h">… aro '+(l.length-80)+' ta, search kore khujo</p>':l.length?'':'<p class="h">Kichu pai ni</p>');
+  return '<div class="fl">'+l.slice(0,80).map(x=>'<button data-fatt="'+qa(x)+'">'+ico('file',14)+esc(x)+'</button>').join('')+'</div>'+(l.length>80?'<p class="h">… aro '+(l.length-80)+' ta, search kore khujo</p>':l.length?'':'<p class="h">Kichu pai ni</p>');
 }
 function loadFiles(){flist=undefined;getTree().then(t=>{flist=[...t.paths].sort()}).catch(e=>{flist=e.message}).finally(()=>{if(view==='repo'&&rsub==='files'&&$('fl'))$('fl').innerHTML=fileListHTML()})}
 function subHTML(){
@@ -843,7 +883,7 @@ function subHTML(){
 function updateChip(){
   const e=$('rchip');if(!S.repo){e.className='';e.innerHTML='';return}
   const c=chat(),n=c?dcount(c):0;
-  e.className='on';e.innerHTML='<button data-act="ropen">📦 '+esc(S.repo.full)+' · '+esc(S.repo.branch)+(n?' · '+n+' draft':'')+(agentOn()?'':' · token nai')+'</button><button data-act="rclear" aria-label="Remove repo">✕</button>';
+  e.className='on';e.innerHTML='<button data-act="ropen">'+ico('box',15)+esc(S.repo.full)+' · '+esc(S.repo.branch)+(n?' · '+n+' draft':'')+(agentOn()?'':' · token nai')+'</button><button data-act="rclear" aria-label="Remove repo">'+ico('x',14)+'</button>';
 }
 function okPath(p){
   if(typeof p!=='string')throw new Error('path dorkar');
@@ -1129,7 +1169,7 @@ function agentSys0(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
   return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message',edit_many:'✂️ edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'🔎 search '+(a.query||''),list_issues:'🐞 issues',get_issue:'🐞 issue #'+(a.number||''),create_issue:'➕ issue '+(a.title||''),list_prs:'🔀 PR list',get_pr:'🔀 PR #'+(a.number||''),switch_branch:'🌿 branch '+(a.branch||''),pr_description:'📝 PR description',search_attachment:'🔎 file e khujchi: '+(a.query||''),read_attachment:'📄 file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'🖼 save image '+p,save_repo_notes:'🧠 repo notes save'})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save'})[k.name]||k.name};
 async function ensureNotes(c){
   const R=S.repo.full;if(S.repoNotes&&S.repoNotes[R])return;
   const t=await getTree();if(t.empty||!t.paths.size)return;
@@ -1149,7 +1189,7 @@ async function runAgent(c,list){
     for(let step=0;step<30&&!stopped&&!done&&!failedAll;step++){
       let res=null;
       while(pi<list.length&&!stopped){
-        try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{live=(log.length?log.map(l=>'- '+l).join('\n')+'\n\n':'')+(t||'')+(pn?'\n⏳ '+pn+'…':'');draw()});by=list[pi].name;break}
+        try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{live=(log.length?log.map(l=>'- '+logTxt(l)).join('\n')+'\n\n':'')+(t||'')+(pn?'\n→ '+pn+'…':'');draw()});by=list[pi].name;break}
         catch(e){if(stopped||e.message==='STOP')break;fails.push(list[pi].name+': '+e.message);pi++}
       }
       if(!res){if(!stopped)failedAll=true;break}
@@ -1157,7 +1197,7 @@ async function runAgent(c,list){
       if(!res.calls.length){final=res.text;done=true;break}
       work.push({role:'assistant',text:res.text,calls:res.calls,raw:res.raw});
       for(const k of res.calls){
-        log.push(dlabel(k));live=log.map(l=>'- '+l).join('\n');draw();
+        log.push(dlabel(k));live=log.map(l=>'- '+logTxt(l)).join('\n');draw();
         let out;try{out=await tool(c,k.name,k.args||{})}catch(e){out='Error: '+e.message}
         work.push({role:'tool',id:k.id,name:k.name,result:String(out).slice(0,30000)});
       }
@@ -1170,7 +1210,9 @@ async function runAgent(c,list){
   else c.msgs.push({role:'assistant',content:'Step limit e pouchhe gechhi. "continue" likho.',by,skipped:[],log,u});
   busy=false;live='';setBusyUI(false);save();render();
 }
-const logHTML=m=>m.log&&m.log.length?'<details class="lg"><summary>🔧 '+m.log.length+' step</summary>'+m.log.map(esc).join('<br>')+'</details>':'';
+const logParse=l=>{const m=/^([a-z]+):(.*)$/s.exec(l);return m&&IX[m[1]]?[m[1],m[2]]:[null,String(l).replace(/^[^\w#\s]+\uFE0F?\s*/u,'')]};
+const logTxt=l=>logParse(l)[1];
+const logHTML=m=>m.log&&m.log.length?'<details class="lg"><summary>'+ico('wrench',14)+m.log.length+' step</summary>'+m.log.map(l=>{const [k,t]=logParse(l);return (k?ico(k,14):'')+esc(t)}).join('<br>')+'</details>':'';
 const origC={};
 const okey=(d,p)=>d.repo+'@'+d.branch+':'+p;
 async function loadOrig(d,p){const k=okey(d,p);if(k in origC)return;try{origC[k]=await gh('/repos/'+d.repo+'/contents/'+enc(p)+'?ref='+encodeURIComponent(d.branch),{raw:true})}catch(e){origC[k]=''}}
@@ -1207,18 +1249,18 @@ function draftHTML(c){
   let h='';const d=c.draft;
   if(d&&dcount(c)){
     const fs=Object.entries(d.files),pr=S.pushMode==='pr';
-    h+='<div class="dc"><b>📝 Draft: '+fs.length+' file</b><small>'+esc(d.repo)+' · '+esc(d.branch)+'</small>'+
+    h+='<div class="dc"><b>'+ico('note')+'Draft: '+fs.length+' file</b><small>'+esc(d.repo)+' · '+esc(d.branch)+'</small>'+
     fs.map(([p,f])=>'<div class="df"><div class="fr"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button><button class="fx" data-fx="'+qa(p)+'" aria-label="Ei file ta bad dao" title="Bad dao">'+IC.x+'</button></div>'+(dview[p]?fileDiffHTML(d,p,f):'')+'</div>').join('')+
     '<input class="f cm" placeholder="Commit message" value="'+qa(d.msg||defMsg(c))+'">'+
     (pr?'<textarea class="f pb" rows="3" placeholder="PR description (optional — AI likhe dite pare)">'+esc(d.prBody||'')+'</textarea>':'')+'<div class="seg"><button data-pm="direct" class="'+(pr?'':'on')+'">Sorasori push</button><button data-pm="pr" class="'+(pr?'on':'')+'">Branch + PR</button></div>'+
     '<small>'+(pr?'Notun branch e jabe. Tumi Merge chaple \''+esc(d.branch)+'\' e mishbe. (Beshi nirapod)':'Sorasori \''+esc(d.branch)+'\' e jabe. Pore Undo kora jabe.')+'</small>'+
-    '<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gpush">'+(pr?'🔀 PR kholo':'⬆ Push korbo')+'</button><button class="btn ghost sm" data-act="gdisc">Discard</button></div></div>';
+    '<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gpush">'+(pr?ico('pr',15)+'PR kholo':ico('up',15)+'Push korbo')+'</button><button class="btn ghost sm" data-act="gdisc">Discard</button></div></div>';
   }
   const u=c.pushed;
   if(u&&u.pr){
-    const st=u.merged?'✅ Merge hoyeche':u.closed?'✖ PR close hoyeche':'🔀 Pull Request khola hoyeche';
+    const st=u.merged?ico('okc')+'Merge hoyeche':u.closed?ico('xc')+'PR close hoyeche':ico('pr')+'Pull Request khola hoyeche';
     h+='<div class="dc">'+st+' → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/pull/'+u.pr.n+'" target="_blank" rel="noopener">#'+u.pr.n+'</a>'+(u.merged||u.closed?'':'<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gmerge">Merge koro</button><button class="btn ghost sm" data-act="gclose">Close</button></div>')+depHTML(u)+'</div>';
-  }else if(u)h+='<div class="dc">'+(u.undone?'↩️ Undo hoyeche ('+esc(u.repo)+')':'✅ Pushed '+u.n+' file → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/commit/'+qa(u.sha)+'" target="_blank" rel="noopener">'+esc(u.sha.slice(0,7))+'</a>'+(u.prev?' <button class="btn ghost sm" data-act="gundo">↩ Undo</button>':''))+depHTML(u)+'</div>';
+  }else if(u)h+='<div class="dc">'+(u.undone?ico('undo')+'Undo hoyeche ('+esc(u.repo)+')':ico('okc')+'Pushed '+u.n+' file → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/commit/'+qa(u.sha)+'" target="_blank" rel="noopener">'+esc(u.sha.slice(0,7))+'</a>'+(u.prev?' <button class="btn ghost sm" data-act="gundo">'+ico('undo',14)+'Undo</button>':''))+depHTML(u)+'</div>';
   return h;
 }
 async function pushDraft(c){
@@ -1254,7 +1296,7 @@ async function pushDraft(c){
         pr={n:pl.number,head:target};prev=null;
       }
     }
-    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false,pr};c.draft=null;ghTree=null;for(const k in origC)delete origC[k];save();toast(pr?'PR #'+pr.n+' khola hoyeche ✓':'Pushed ✓');if(!pr)watchDeploy(c,R,sha,B);
+    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false,pr};c.draft=null;ghTree=null;for(const k in origC)delete origC[k];save();toast(pr?'PR #'+pr.n+' khola hoyeche':'Pushed');if(!pr)watchDeploy(c,R,sha,B);
   }catch(e){c.msgs.push({role:'error',content:(wantPR?'PR':'Push')+' fail: '+e.message});save()}
   pushing=false;render();
 }
@@ -1263,10 +1305,10 @@ function depHTML(u){
   const d=u.dep;if(!d)return '';
   const act='https://github.com/'+qa(u.repo)+'/actions';
   if(d.st==='completed'){
-    if(d.c==='success')return '<div class="dep">🚀 Deploy hoyeche ✓'+(d.url&&/^https:\/\//.test(d.url)?' · <a href="'+qa(d.url)+'" target="_blank" rel="noopener">Site dekho</a>':'')+'</div>';
-    return '<div class="dep bad">❌ Deploy fail ('+esc(d.c||'?')+') · <a href="'+act+'" target="_blank" rel="noopener">Log dekho</a></div>';
+    if(d.c==='success')return '<div class="dep">'+ico('okc')+'Deploy hoyeche'+(d.url&&/^https:\/\//.test(d.url)?' · <a href="'+qa(d.url)+'" target="_blank" rel="noopener">Site dekho</a>':'')+'</div>';
+    return '<div class="dep bad">'+ico('xc')+'Deploy fail ('+esc(d.c||'?')+') · <a href="'+act+'" target="_blank" rel="noopener">Log dekho</a></div>';
   }
-  return '<div class="dep">⏳ Deploy '+(d.st==='in_progress'?'cholche':'shuru hobe')+'…'+(d.stuck?'<br><small>Onek somoy lagche. GitHub e atke thakte pare: <a href="'+act+'" target="_blank" rel="noopener">Actions</a> e giye Cancel kore Re-run koro.</small>':'')+' <button class="chip" data-act="gdep">↻ Check</button></div>';
+  return '<div class="dep">'+ico('clock')+'Deploy '+(d.st==='in_progress'?'cholche':'shuru hobe')+'…'+(d.stuck?'<br><small>Onek somoy lagche. GitHub e atke thakte pare: <a href="'+act+'" target="_blank" rel="noopener">Actions</a> e giye Cancel kore Re-run koro.</small>':'')+' <button class="chip" data-act="gdep">'+ico('refresh',14)+'Check</button></div>';
 }
 async function watchDeploy(c,R,sha,B,force){
   const u=c.pushed;if(!u)return;
@@ -1296,7 +1338,7 @@ async function prAct(c,kind){
       u.merged=true;if(mr&&mr.sha)setTimeout(()=>watchDeploy(c,u.repo,mr.sha,u.branch),0);
     }else{await gh('/repos/'+u.repo+'/pulls/'+u.pr.n,{method:'PATCH',body:{state:'closed'}});u.closed=true}
     try{await gh('/repos/'+u.repo+'/git/refs/heads/'+enc(u.pr.head),{method:'DELETE'})}catch(e){}
-    ghTree=null;save();toast(kind==='merge'?'Merge hoyeche ✓':'PR close hoyeche');
+    ghTree=null;save();toast(kind==='merge'?'Merge hoyeche':'PR close hoyeche');
   }catch(e){c.msgs.push({role:'error',content:(kind==='merge'?'Merge':'Close')+' fail: '+e.message});save()}
   pushing=false;render();
 }
@@ -1366,7 +1408,7 @@ function render(typing){
     el.innerHTML='<div class="empty"><div class="logo"><i></i></div><h2>Ki jante chao?</h2><p>'+(S.providers.length?'Likhte shuru koro, ba niche theke ekta bachho.':'Shuru korar age ekta provider add korte hobe.')+'</p>'+(S.providers.length?sugHTML():'<button class="btn" data-act="hset" style="margin-top:14px">Provider add koro</button>')+'</div>';return}
   let h='';
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
-    if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.sm?'<span class="tag">🔎 Smart · '+m.sm+' ongsho</span>':'')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r">'+ibtn('data-edit="'+i+'"','Edit','edit')+'</div>';
+    if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">'+ico('pdf',13)+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?ico('pdf',13):ico('image',13))+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">'+ico('file',13)+esc(f.name)+'</span>').join('')+(m.sm?'<span class="tag">'+ico('search',13)+'Smart · '+m.sm+' ongsho</span>':'')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r">'+ibtn('data-edit="'+i+'"','Edit','edit')+'</div>';
     else if(m.role==='assistant'){
       h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+usageStr(m.u)+'</span>'+(m.pic?ibtn('data-save="'+i+'"','Save image','dl'):ibtn('data-copy="'+i+'"','Copy','copy'))+(i===c.msgs.length-1?ibtn('data-regen="1"','Regenerate','refresh'):'')+'</div>';
     }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta">'+ibtn('data-regen="1"','Retry','refresh')+'<span>Retry</span></div>':'');
@@ -1401,21 +1443,21 @@ function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'
 function settingsMenu(){
   const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session;
   const row=(k,ic,t,sub)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+esc(sub)+'</small></span><span class="ar">›</span></button>';
-  return gl('AI')+row('prov','🤖','Providers & Models',S.providers.length?S.providers.length+' provider · '+(on[0]?on[0].model:'sob off'):'Kono provider nai — add koro')+
-   row('sys','💬','System prompt',S.system.trim()?S.system.trim().slice(0,50):'Set kora nai')+
-   gl('Tools')+row('search','🌐','Web search',S.search&&S.search.key?'Chalu (Tavily)':'Key dewa nai')+
-   row('img','🖼','Image generation',im.model?im.model:'Set kora nai')+
-   row('gh','🐙','GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token ache, repo bechhe nai'):'Connect kora nai')+
-   gl('App')+row('app','🎨','Appearance & Voice','Theme: '+(S.theme||'auto')+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||''))+
-   gl('Account & data')+row('acct','☁️','Account & Sync',cl?(S.cloud.email||'Logged in'):'Log in kora nai')+
-   row('bk','💾','Backup','Export / Import');
+  return gl('AI')+row('prov',ico('bot',20),'Providers & Models',S.providers.length?S.providers.length+' provider · '+(on[0]?on[0].model:'sob off'):'Kono provider nai — add koro')+
+   row('sys',ico('chat',20),'System prompt',S.system.trim()?S.system.trim().slice(0,50):'Set kora nai')+
+   gl('Tools')+row('search',ico('globe',20),'Web search',S.search&&S.search.key?'Chalu (Tavily)':'Key dewa nai')+
+   row('img',ico('image',20),'Image generation',im.model?im.model:'Set kora nai')+
+   row('gh',ico('github',20),'GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token ache, repo bechhe nai'):'Connect kora nai')+
+   gl('App')+row('app',ico('palette',20),'Appearance & Voice','Theme: '+(S.theme||'auto')+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||''))+
+   gl('Account & data')+row('acct',ico('cloud',20),'Account & Sync',cl?(S.cloud.email||'Logged in'):'Log in kora nai')+
+   row('bk',ico('save',20),'Backup','Export / Import');
 }
 function drawSheet(){
   const b=$('sbody');$('sheet').querySelector('h1').textContent=view==='repo'?'GitHub':'Settings';
   if(view==='repo'){
     const has=!!(S.gh&&S.gh.token);
     b.innerHTML='<div class="sec"><h3>GitHub token</h3>'+(has?'<p class="h">Token save ache. Bodlate chaile notun ta paste koro.</p>':GH_HELP)+'<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn sm" data-act="gsave">'+(has?'Reload repos':'Connect')+'</button></div></div>'+
-    (has&&S.repo?'<div class="sec"><h3>'+esc(S.repo.full)+'</h3><div class="row"><button class="btn sm ghost" data-act="rsub" data-sub="hist">🕘 History</button><button class="btn sm ghost" data-act="rsub" data-sub="files">📎 File attach</button></div><div id="rsub">'+subHTML()+'</div></div>':'')+
+    (has&&S.repo?'<div class="sec"><h3>'+esc(S.repo.full)+'</h3><div class="row"><button class="btn sm ghost" data-act="rsub" data-sub="hist">'+ico('hist',15)+'History</button><button class="btn sm ghost" data-act="rsub" data-sub="files">'+ico('clip',15)+'File attach</button></div><div id="rsub">'+subHTML()+'</div></div>':'')+
     (has?'<div class="sec"><h3>Repo bechhe nao</h3>'+(S.repo?'<p class="h">Ekhon: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Bondho koro</button></p>':'')+(S.repo?'<label>Branch</label><div id="rbw">'+branchHTML()+'</div><label>Repo</label>':'')+'<input class="f" id="rq" placeholder="Search repo…" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
     '<div class="sec"><h3>Notun repo banao</h3><label>Name</label><input class="f" id="nn" placeholder="my-project"><label>Description (optional)</label><input class="f" id="nd"><label><input type="checkbox" id="np" checked> Private</label><div class="row"><button class="btn sm" data-act="rnew">Create repo</button></div></div>':'');
     const gt=$('gt');if(gt)gt.oninput=()=>{S.gh={token:gt.value.trim()};save()};
@@ -1475,7 +1517,7 @@ document.addEventListener('click',e=>{
   else if(d.pm){S.pushMode=d.pm==='pr'?'pr':'direct';rawSave();render()}
   else if(d.act==='gmerge'){const c=chat();if(c)prAct(c,'merge')}
   else if(d.act==='gclose'){const c=chat();if(c)prAct(c,'close')}
-  else if(d.cc){const code=t.parentElement.querySelector('code');if(code)copyText(code.textContent).then(()=>{t.textContent='Copied ✓';setTimeout(()=>{t.textContent='Copy'},1200)})}
+  else if(d.cc){const code=t.parentElement.querySelector('code');if(code)copyText(code.textContent).then(()=>{t.textContent='Copied';setTimeout(()=>{t.textContent='Copy'},1200)})}
   else if(d.rp){const r=(Array.isArray(ghRepos)?ghRepos:[]).find(x=>x.full_name===d.rp);if(!r)return;
     const c=chat();if(c&&dcount(c)&&c.draft.repo!==r.full_name){if(!confirm('Ei chat er draft muche jabe. Repo bodlabe?'))return;c.draft=null}
     S.repo={full:r.full_name,branch:r.default_branch||'main'};ghTree=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo: '+r.full_name)}
@@ -1495,7 +1537,7 @@ document.addEventListener('click',e=>{
   else if(d.act==='gdisc'){const c=chat();if(c&&confirm('Draft discard korbe?')){c.draft=null;save();render()}}
   else if(d.ipre!==undefined){const x=IMGP[+d.ipre];S.imgcfg=Object.assign({},S.imgcfg,{url:x[1],model:x[2],size:x[3]});save();drawSheet()}
   else if(d.save){const m=chat().msgs[+d.save];if(m&&m.pic){const a=document.createElement('a');a.href=m.pic;a.download='orin-image.jpg';a.target='_blank';a.rel='noopener';a.click()}}
-  else if(d.more){const c=S.chats.find(x=>x.id===d.more);pop(t,'<button class="pi" data-pin="'+d.more+'"><span>📌 '+(c&&c.pin?'Unpin':'Pin')+'</span></button><button class="pi" data-ren="'+d.more+'"><span>✎ Rename</span></button><button class="pi" data-del="'+d.more+'"><span>🗑 Delete</span></button>')}
+  else if(d.more){const c=S.chats.find(x=>x.id===d.more);pop(t,'<button class="pi" data-pin="'+d.more+'"><span>'+ico('pin',15)+(c&&c.pin?'Unpin':'Pin')+'</span></button><button class="pi" data-ren="'+d.more+'"><span>'+ico('edit',15)+'Rename</span></button><button class="pi" data-del="'+d.more+'"><span>'+ico('trash',15)+'Delete</span></button>')}
   else if(d.pin){closePop();const c=S.chats.find(x=>x.id===d.pin);if(c){c.pin=!c.pin;save();renderList()}}
   else if(d.ren){closePop();const c=S.chats.find(x=>x.id===d.ren);const n=c&&prompt('Chat er naam',c.title);if(n&&n.trim()){c.title=n.trim().slice(0,60);save();renderList();render()}}
   else if(d.regen)regen()
@@ -1524,7 +1566,7 @@ document.addEventListener('click',e=>{
 });
 $('fdir').onchange=e=>{addDir([...e.target.files]);e.target.value=''};
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
-$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>📁 Folder</span></button><button class="pi" data-act="ropen"><span>📦 GitHub repo</span></button>');
+$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>'+ico('image',16)+'Photos</span></button><button class="pi" data-add="fcam"><span>'+ico('camera',16)+'Camera</span></button><button class="pi" data-add="fi"><span>'+ico('file',16)+'Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>'+ico('folder',16)+'Folder</span></button><button class="pi" data-act="ropen"><span>'+ico('box',16)+'GitHub repo</span></button>');
 $('modelb').onclick=e=>pop(e.currentTarget,modelMenu());
 $('mic').onclick=toggleMic;
 $('tobot').onclick=()=>{const m=$('msgs');m.scrollTo({top:m.scrollHeight,behavior:'smooth'})};
