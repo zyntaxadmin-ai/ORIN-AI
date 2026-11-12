@@ -204,6 +204,8 @@ form.in{padding:4px 12px 10px}
 .dif .dk{color:var(--mute);text-align:center}.dif .ds{color:var(--mute);border-bottom:1px solid var(--line);font-family:system-ui,sans-serif;padding:4px 8px}
 .seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px;margin-top:6px}
 .seg button{flex:1;padding:7px 6px;border-radius:9px;font-size:13px;font-weight:600;color:var(--mute)}.seg button.on{background:var(--ac);color:var(--acink)}
+.df .fr{display:flex;align-items:center;gap:2px}.df .fr>button:first-child{flex:1}.df .fx{width:30px;height:30px;flex:none;color:var(--mute);border-radius:8px}.df .fx:hover{background:var(--ac2)}
+.dep{font-size:13px;margin-top:6px}.dep.bad{color:var(--err)}
 </style>
 </head>
 <body>
@@ -888,7 +890,7 @@ function draftHTML(c){
   if(d&&dcount(c)){
     const fs=Object.entries(d.files),pr=S.pushMode==='pr';
     h+='<div class="dc"><b>📝 Draft: '+fs.length+' file</b><small>'+esc(d.repo)+' · '+esc(d.branch)+'</small>'+
-    fs.map(([p,f])=>'<div class="df"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button>'+(dview[p]?fileDiffHTML(d,p,f):'')+'</div>').join('')+
+    fs.map(([p,f])=>'<div class="df"><div class="fr"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button><button class="fx" data-fx="'+qa(p)+'" aria-label="Ei file ta bad dao" title="Bad dao">'+IC.x+'</button></div>'+(dview[p]?fileDiffHTML(d,p,f):'')+'</div>').join('')+
     '<input class="f cm" placeholder="Commit message" value="'+qa(d.msg||defMsg(c))+'">'+
     '<div class="seg"><button data-pm="direct" class="'+(pr?'':'on')+'">Sorasori push</button><button data-pm="pr" class="'+(pr?'on':'')+'">Branch + PR</button></div>'+
     '<small>'+(pr?'Notun branch e jabe. Tumi Merge chaple \''+esc(d.branch)+'\' e mishbe. (Beshi nirapod)':'Sorasori \''+esc(d.branch)+'\' e jabe. Pore Undo kora jabe.')+'</small>'+
@@ -897,8 +899,8 @@ function draftHTML(c){
   const u=c.pushed;
   if(u&&u.pr){
     const st=u.merged?'✅ Merge hoyeche':u.closed?'✖ PR close hoyeche':'🔀 Pull Request khola hoyeche';
-    h+='<div class="dc">'+st+' → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/pull/'+u.pr.n+'" target="_blank" rel="noopener">#'+u.pr.n+'</a>'+(u.merged||u.closed?'':'<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gmerge">Merge koro</button><button class="btn ghost sm" data-act="gclose">Close</button></div>')+'</div>';
-  }else if(u)h+='<div class="dc">'+(u.undone?'↩️ Undo hoyeche ('+esc(u.repo)+')':'✅ Pushed '+u.n+' file → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/commit/'+qa(u.sha)+'" target="_blank" rel="noopener">'+esc(u.sha.slice(0,7))+'</a>'+(u.prev?' <button class="btn ghost sm" data-act="gundo">↩ Undo</button>':''))+'</div>';
+    h+='<div class="dc">'+st+' → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/pull/'+u.pr.n+'" target="_blank" rel="noopener">#'+u.pr.n+'</a>'+(u.merged||u.closed?'':'<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gmerge">Merge koro</button><button class="btn ghost sm" data-act="gclose">Close</button></div>')+depHTML(u)+'</div>';
+  }else if(u)h+='<div class="dc">'+(u.undone?'↩️ Undo hoyeche ('+esc(u.repo)+')':'✅ Pushed '+u.n+' file → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/commit/'+qa(u.sha)+'" target="_blank" rel="noopener">'+esc(u.sha.slice(0,7))+'</a>'+(u.prev?' <button class="btn ghost sm" data-act="gundo">↩ Undo</button>':''))+depHTML(u)+'</div>';
   return h;
 }
 async function pushDraft(c){
@@ -933,9 +935,35 @@ async function pushDraft(c){
         pr={n:pl.number,head:target};prev=null;
       }
     }
-    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false,pr};c.draft=null;ghTree=null;for(const k in origC)delete origC[k];save();toast(pr?'PR #'+pr.n+' khola hoyeche ✓':'Pushed ✓');
+    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false,pr};c.draft=null;ghTree=null;for(const k in origC)delete origC[k];save();toast(pr?'PR #'+pr.n+' khola hoyeche ✓':'Pushed ✓');if(!pr)watchDeploy(c,R,sha,B);
   }catch(e){c.msgs.push({role:'error',content:(wantPR?'PR':'Push')+' fail: '+e.message});save()}
   pushing=false;render();
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,window.__fast?Math.min(ms,20):ms));
+function depHTML(u){
+  const d=u.dep;if(!d)return '';
+  const act='https://github.com/'+qa(u.repo)+'/actions';
+  if(d.st==='completed'){
+    if(d.c==='success')return '<div class="dep">🚀 Deploy hoyeche ✓'+(d.url&&/^https:\/\//.test(d.url)?' · <a href="'+qa(d.url)+'" target="_blank" rel="noopener">Site dekho</a>':'')+'</div>';
+    return '<div class="dep bad">❌ Deploy fail ('+esc(d.c||'?')+') · <a href="'+act+'" target="_blank" rel="noopener">Log dekho</a></div>';
+  }
+  return '<div class="dep">⏳ Deploy '+(d.st==='in_progress'?'cholche':'shuru hobe')+'…'+(d.stuck?'<br><small>Onek somoy lagche. GitHub e atke thakte pare: <a href="'+act+'" target="_blank" rel="noopener">Actions</a> e giye Cancel kore Re-run koro.</small>':'')+' <button class="chip" data-act="gdep">↻ Check</button></div>';
+}
+async function watchDeploy(c,R,sha,B,force){
+  const u=c.pushed;if(!u)return;
+  let pg=null;try{pg=await gh('/repos/'+R+'/pages')}catch(e){}
+  if(!pg||(!force&&pg.source&&pg.source.branch&&pg.source.branch!==B))return;
+  u.dep={st:'queued',sha,url:pg.html_url};save();render();
+  for(let i=0;i<45;i++){
+    await sleep(9000);if(c.pushed!==u)return;
+    try{
+      const j=await gh('/repos/'+R+'/actions/runs?head_sha='+encodeURIComponent(sha)+'&per_page=10'),rs=j.workflow_runs||[];
+      const run=rs.find(x=>/pages/i.test(x.name||''))||rs[0];
+      if(run){u.dep.st=run.status;u.dep.c=run.conclusion;if(run.status!=='completed'&&Date.now()-new Date(run.created_at)>5*60e3)u.dep.stuck=1;else delete u.dep.stuck}
+      save();render();
+      if(run&&run.status==='completed')return;
+    }catch(e){}
+  }
 }
 async function prAct(c,kind){
   const u=c.pushed;if(!u||!u.pr||u.merged||u.closed||pushing)return;
@@ -943,9 +971,10 @@ async function prAct(c,kind){
   pushing=true;
   try{
     if(kind==='merge'){
-      try{await gh('/repos/'+u.repo+'/pulls/'+u.pr.n+'/merge',{method:'PUT',body:{merge_method:'squash'}})}
-      catch(e){if(/ 405/.test(e.message))await gh('/repos/'+u.repo+'/pulls/'+u.pr.n+'/merge',{method:'PUT',body:{merge_method:'merge'}});else throw e}
-      u.merged=true;
+      let mr;
+      try{mr=await gh('/repos/'+u.repo+'/pulls/'+u.pr.n+'/merge',{method:'PUT',body:{merge_method:'squash'}})}
+      catch(e){if(/ 405/.test(e.message))mr=await gh('/repos/'+u.repo+'/pulls/'+u.pr.n+'/merge',{method:'PUT',body:{merge_method:'merge'}});else throw e}
+      u.merged=true;if(mr&&mr.sha)setTimeout(()=>watchDeploy(c,u.repo,mr.sha,u.branch),0);
     }else{await gh('/repos/'+u.repo+'/pulls/'+u.pr.n,{method:'PATCH',body:{state:'closed'}});u.closed=true}
     try{await gh('/repos/'+u.repo+'/git/refs/heads/'+enc(u.pr.head),{method:'DELETE'})}catch(e){}
     ghTree=null;save();toast(kind==='merge'?'Merge hoyeche ✓':'PR close hoyeche');
@@ -1096,6 +1125,8 @@ document.addEventListener('click',e=>{
   else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
   else if(d.lang){S.lang=d.lang;rawSave();drawSheet()}
   else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();if(dview[d.dv]){const c=chat(),f=c&&c.draft&&c.draft.files[d.dv];if(f&&f.ex&&!(okey(c.draft,d.dv) in origC))loadOrig(c.draft,d.dv).then(render)}}
+  else if(d.fx!==undefined){const c=chat();if(c&&c.draft){delete c.draft.files[d.fx];if(!Object.keys(c.draft.files).length)c.draft=null;save();render()}}
+  else if(d.act==='gdep'){const c=chat();if(c&&c.pushed&&c.pushed.dep)watchDeploy(c,c.pushed.repo,c.pushed.dep.sha,c.pushed.branch,true)}
   else if(d.pm){S.pushMode=d.pm==='pr'?'pr':'direct';rawSave();render()}
   else if(d.act==='gmerge'){const c=chat();if(c)prAct(c,'merge')}
   else if(d.act==='gclose'){const c=chat();if(c)prAct(c,'close')}
