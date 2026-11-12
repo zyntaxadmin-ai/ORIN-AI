@@ -904,7 +904,7 @@ async function getTree(){
   ghTree=t;return t;
 }
 function sliceRead(x,a){
-  const lim=60000,ls=x.split('\n'),n=ls.length,s0=Math.max(1,parseInt(a.start_line,10)||1),e0=Math.min(n,parseInt(a.end_line,10)||n);
+  const lim=50000,ls=x.split('\n'),n=ls.length,s0=Math.max(1,parseInt(a.start_line,10)||1),e0=Math.min(n,parseInt(a.end_line,10)||n);
   if(s0===1&&e0===n&&x.length<=lim)return x;
   const out=[];let len=0;
   for(let i=s0-1;i<e0;i++){if(len+ls[i].length+1>lim&&out.length)break;out.push(ls[i]);len+=ls[i].length+1}
@@ -1207,7 +1207,7 @@ async function runAgent(c,list){
       for(const k of res.calls){
         log.push(dlabel(k));live=log.map(l=>'- '+logTxt(l)).join('\n');draw();
         let out;try{out=await tool(c,k.name,k.args||{})}catch(e){out='Error: '+e.message}
-        work.push({role:'tool',id:k.id,name:k.name,result:String(out).slice(0,30000)});
+        work.push({role:'tool',id:k.id,name:k.name,result:String(out).slice(0,66000)});
       }
     }
   }catch(e){fails.push('agent: '+e.message);failedAll=!done&&!stopped}
