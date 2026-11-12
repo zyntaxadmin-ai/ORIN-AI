@@ -16,6 +16,10 @@ No build step, no framework, no server. The whole app is a single `index.html` f
 - **Web search.** Turn on the 🌐 button and Orin searches the web (via Tavily) before answering, then shows source links under the reply. Add your Tavily key in Settings.
 - **Image generation.** Turn on the 🎨 button to send your message as an image prompt to any OpenAI-compatible `/images/generations` API (OpenAI, Together, ...). Configure it in Settings.
 - **GitHub agent mode.** Pick any of your repos (or create a new one) from the **+** menu. The AI lists, reads, creates and edits files by itself using tool calling (OpenAI-compatible, Anthropic, Gemini). Changes are staged as a draft; you review them and press **Push**. **Undo** restores the previous commit. Needs a GitHub token (classic, `repo` scope). Writes to `.git/` and `.github/workflows/` are blocked. The draft card shows a red/green line diff, and you can push straight to the branch or open a **Branch + Pull Request** (with Merge/Close buttons). Any branch of the repo can be selected.
+  - Smarter agent: streaming replies, repo-wide code search, multi-edit per file, saved repo notes (so later chats already know the project), read-only access to other repos.
+  - Issues & PRs: the agent can list/read/create issues, read PRs with review comments, switch to a PR branch to fix them, and write the PR description (editable before opening).
+  - Safety: per-file ✕ in the draft, commit **History** with non-destructive **Restore**, and a live **Deploy status** (GitHub Pages) after push/merge.
+  - Files: attach any repo file to the chat from the repo sheet; the agent can commit images you attached (`save_attachment`).
 - **Voice input** (Web Speech API) in Bangla, English, or Hindi.
 - **Markdown rendering.** Headings, lists, tables, code blocks, links.
 - **Accounts and cloud sync.** Email and password login via Supabase. Providers, API keys, system prompt, and chat history follow you to every device.

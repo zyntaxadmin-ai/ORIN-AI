@@ -206,6 +206,8 @@ form.in{padding:4px 12px 10px}
 .seg button{flex:1;padding:7px 6px;border-radius:9px;font-size:13px;font-weight:600;color:var(--mute)}.seg button.on{background:var(--ac);color:var(--acink)}
 .df .fr{display:flex;align-items:center;gap:2px}.df .fr>button:first-child{flex:1}.df .fx{width:30px;height:30px;flex:none;color:var(--mute);border-radius:8px}.df .fx:hover{background:var(--ac2)}
 .dep{font-size:13px;margin-top:6px}.dep.bad{color:var(--err)}
+.hi{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-top:6px;display:flex;flex-direction:column;gap:3px;align-items:flex-start}.hi small{color:var(--mute)}
+.fl button{display:block;width:100%;text-align:left;padding:7px 8px;border-radius:8px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fl button:hover{background:var(--ac2)}
 </style>
 </head>
 <body>
@@ -641,6 +643,7 @@ async function run(c,list){
 /* ---------- GitHub agent ---------- */
 const enc=x=>String(x).split('/').map(encodeURIComponent).join('/');
 const agentOn=()=>!!(S.repo&&S.gh&&S.gh.token);
+let rsub='',hist=null,flist,fq='';
 let ghTree=null,ghRepos,rfilter='',dview={},pushing=false,rloading=false;
 const GH_HELP='<p class="h">AI ke repo te kaj korate GitHub token lagbe (ekbar). Steps: <b>github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)</b>. Note e Orin likho, Expiration dao, <b>repo</b> box tick koro, Generate koro, token copy kore niche paste koro. Token kauke dio na.</p>';
 function ghHTML(){return '<div class="sec"><h3>GitHub (agent mode)</h3><p class="h">AI nijei repo er file porbe, likhbe, ar tumi Push chaple GitHub e jabe. Composer er + → GitHub repo theke repo bechhe nao.</p><input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn ghost sm" data-act="ropen">Repo bechhe nao</button></div></div>'}
@@ -675,6 +678,32 @@ function repoListHTML(){
   const l=ghRepos.filter(r=>!rfilter||r.full_name.toLowerCase().includes(rfilter));
   return l.map(r=>'<button class="rc" data-rp="'+qa(r.full_name)+'">'+(S.repo&&S.repo.full===r.full_name?'✓ ':'')+esc(r.full_name)+(r.private?' 🔒':'')+'</button>').join('')||'<p class="h">Kono repo pailam na</p>';
 }
+function loadHist(){const R=S.repo.full,B=S.repo.branch;hist={repo:R,branch:B,loading:1};gh('/repos/'+R+'/commits?sha='+encodeURIComponent(B)+'&per_page=25').then(j=>{hist={repo:R,branch:B,list:j}}).catch(e=>{hist={repo:R,branch:B,err:e.message}}).finally(()=>{if(view==='repo'&&rsub==='hist'&&$('rsub'))$('rsub').innerHTML=histHTML()})}
+function histHTML(){
+  if(!hist||hist.loading)return '<p class="h">Loading…</p>';if(hist.err)return '<p class="h">'+esc(hist.err)+'</p>';
+  return '<p class="h">Restore = notun commit ja purono state e fire jay. Kono history mushe jay na (abar restore kore ferot ana jay).</p>'+hist.list.map((x,i)=>'<div class="hi"><b>'+esc(String((x.commit&&x.commit.message)||'').split('\n')[0].slice(0,80))+'</b><small>'+esc(x.sha.slice(0,7))+' · '+esc(new Date(x.commit.author.date).toLocaleString())+' · '+esc(x.commit.author.name||'')+'</small>'+(i?'<button class="chip" data-hrest="'+qa(x.sha)+'">↩ Ekhane restore koro</button>':'<span class="chip">ekhon</span>')).join('</div>')+'</div>';
+}
+async function restoreTo(sha){
+  const R=S.repo.full,B=S.repo.branch;
+  if(!confirm(R+' ('+B+') ke '+sha.slice(0,7)+' commit er obosthay phire nibe? (notun commit hishebe, history thakbe)'))return;
+  try{
+    const head=await gh('/repos/'+R+'/git/ref/heads/'+enc(B)),cm=await gh('/repos/'+R+'/git/commits/'+sha);
+    const nc=await gh('/repos/'+R+'/git/commits',{method:'POST',body:{message:'Restore to '+sha.slice(0,7)+' (via Orin)',tree:cm.tree.sha,parents:[head.object.sha]}});
+    await gh('/repos/'+R+'/git/refs/heads/'+enc(B),{method:'PATCH',body:{sha:nc.sha}});
+    ghTree=null;toast('Restore hoyeche ✓');loadHist();if(view==='repo')drawSheet();
+  }catch(e){toast(e.message)}
+}
+function fileListHTML(){
+  if(flist===undefined)return '<p class="h">Loading…</p>';if(typeof flist==='string')return '<p class="h">'+esc(flist)+'</p>';
+  const q=fq.toLowerCase(),l=flist.filter(x=>!q||x.toLowerCase().includes(q));
+  return '<div class="fl">'+l.slice(0,80).map(x=>'<button data-fatt="'+qa(x)+'">📄 '+esc(x)+'</button>').join('')+'</div>'+(l.length>80?'<p class="h">… aro '+(l.length-80)+' ta, search kore khujo</p>':l.length?'':'<p class="h">Kichu pai ni</p>');
+}
+function loadFiles(){flist=undefined;getTree().then(t=>{flist=[...t.paths].sort()}).catch(e=>{flist=e.message}).finally(()=>{if(view==='repo'&&rsub==='files'&&$('fl'))$('fl').innerHTML=fileListHTML()})}
+function subHTML(){
+  if(rsub==='hist')return histHTML();
+  if(rsub==='files')return '<p class="h">File chat e attach hobe (AI porte parbe). Max 6 ta attach.</p><input class="f" id="fq" placeholder="File khujo…" value="'+qa(fq)+'"><div id="fl" style="margin-top:6px">'+fileListHTML()+'</div>';
+  return '';
+}
 function updateChip(){
   const e=$('rchip');if(!S.repo){e.className='';e.innerHTML='';return}
   const c=chat(),n=c?dcount(c):0;
@@ -700,7 +729,7 @@ async function getTree(){
 }
 async function readFull(c,p){
   const d=dr(c),f=d.files[p];
-  if(f){if(f.del)throw new Error('File draft e deleted');return f.content}
+  if(f){if(f.del)throw new Error('File draft e deleted');if(f.bin)throw new Error('Binary file, porte parbo na');return f.content}
   const t=await getTree();if(!t.trunc&&!t.paths.has(p))throw new Error('File nai: '+p);
   const txt=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true});
   if(txt.includes('\u0000'))throw new Error('Binary file, porte parbo na');
@@ -708,14 +737,15 @@ async function readFull(c,p){
 }
 const TOOLS=[
  {name:'list_repos',description:"List the user's GitHub repositories (optionally filtered by a text query).",parameters:{type:'object',properties:{query:{type:'string',description:'optional text filter'}}}},
- {name:'list_files',description:'List files in the current repository (with staged draft changes applied). Optionally only under a folder path.',parameters:{type:'object',properties:{path:{type:'string',description:'optional folder prefix, e.g. src'}}}},
- {name:'read_file',description:'Read a text file from the current repository (staged draft version if changed).',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}},
+ {name:'list_files',description:'List files in the current repository (with staged draft changes applied). Optionally only under a folder path.',parameters:{type:'object',properties:{path:{type:'string',description:'optional folder prefix, e.g. src'},repo:{type:'string',description:'optional other repo as owner/name (read-only, default branch)'}}}},
+ {name:'read_file',description:'Read a text file from the current repository (staged draft version if changed). Optionally from another repo (owner/name, read-only, default branch).',parameters:{type:'object',properties:{path:{type:'string'},repo:{type:'string'}},required:['path']}},
  {name:'write_file',description:'Create or fully overwrite a file with COMPLETE content. Staged as a draft; the user pushes it.',parameters:{type:'object',properties:{path:{type:'string'},content:{type:'string',description:'full file content'}},required:['path','content']}},
  {name:'edit_file',description:'Replace one exact piece of text in an existing file. old_text must appear exactly once. Staged as draft.',parameters:{type:'object',properties:{path:{type:'string'},old_text:{type:'string'},new_text:{type:'string'}},required:['path','old_text','new_text']}},
  {name:'delete_file',description:'Delete a file (staged as draft).',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}},
  {name:'create_repo',description:'Create a NEW GitHub repository for the user (asks the user to confirm) and switch to it.',parameters:{type:'object',properties:{name:{type:'string'},description:{type:'string'},private:{type:'boolean',description:'default true'}},required:['name']}},
  {name:'edit_many',description:'Apply several exact-text replacements to ONE file in a single call (all-or-nothing). Each old_text must appear exactly once in the file at the moment it is applied.',parameters:{type:'object',properties:{path:{type:'string'},edits:{type:'array',items:{type:'object',properties:{old_text:{type:'string'},new_text:{type:'string'}},required:['old_text','new_text']}}},required:['path','edits']}},
- {name:'search_code',description:'Search code across the whole repository by text (GitHub code search; default branch only, does NOT include staged draft changes, may lag behind very recent pushes). Returns file paths with matching snippets. Use read_file afterwards.',parameters:{type:'object',properties:{query:{type:'string'}},required:['query']}},
+ {name:'search_code',description:'Search code across the whole repository by text (GitHub code search; default branch only, does NOT include staged draft changes, may lag behind very recent pushes). Returns file paths with matching snippets. Use read_file afterwards.',parameters:{type:'object',properties:{query:{type:'string'},repo:{type:'string',description:'optional other repo as owner/name'}},required:['query']}},
+ {name:'save_attachment',description:'Save an image the user attached in this chat into the repo as a binary file (e.g. logo.png). Staged as a draft.',parameters:{type:'object',properties:{path:{type:'string'},which:{type:'string',description:'attachment file name or 1-based index among the latest attached images; default first'}},required:['path']}},
  {name:'save_repo_notes',description:'Save a SHORT overview of this repository (purpose, structure, key files, conventions; max ~1500 chars) so that future chats already know it. Replaces previous notes.',parameters:{type:'object',properties:{notes:{type:'string'}},required:['notes']}},
  {name:'list_issues',description:'List GitHub issues of the current repo (excludes pull requests).',parameters:{type:'object',properties:{state:{type:'string',description:'open (default), closed or all'}}}},
  {name:'get_issue',description:'Read one issue with its comments.',parameters:{type:'object',properties:{number:{type:'integer'}},required:['number']}},
@@ -735,6 +765,23 @@ async function tool(c,name,a){
     const j=await gh('/user/repos',{method:'POST',body:{name:n,description:String(a.description||'').slice(0,300),private:pv,auto_init:true}});
     S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;rawSave();
     return 'Created '+j.full_name+' (branch '+S.repo.branch+') and selected it.';
+  }
+  const XR=a.repo&&String(a.repo)!==S.repo.full?String(a.repo).trim():null;
+  if(XR&&['list_files','read_file','search_code'].includes(name)){
+    if(!/^[\w.-]+\/[\w.-]+$/.test(XR))throw new Error('repo owner/name format e dao');
+    if(name==='list_files'){
+      const j=await gh('/repos/'+XR+'/git/trees/HEAD?recursive=1');let l=(j.tree||[]).filter(x=>x.type==='blob').map(x=>x.path).sort();const pre=String(a.path||'').replace(/^\/+|\/+$/g,'');
+      if(pre)l=l.filter(x=>x===pre||x.startsWith(pre+'/'));
+      return '['+XR+' · read-only]\n'+(l.slice(0,400).join('\n')||'(no files)')+(l.length>400?'\n... '+(l.length-400)+' more':'');
+    }
+    if(name==='read_file'){
+      const pp=okPath(a.path),x=await gh('/repos/'+XR+'/contents/'+enc(pp),{raw:true});
+      if(x.includes('\u0000'))throw new Error('Binary file');
+      return x.length>40000?x.slice(0,40000)+'\n[TRUNCATED]':x;
+    }
+    const q=String(a.query||'').trim();if(!q)throw new Error('query khali');
+    const j=await gh('/search/code?q='+encodeURIComponent(q+' repo:'+XR)+'&per_page=12',{accept:'application/vnd.github.text-match+json'});
+    return (j.items||[]).map(x=>x.path).join('\n')||'No matches';
   }
   if(name==='save_repo_notes'){const n=String(a.notes||'').slice(0,2500);S.repoNotes=Object.assign({},S.repoNotes);S.repoNotes[S.repo.full]=n;rawSave();return 'Notes saved ('+n.length+' chars)'}
   if(name==='search_code'){
@@ -774,6 +821,16 @@ async function tool(c,name,a){
     return 'Switched to branch '+b;
   }
   const d=dr(c);
+  if(name==='save_attachment'){
+    const p=okPath(a.path),all=[];
+    for(const m of [...c.msgs].reverse()){if(m.role==='user'&&m.imgs&&m.imgs.some(i=>/^image\//.test(i.mime))){m.imgs.filter(i=>/^image\//.test(i.mime)).forEach(i=>all.push(i));break}}
+    if(!all.length)throw new Error('Chat e kono image attach kora nai');
+    const w=String(a.which||'1'),im=/^\d+$/.test(w)?all[+w-1]:all.find(i=>i.name===w);
+    if(!im)throw new Error('Oi attachment pai ni');
+    if(im.data.length>2.5e6)throw new Error('Image onek boro (max ~1.8MB)');
+    const t=await getTree();d.files[p]={bin:im.data,mime:im.mime,ex:t.paths.has(p)};rawSave();
+    return 'Staged binary '+p+' ('+Math.round(im.data.length*0.75/1024)+' KB)';
+  }
   if(name==='pr_description'){d.prBody=String(a.body||'').slice(0,60000);rawSave();return 'PR description saved'}
   if(name==='commit_message'){d.msg=String(a.message||'').slice(0,200);rawSave();return 'ok'}
   if(name==='list_files'){
@@ -919,9 +976,9 @@ async function agentCall(p,history,work,sys,onLive){
 const buildHistory=c=>{let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
 function agentSys(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
-  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the user will open a PR, call pr_description with a clear summary (add "Fixes #N" when relevant). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. If there are no saved repo notes, after exploring call save_repo_notes once with a short overview. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the user will open a PR, call pr_description with a clear summary (add "Fixes #N" when relevant). Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. If there are no saved repo notes, after exploring call save_repo_notes once with a short overview. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message',edit_many:'✂️ edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'🔎 search '+(a.query||''),list_issues:'🐞 issues',get_issue:'🐞 issue #'+(a.number||''),create_issue:'➕ issue '+(a.title||''),list_prs:'🔀 PR list',get_pr:'🔀 PR #'+(a.number||''),switch_branch:'🌿 branch '+(a.branch||''),pr_description:'📝 PR description',save_repo_notes:'🧠 repo notes save'})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message',edit_many:'✂️ edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'🔎 search '+(a.query||''),list_issues:'🐞 issues',get_issue:'🐞 issue #'+(a.number||''),create_issue:'➕ issue '+(a.title||''),list_prs:'🔀 PR list',get_pr:'🔀 PR #'+(a.number||''),switch_branch:'🌿 branch '+(a.branch||''),pr_description:'📝 PR description',save_attachment:'🖼 save image '+p,save_repo_notes:'🧠 repo notes save'})[k.name]||k.name};
 async function runAgent(c,list){
   const history=buildHistory(c),work=[],log=[],fails=[],sys=agentSys(c);
   let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0};
@@ -978,6 +1035,7 @@ function diffHTML(ops){
   return '<div class="dif"><div class="ds">+'+ad+' −'+de+'</div>'+rows.slice(0,400).join('')+(more?'<div class="dk">… (baki dekhano hoyni)</div>':'')+'</div>';
 }
 function fileDiffHTML(d,p,f){
+  if(f.bin)return '<div class="dif"><div class="ds">Binary / image · '+Math.round(f.bin.length*0.75/1024)+' KB</div></div>';
   if(!f.ex)return diffHTML(f.content.split('\n').map(x=>['+',x]));
   const o=origC[okey(d,p)];if(o===undefined)return '<div class="dif"><div class="ds">Loading…</div></div>';
   return f.del?diffHTML(o.split('\n').map(x=>['-',x])):diffHTML(lineDiff(o,f.content));
@@ -1009,7 +1067,7 @@ async function pushDraft(c){
     const br=enc(B);let head=null,sha,prev=null,modes={},pr=null;
     try{head=await gh('/repos/'+R+'/git/ref/heads/'+br)}catch(e){if(!/ 409/.test(e.message))throw e}
     if(!head){
-      for(const [p,f] of fs){if(f.del)continue;const j=await gh('/repos/'+R+'/contents/'+enc(p),{method:'PUT',body:{message:msg,content:btoa(unescape(encodeURIComponent(f.content))),branch:B}});sha=j.commit.sha}
+      for(const [p,f] of fs){if(f.del)continue;const j=await gh('/repos/'+R+'/contents/'+enc(p),{method:'PUT',body:{message:msg,content:f.bin||btoa(unescape(encodeURIComponent(f.content))),branch:B}});sha=j.commit.sha}
       if(!sha)throw new Error('Push korar moto file nai');
     }else{
       prev=head.object.sha;
@@ -1022,7 +1080,7 @@ async function pushDraft(c){
       const cm=await gh('/repos/'+R+'/git/commits/'+prev),tree=[];
       for(const [p,f] of fs){
         if(f.del)tree.push({path:p,mode:modes[p]||'100644',type:'blob',sha:null});
-        else{const b=await gh('/repos/'+R+'/git/blobs',{method:'POST',body:{content:f.content,encoding:'utf-8'}});tree.push({path:p,mode:modes[p]||'100644',type:'blob',sha:b.sha})}
+        else{const b=await gh('/repos/'+R+'/git/blobs',{method:'POST',body:f.bin?{content:f.bin,encoding:'base64'}:{content:f.content,encoding:'utf-8'}});tree.push({path:p,mode:modes[p]||'100644',type:'blob',sha:b.sha})}
       }
       const t=await gh('/repos/'+R+'/git/trees',{method:'POST',body:{base_tree:cm.tree.sha,tree}});
       const nc=await gh('/repos/'+R+'/git/commits',{method:'POST',body:{message:msg,tree:t.sha,parents:[prev]}});
@@ -1176,6 +1234,7 @@ function drawSheet(){
   if(view==='repo'){
     const has=!!(S.gh&&S.gh.token);
     b.innerHTML='<div class="sec"><h3>GitHub token</h3>'+(has?'<p class="h">Token save ache. Bodlate chaile notun ta paste koro.</p>':GH_HELP)+'<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn sm" data-act="gsave">'+(has?'Reload repos':'Connect')+'</button></div></div>'+
+    (has&&S.repo?'<div class="sec"><h3>'+esc(S.repo.full)+'</h3><div class="row"><button class="btn sm ghost" data-act="rsub" data-sub="hist">🕘 History</button><button class="btn sm ghost" data-act="rsub" data-sub="files">📎 File attach</button></div><div id="rsub">'+subHTML()+'</div></div>':'')+
     (has?'<div class="sec"><h3>Repo bechhe nao</h3>'+(S.repo?'<p class="h">Ekhon: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Bondho koro</button></p>':'')+(S.repo?'<label>Branch</label><div id="rbw">'+branchHTML()+'</div><label>Repo</label>':'')+'<input class="f" id="rq" placeholder="Search repo…" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
     '<div class="sec"><h3>Notun repo banao</h3><label>Name</label><input class="f" id="nn" placeholder="my-project"><label>Description (optional)</label><input class="f" id="nd"><label><input type="checkbox" id="np" checked> Private</label><div class="row"><button class="btn sm" data-act="rnew">Create repo</button></div></div>':'');
     const gt=$('gt');if(gt)gt.oninput=()=>{S.gh={token:gt.value.trim()};save()};
@@ -1233,6 +1292,12 @@ document.addEventListener('click',e=>{
     S.repo={full:r.full_name,branch:r.default_branch||'main'};ghTree=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo: '+r.full_name)}
   else if(d.act==='ropen'){closePop();editing=null;view='repo';openSheet()}
   else if(d.act==='gsave'){const g=$('gt');if(g)S.gh={token:g.value.trim()};ghRepos=undefined;ghTree=null;save();drawSheet()}
+  else if(d.act==='rsub'){rsub=rsub===d.sub?'':d.sub;if(rsub==='hist')loadHist();if(rsub==='files')loadFiles();drawSheet()}
+  else if(d.hrest){restoreTo(d.hrest)}
+  else if(d.fatt!==undefined){
+    if(pend.length>=6){toast('Max 6 ta file');return}
+    readFull(chat()||{draft:null},d.fatt).then(tx=>{pend.push({kind:'text',name:d.fatt.split('/').pop(),text:tx.slice(0,60000)});renderTray();view='';$('sheet').classList.remove('on');render();toast('Attach hoyeche: '+d.fatt)}).catch(e=>toast(e.message));
+  }
   else if(d.act==='rclear'){S.repo=null;ghTree=null;save();if(view==='repo')drawSheet();render()}
   else if(d.act==='rnew'){const n=$('nn').value.trim();if(!/^[A-Za-z0-9._-]{1,100}$/.test(n)){toast('Repo name e shudhu english okkhor, number, - _ . cholbe');return}
     t.disabled=true;gh('/user/repos',{method:'POST',body:{name:n,description:$('nd').value.trim().slice(0,300),private:$('np').checked,auto_init:true}}).then(j=>{S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;const c=chat();if(c)c.draft=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo banano hoyeche: '+j.full_name)}).catch(e=>{t.disabled=false;toast(e.message)})}
@@ -1288,7 +1353,7 @@ $('msgs').addEventListener('scroll',updateFab,{passive:true});addEventListener('
 $('dclose').onclick=closeDrawer;$('dset').onclick=()=>{closeDrawer();editing=null;view='';openSheet()};
 $('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search ON':'Web search ON. Settings e Tavily key dao'):'Web search OFF')};
 $('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode ON':'Image mode ON. Settings e image provider dao'):'Image mode OFF')};
-document.addEventListener('input',e=>{const t=e.target;
+document.addEventListener('input',e=>{const t=e.target;if(t.id==='fq'){fq=t.value;if($('fl'))$('fl').innerHTML=fileListHTML();return}
   if(t.classList&&t.classList.contains('pb')){const c=chat();if(c&&c.draft){c.draft.prBody=t.value;rawSave()}}
   if(t.classList&&t.classList.contains('cm')){const c=chat();if(c&&c.draft){c.draft.msg=t.value;rawSave()}}
   else if(t.id==='rq'){rfilter=t.value.toLowerCase();const l=$('rl');if(l)l.innerHTML=repoListHTML()}});
