@@ -240,7 +240,8 @@ form.in{padding:4px 12px 10px}
     </div>
   </form>
   <button class="tobot" id="tobot" aria-label="Scroll to bottom"></button>
-  <input type="file" id="fi" multiple hidden accept="application/pdf,.pdf,text/*,.md,.csv,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,.log,.java,.c,.cpp,.sh,.sql,image/*">
+  <input type="file" id="fi" multiple hidden accept="application/pdf,.pdf,.zip,.docx,.xlsx,.pptx,text/*,.md,.csv,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,.log,.java,.c,.cpp,.sh,.sql,image/*">
+  <input type="file" id="fdir" multiple hidden webkitdirectory>
   <input type="file" id="fimg" multiple hidden accept="image/*">
   <input type="file" id="fcam" hidden accept="image/*" capture="environment">
 </div>
@@ -574,15 +575,98 @@ function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t
 function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
 async function addFiles(list){
   for(const f of list){
-    if(pend.length>=6){toast('Max 6 ta file');break}
+    if(pend.length>=10){toast('Max 10 ta file');break}
     try{
       if(f.type.startsWith('image/'))pend.push({kind:'image',name:f.name,mime:'image/jpeg',data:await readImg(f)});
       else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){if(f.size>10e6)toast(f.name+' onek boro (max 10MB)');else pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)})}
+      else if(/\.zip$/i.test(f.name)){
+        if(f.size>150e6){toast(f.name+' onek boro (max 150MB)');continue}
+        const r=await zipToText(f);if(!r.n){toast(f.name+': porar moto text file pai ni');continue}
+        pend.push({kind:'text',name:f.name,text:r.text,size:r.text.length,tok:etok(r.text)});toast(f.name+': '+r.n+' ta file pora hoyeche'+(r.skipped?' ('+r.skipped+' ta skip: binary/boro/node_modules)':''));
+      }
+      else if(/\.(docx|xlsx|pptx)$/i.test(f.name)){
+        if(f.size>60e6){toast(f.name+' onek boro');continue}
+        const t=await officeToText(f);if(!t.trim()){toast(f.name+': kono text pai ni');continue}
+        pend.push({kind:'text',name:f.name,text:t,size:t.length,tok:etok(t)});
+      }
       else if(f.size>MAXF)toast(f.name+' onek boro (max '+fmtSz(MAXF)+')');
       else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': ei file support kore na');continue}pend.push({kind:'text',name:f.name,text:t,size:f.size,tok:etok(t)})}
     }catch(e){toast(f.name+' porte parlam na')}
   }
   renderTray();
+}
+/* ---- zip / folder / office readers (no libraries; DecompressionStream) ---- */
+const BIN_EXT=/\.(png|jpe?g|gif|webp|bmp|ico|pdf|zip|gz|tgz|rar|7z|mp[34]|mov|avi|mkv|wav|woff2?|ttf|otf|eot|exe|dll|so|dylib|class|jar|bin|o|a|wasm|pyc|psd|sqlite|db|docx|xlsx|pptx|map|min\.js)$/i,SKIP_DIR=/(^|\/)(node_modules|\.git|dist|build|__pycache__|\.next|vendor|\.venv|venv|\.idea)\//;
+async function inflate(u8){const r=new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'));return new Uint8Array(await new Response(r).arrayBuffer())}
+async function zipList(file){
+  const tail=new DataView(await file.slice(Math.max(0,file.size-66000)).arrayBuffer());let i=tail.byteLength-22;
+  for(;i>=0;i--)if(tail.getUint32(i,true)===0x06054b50)break;
+  if(i<0)throw new Error('Valid zip na');
+  const cnt=tail.getUint16(i+10,true),cdSize=tail.getUint32(i+12,true),cdOff=tail.getUint32(i+16,true);
+  if(cdOff===0xffffffff||cnt===0xffff)throw new Error('zip64 support nai');
+  const cd=new DataView(await file.slice(cdOff,cdOff+cdSize).arrayBuffer()),dec=new TextDecoder(),out=[];let p=0;
+  for(let k=0;k<cnt&&p+46<=cd.byteLength;k++){
+    if(cd.getUint32(p,true)!==0x02014b50)break;
+    const fl=cd.getUint16(p+8,true),method=cd.getUint16(p+10,true),cs=cd.getUint32(p+20,true),us=cd.getUint32(p+24,true),nl=cd.getUint16(p+28,true),el=cd.getUint16(p+30,true),cl=cd.getUint16(p+32,true),off=cd.getUint32(p+42,true);
+    out.push({name:dec.decode(new Uint8Array(cd.buffer,p+46,nl)),method,cs,us,off,enc:fl&1});p+=46+nl+el+cl;
+  }
+  return out;
+}
+async function zipRead(file,e){
+  const h=new DataView(await file.slice(e.off,e.off+30).arrayBuffer()),st=e.off+30+h.getUint16(26,true)+h.getUint16(28,true);
+  const raw=new Uint8Array(await file.slice(st,st+e.cs).arrayBuffer());
+  if(e.method===0)return raw;if(e.method===8)return inflate(raw);throw new Error('zip method '+e.method);
+}
+const zipStr=async(f,e)=>new TextDecoder().decode(await zipRead(f,e));
+function packText(items){let out='',n=0,skipped=0;for(const [name,t] of items){if(out.length+t.length>MAXF){skipped++;continue}out+='\n=== '+name+' ===\n'+t;n++}return {text:out.trimStart(),n,skipped}}
+async function zipToText(file){
+  const es=(await zipList(file)).filter(e=>!e.name.endsWith('/')),items=[];let skipped=0;
+  for(const e of es){
+    if(BIN_EXT.test(e.name)||SKIP_DIR.test('/'+e.name)||e.us>1.5e6||e.enc){skipped++;continue}
+    try{const t=await zipStr(file,e);if(t.includes('\u0000')){skipped++;continue}items.push([e.name,t])}catch(_){skipped++}
+  }
+  const r=packText(items);r.skipped+=skipped;return r;
+}
+async function dirToText(list){
+  const items=[];let skipped=0;
+  for(const f of list){const n=f.webkitRelativePath||f.name;
+    if(BIN_EXT.test(n)||SKIP_DIR.test('/'+n)||f.size>1.5e6){skipped++;continue}
+    try{const t=await f.text();if(t.includes('\u0000')){skipped++;continue}items.push([n,t])}catch(_){skipped++}}
+  const r=packText(items);r.skipped+=skipped;return r;
+}
+async function addDir(list){
+  if(!list.length)return;if(pend.length>=10){toast('Max 10 ta file');return}
+  const nm=((list[0].webkitRelativePath||'').split('/')[0]||'folder')+'/';
+  toast('Folder pora hocche…');const r=await dirToText(list);
+  if(!r.n){toast('Porar moto text file pai ni');return}
+  pend.push({kind:'text',name:nm,text:r.text,size:r.text.length,tok:etok(r.text)});renderTray();
+  toast(nm+': '+r.n+' ta file'+(r.skipped?' ('+r.skipped+' ta skip: binary/boro/node_modules)':''));
+}
+const xmlDec=x=>x.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(+n)).replace(/&amp;/g,'&');
+const numSort=(a,b)=>(+(a.match(/(\d+)\.xml$/)||[0,0])[1])-(+(b.match(/(\d+)\.xml$/)||[0,0])[1]);
+const colIdx=r=>{let n=0;for(const ch of (r.match(/^[A-Z]+/)||[''])[0])n=n*26+ch.charCodeAt(0)-64;return n-1};
+const csvq=v=>/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+async function officeToText(file){
+  const es=await zipList(file),by=n=>es.find(e=>e.name===n),nm=file.name.toLowerCase();
+  if(nm.endsWith('.docx')){const e=by('word/document.xml');if(!e)throw new Error('docx na');return xmlDec((await zipStr(file,e)).replace(/<w:tab\/>/g,'\t').replace(/<w:br\/>/g,'\n').replace(/<\/w:p>/g,'\n').replace(/<[^>]+>/g,'')).replace(/\n{3,}/g,'\n\n')}
+  if(nm.endsWith('.pptx')){
+    const sl=es.filter(e=>/^ppt\/slides\/slide\d+\.xml$/.test(e.name)).sort((a,b)=>numSort(a.name,b.name));let o='';
+    for(const [i,e] of sl.entries())o+='--- Slide '+(i+1)+' ---\n'+xmlDec((await zipStr(file,e)).replace(/<\/a:p>/g,'\n').replace(/<[^>]+>/g,''))+'\n';return o;
+  }
+  const ss=[];const sse=by('xl/sharedStrings.xml');
+  if(sse){const x=await zipStr(file,sse);for(const m of x.matchAll(/<si>([\s\S]*?)<\/si>/g))ss.push(xmlDec([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(t=>t[1]).join('')))}
+  const wb=by('xl/workbook.xml'),names=wb?[...(await zipStr(file,wb)).matchAll(/<sheet [^>]*name="([^"]*)"/g)].map(m=>xmlDec(m[1])):[];
+  const sh=es.filter(e=>/^xl\/worksheets\/sheet\d+\.xml$/.test(e.name)).sort((a,b)=>numSort(a.name,b.name));let o='';
+  for(const [i,e] of sh.entries()){
+    o+='--- Sheet: '+(names[i]||'Sheet'+(i+1))+' ---\n';const x=await zipStr(file,e);
+    for(const r of x.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)){
+      const row=[];for(const c of r[1].matchAll(/<c ([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)){
+        const at=c[1],ref=(at.match(/r="([A-Z]+\d+)"/)||[])[1]||'',t=(at.match(/t="(\w+)"/)||[])[1],body=c[2]||'';let v='';
+        if(t==='inlineStr')v=xmlDec([...body.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(m=>m[1]).join(''));
+        else{const m=body.match(/<v>([\s\S]*?)<\/v>/);if(m)v=t==='s'?(ss[+m[1]]||''):xmlDec(m[1])}
+        row[colIdx(ref)]=csvq(v)}
+      o+=Array.from(row,v=>v||'').join(',')+'\n'}}
+  return o;
 }
 function updatePill(){const p=S.pick&&S.providers.find(x=>x.id===S.pick&&x.on);$('modelb').innerHTML=esc(p?p.name:'Auto')+IC.chev}
 function closePop(){['pov','pop'].forEach(i=>{const e=$(i);if(e)e.remove()})}
@@ -753,7 +837,7 @@ function fileListHTML(){
 function loadFiles(){flist=undefined;getTree().then(t=>{flist=[...t.paths].sort()}).catch(e=>{flist=e.message}).finally(()=>{if(view==='repo'&&rsub==='files'&&$('fl'))$('fl').innerHTML=fileListHTML()})}
 function subHTML(){
   if(rsub==='hist')return histHTML();
-  if(rsub==='files')return '<p class="h">File chat e attach hobe (AI porte parbe). Max 6 ta attach.</p><input class="f" id="fq" placeholder="File khujo…" value="'+qa(fq)+'"><div id="fl" style="margin-top:6px">'+fileListHTML()+'</div>';
+  if(rsub==='files')return '<p class="h">File chat e attach hobe (AI porte parbe). Max 10 ta attach.</p><input class="f" id="fq" placeholder="File khujo…" value="'+qa(fq)+'"><div id="fl" style="margin-top:6px">'+fileListHTML()+'</div>';
   return '';
 }
 function updateChip(){
@@ -1400,7 +1484,7 @@ document.addEventListener('click',e=>{
   else if(d.act==='rsub'){rsub=rsub===d.sub?'':d.sub;if(rsub==='hist')loadHist();if(rsub==='files')loadFiles();drawSheet()}
   else if(d.hrest){restoreTo(d.hrest)}
   else if(d.fatt!==undefined){
-    if(pend.length>=6){toast('Max 6 ta file');return}
+    if(pend.length>=10){toast('Max 10 ta file');return}
     readFull(chat()||{draft:null},d.fatt).then(tx=>{pend.push({kind:'text',name:d.fatt.split('/').pop(),text:tx.slice(0,MAXF),size:tx.length,tok:etok(tx)});renderTray();view='';$('sheet').classList.remove('on');render();toast('Attach hoyeche: '+d.fatt)}).catch(e=>toast(e.message));
   }
   else if(d.act==='rclear'){S.repo=null;ghTree=null;save();if(view==='repo')drawSheet();render()}
@@ -1438,8 +1522,9 @@ document.addEventListener('click',e=>{
   else if(d.act==='exp'){const a=document.createElement('a');const ex=JSON.parse(JSON.stringify(Object.assign({},S,{cloud:undefined}),strip));ex.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text===undefined&&FT.has(f.id))f.text=FT.get(f.id)})));a.href=URL.createObjectURL(new Blob([JSON.stringify(ex)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));S.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text!==undefined){fput(f.id,f.text);delete f.text}})));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
+$('fdir').onchange=e=>{addDir([...e.target.files]);e.target.value=''};
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
-$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files</span></button><button class="pi" data-act="ropen"><span>📦 GitHub repo</span></button>');
+$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>📁 Folder</span></button><button class="pi" data-act="ropen"><span>📦 GitHub repo</span></button>');
 $('modelb').onclick=e=>pop(e.currentTarget,modelMenu());
 $('mic').onclick=toggleMic;
 $('tobot').onclick=()=>{const m=$('msgs');m.scrollTo({top:m.scrollHeight,behavior:'smooth'})};
