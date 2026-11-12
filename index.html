@@ -522,16 +522,55 @@ const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)retu
 })};
 let pend=[];
 /* big text files live in IndexedDB (not localStorage); messages keep {name,id,size,tok} */
-const FT=new Map(),MAXF=5e6,etok=n=>Math.ceil((typeof n==='string'?n.length:n)/3.2),fmtSz=n=>n>=1e6?(n/1e6).toFixed(1)+'MB':Math.max(1,Math.round(n/1e3))+'KB';
+const FT=new Map(),MAXF=15e6,etok=n=>Math.ceil((typeof n==='string'?n.length:n)/3.2),fmtSz=n=>n>=1e6?(n/1e6).toFixed(1)+'MB':Math.max(1,Math.round(n/1e3))+'KB';
 let fdb;
 const idb=()=>fdb||(fdb=new Promise((res,rej)=>{try{const r=indexedDB.open('orin-files',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}}));
 async function fput(id,text){FT.set(id,text);try{const d=await idb();await new Promise((res,rej)=>{const t=d.transaction('f','readwrite');t.objectStore('f').put(text,id);t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)});return true}catch(e){return false}}
 async function fload(){try{const d=await idb();await new Promise(res=>{const q=d.transaction('f').objectStore('f').openCursor();q.onsuccess=()=>{const c=q.result;if(c){FT.set(c.key,c.value);c.continue()}else res()};q.onerror=()=>res()})}catch(e){}}
 async function fclean(){try{const used=new Set();S.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>f.id&&used.add(f.id))));const d=await idb(),t=d.transaction('f','readwrite'),st=t.objectStore('f');for(const k of [...FT.keys()])if(!used.has(k)){st.delete(k);FT.delete(k)}}catch(e){}}
 const ftext=f=>f.text!==undefined?f.text:(FT.has(f.id)?FT.get(f.id):'[file content ei device e nai]');
-function fullText(m){return (m.content||'')+(m.files||[]).map(f=>'\n\n[File: '+f.name+']\n'+ftext(f)).join('')}
+function fullText(m,sm){return (m.content||'')+(m.files||[]).map(f=>'\n\n[File: '+f.name+']'+(sm&&sm.res.has(f.id||f.name)?sm.res.get(f.id||f.name):'\n'+ftext(f))).join('')}
+/* Smart mode: when attached files exceed the model's context budget, send only chunks relevant to the question */
+const CHI=new Map(),STOP=new Set('the and for are but not you with this that from have was were will can all any how what when where which who why your our ko ki ke kore koro kothay ache ami tumi eta ota ar na hoy hobe dao dekho bolo please file'.split(' '));
+const tokz=t=>(t.toLowerCase().match(/[\p{L}\p{N}_]{2,}/gu)||[]);
+function chunkIdx(id,text){
+  let ix=CHI.get(id);if(ix&&ix.len===text.length)return ix;
+  const lines=text.split('\n'),ch=[];let cur=[],sz=0,sl=1;
+  const flush=el=>{if(cur.length){ch.push({sl,el,text:cur.join('\n')});cur=[];sz=0}};
+  lines.forEach((ln,i)=>{
+    if(ln.length>3500){flush(i);for(let k=0;k<ln.length;k+=3500)ch.push({sl:i+1,el:i+1,text:ln.slice(k,k+3500)});sl=i+2;return}
+    if(!cur.length)sl=i+1;cur.push(ln);sz+=ln.length+1;if(sz>=3500)flush(i+1)});
+  flush(lines.length);
+  const df=new Map();let tot=0;
+  ch.forEach(c=>{const tf=new Map();tokz(c.text).forEach(w=>tf.set(w,(tf.get(w)||0)+1));c.tf=tf;c.n=c.text.length;tot+=c.n;tf.forEach((_,w)=>df.set(w,(df.get(w)||0)+1))});
+  ix={chunks:ch,df,avg:tot/Math.max(1,ch.length),len:text.length,lines:lines.length};CHI.set(id,ix);return ix;
+}
+function rankChunks(ix,query){
+  const qs=[...new Set(tokz(query).filter(w=>!STOP.has(w)))],N=ix.chunks.length;
+  return ix.chunks.map((c,i)=>{let sc=0;for(const w of qs){const f=c.tf.get(w);if(!f)continue;const d=ix.df.get(w)||1,idf=Math.log(1+(N-d+.5)/(d+.5));sc+=idf*f*2.5/(f+1.5*(.25+.75*c.n/ix.avg))}return {i,sc}});
+}
+function retrieveChunks(id,text,query,maxChars){
+  const ix=chunkIdx(id,text),rk=rankChunks(ix,query),hit=rk.filter(x=>x.sc>0).sort((a,b)=>b.sc-a.sc),pick=new Set();let used=0;
+  const add=i=>{if(!ix.chunks[i])return false;const n=ix.chunks[i].n;if(pick.has(i)||used+n>maxChars)return false;pick.add(i);used+=n;return true};
+  add(0);
+  for(const x of hit){if(!add(x.i)&&used>maxChars*0.95)break}
+  if(hit.length)for(const i of [...pick]){if(i)add(i-1);add(i+1)}
+  if(!hit.length){const N=ix.chunks.length,step=Math.max(1,Math.floor(N/Math.max(1,Math.floor(maxChars/3500))));for(let i=0;i<N;i+=step)add(i)}
+  return {ix,out:[...pick].sort((a,b)=>a-b).map(i=>'--- lines '+ix.chunks[i].sl+'-'+ix.chunks[i].el+' ---\n'+ix.chunks[i].text).join('\n'),n:pick.size};
+}
+const fbudget=ctx=>Math.floor(ctx*0.55);
+const curCtx=()=>{let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=[o]}return l.length?ctxOf(l[0]):128e3};
+function chatFiles(c){const o=[];(c.msgs||[]).forEach(m=>(m.files||[]).forEach(f=>{const t=ftext(f);o.push({id:f.id||f.name,name:f.name,text:t,tok:etok(t)})}));return o}
+function smartPlan(c){
+  const fs=chatFiles(c),tot=fs.reduce((a,f)=>a+f.tok,0),fb=fbudget(curCtx());
+  if(!fs.length||tot<=fb)return null;
+  const um=[...c.msgs].reverse().filter(m=>m.role==='user'),q=((um[0]&&um[0].content)||'')+((um[0]&&um[0].content||'').length<25&&um[1]?' '+um[1].content:'');
+  const per=Math.floor(fb*3.2/fs.length),res=new Map();let n=0;
+  fs.forEach(f=>{const r=retrieveChunks(f.id,f.text,q,per);n+=r.n;res.set(f.id,'\n[Smart mode: file boro ('+fmtSz(f.text.length)+', '+r.ix.lines+' lines), tai shudhu prosner shathe milano ongsho dewa holo. Baki ongsho dorkar hole user ke prosno shuddho kore bolte bolo'+(agentOn()?' ba search_attachment/read_attachment tool use koro':'')+'.]\n'+r.out)});
+  return {res,n};
+}
 const ctxOf=p=>+p.ctx||(p.type==='gemini'?1e6:p.type==='anthropic'?2e5:128e3);
-function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?'📕':'📄')+'<span>'+esc(a.name)+(a.kind==='text'&&a.tok?'<small class="pcs">'+fmtSz(a.size||a.text.length)+' · ~'+fmtTok(a.tok)+' token</small>':'')+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
+function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?'📕':'📄')+'<span>'+esc(a.name)+(a.kind==='text'&&a.tok?'<small class="pcs">'+fmtSz(a.size||a.text.length)+' · ~'+fmtTok(a.tok)+' token'+(a.tok>fbudget(curCtx())?' · 🔎 Smart':'')+'</small>':'')+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
 function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
 async function addFiles(list){
   for(const f of list){
@@ -759,6 +798,8 @@ const TOOLS=[
  {name:'edit_many',description:'Apply several exact-text replacements to ONE file in a single call (all-or-nothing). Each old_text must appear exactly once in the file at the moment it is applied.',parameters:{type:'object',properties:{path:{type:'string'},edits:{type:'array',items:{type:'object',properties:{old_text:{type:'string'},new_text:{type:'string'}},required:['old_text','new_text']}}},required:['path','edits']}},
  {name:'search_code',description:'Search code across the whole repository by text (GitHub code search; default branch only, does NOT include staged draft changes, may lag behind very recent pushes). Returns file paths with matching snippets. Use read_file afterwards.',parameters:{type:'object',properties:{query:{type:'string'},repo:{type:'string',description:'optional other repo as owner/name'}},required:['query']}},
  {name:'save_attachment',description:'Save an image the user attached in this chat into the repo as a binary file (e.g. logo.png). Staged as a draft.',parameters:{type:'object',properties:{path:{type:'string'},which:{type:'string',description:'attachment file name or 1-based index among the latest attached images; default first'}},required:['path']}},
+{name:'search_attachment',description:'Search inside a file the user attached to this chat (best-matching excerpts with line numbers). Use for big attached files.',parameters:{type:'object',properties:{query:{type:'string'},name:{type:'string',description:'attached file name (optional if only one)'}},required:['query']}},
+ {name:'read_attachment',description:'Read a line range of a file the user attached to this chat (max 400 lines).',parameters:{type:'object',properties:{name:{type:'string'},start_line:{type:'integer'},end_line:{type:'integer'}},required:['start_line','end_line']}},
  {name:'save_repo_notes',description:'Save a SHORT overview of this repository (purpose, structure, key files, conventions; max ~1500 chars) so that future chats already know it. Replaces previous notes.',parameters:{type:'object',properties:{notes:{type:'string'}},required:['notes']}},
  {name:'list_issues',description:'List GitHub issues of the current repo (excludes pull requests).',parameters:{type:'object',properties:{state:{type:'string',description:'open (default), closed or all'}}}},
  {name:'get_issue',description:'Read one issue with its comments.',parameters:{type:'object',properties:{number:{type:'integer'}},required:['number']}},
@@ -778,6 +819,13 @@ async function tool(c,name,a){
     const j=await gh('/user/repos',{method:'POST',body:{name:n,description:String(a.description||'').slice(0,300),private:pv,auto_init:true}});
     S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;rawSave();
     return 'Created '+j.full_name+' (branch '+S.repo.branch+') and selected it.';
+  }
+  if(name==='search_attachment'||name==='read_attachment'){
+    const fs=chatFiles(c).filter(f=>!a.name||f.name===a.name);if(!fs.length)throw new Error('Attached file pai ni'+(a.name?' ('+a.name+')':''));
+    const f=fs[fs.length-1];
+    if(name==='search_attachment'){const r=retrieveChunks(f.id,f.text,String(a.query||''),14000);return f.name+' ('+r.ix.lines+' lines) matches:\n'+r.out}
+    const ls=f.text.split('\n'),a0=Math.max(1,parseInt(a.start_line,10)||1),b0=Math.min(ls.length,a0+399,parseInt(a.end_line,10)||a0+99);
+    return f.name+' lines '+a0+'-'+b0+' of '+ls.length+':\n'+ls.slice(a0-1,b0).map((x,i)=>(a0+i)+': '+x).join('\n').slice(0,30000);
   }
   const XR=a.repo&&String(a.repo)!==S.repo.full?String(a.repo).trim():null;
   if(XR&&['list_files','read_file','search_code'].includes(name)){
@@ -990,12 +1038,14 @@ async function agentCall(p,history,work,sys,onLive){
     throw e;
   }finally{clearTimeout(to)}
 }
-const buildHistory=c=>{let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
-function agentSys(c){
+const buildHistory=c=>{const sm=smartPlan(c);{const lu=[...c.msgs].reverse().find(m=>m.role==='user');if(lu){if(sm)lu.sm=sm.n;else delete lu.sm}}let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m,sm)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
+function attachNote(c){const fs=chatFiles(c);if(!fs.length)return '';const sm=smartPlan(c);return '\nFiles attached by the user in this chat: '+fs.map(f=>f.name+' ('+f.text.split('\n').length+' lines)').join(', ')+'.'+(sm?' They are too big for the context, so only excerpts are included in the messages; use search_attachment and read_attachment to look at other parts.':'')}
+function agentSys(c){return agentSys0(c)+attachNote(c)}
+function agentSys0(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
   return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message',edit_many:'✂️ edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'🔎 search '+(a.query||''),list_issues:'🐞 issues',get_issue:'🐞 issue #'+(a.number||''),create_issue:'➕ issue '+(a.title||''),list_prs:'🔀 PR list',get_pr:'🔀 PR #'+(a.number||''),switch_branch:'🌿 branch '+(a.branch||''),pr_description:'📝 PR description',save_attachment:'🖼 save image '+p,save_repo_notes:'🧠 repo notes save'})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message',edit_many:'✂️ edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'🔎 search '+(a.query||''),list_issues:'🐞 issues',get_issue:'🐞 issue #'+(a.number||''),create_issue:'➕ issue '+(a.title||''),list_prs:'🔀 PR list',get_pr:'🔀 PR #'+(a.number||''),switch_branch:'🌿 branch '+(a.branch||''),pr_description:'📝 PR description',search_attachment:'🔎 file e khujchi: '+(a.query||''),read_attachment:'📄 file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'🖼 save image '+p,save_repo_notes:'🧠 repo notes save'})[k.name]||k.name};
 async function ensureNotes(c){
   const R=S.repo.full;if(S.repoNotes&&S.repoNotes[R])return;
   const t=await getTree();if(t.empty||!t.paths.size)return;
@@ -1202,7 +1252,7 @@ async function send(){
   if(imgMode){if(pend.length){toast('Image mode e attachment hobe na. Attachment soriye dao');return}if(!txt){toast('Chobir description likho');return}if(!imgReady()){toast('Age Settings e image provider add koro');spage='img';openSheet();return}}
   else if(!list.length){toast('Age Settings e provider add koro');spage='prov';openSheet();return}
   if(!imgMode){
-    const lim=ctxOf(list[0]),oc=chat(),hist=oc?buildHistory(oc).reduce((a,m)=>a+(m.content||'').length,0):0,add=pend.reduce((a,x)=>a+(x.kind==='text'?x.text.length:0),0)+txt.length,est=etok(hist+add);
+    const lim=ctxOf(list[0]),oc=chat(),fb=fbudget(lim),pf=pend.reduce((a,x)=>a+(x.kind==='text'?x.tok||etok(x.text):0),0),of=oc?chatFiles(oc).reduce((a,f)=>a+f.tok,0):0,nf=oc?oc.msgs.reduce((a,m)=>a+(m.content||'').length,0):0,est=etok(nf+txt.length)+Math.min(pf+of,fb);
     if(est>lim*0.85&&!confirm('Ei message e proy ~'+fmtTok(est)+' token jabe, kintu '+list[0].name+' er limit ~'+fmtTok(lim)+' token. Model error dite pare. Tobu pathabe?\n(Chhoto file dile ba Gemini model use korle bhalo. Settings e provider er "Context window" thik kora jay.)'))return;
   }
   if(!chat())newChat();
@@ -1232,7 +1282,7 @@ function render(typing){
     el.innerHTML='<div class="empty"><div class="logo"><i></i></div><h2>Ki jante chao?</h2><p>'+(S.providers.length?'Likhte shuru koro, ba niche theke ekta bachho.':'Shuru korar age ekta provider add korte hobe.')+'</p>'+(S.providers.length?sugHTML():'<button class="btn" data-act="hset" style="margin-top:14px">Provider add koro</button>')+'</div>';return}
   let h='';
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
-    if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r">'+ibtn('data-edit="'+i+'"','Edit','edit')+'</div>';
+    if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.sm?'<span class="tag">🔎 Smart · '+m.sm+' ongsho</span>':'')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r">'+ibtn('data-edit="'+i+'"','Edit','edit')+'</div>';
     else if(m.role==='assistant'){
       h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+usageStr(m.u)+'</span>'+(m.pic?ibtn('data-save="'+i+'"','Save image','dl'):ibtn('data-copy="'+i+'"','Copy','copy'))+(i===c.msgs.length-1?ibtn('data-regen="1"','Regenerate','refresh'):'')+'</div>';
     }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta">'+ibtn('data-regen="1"','Retry','refresh')+'<span>Retry</span></div>':'');
