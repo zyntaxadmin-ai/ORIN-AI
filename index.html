@@ -211,6 +211,7 @@ form.in{padding:4px 12px 10px}
 .mrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 14px;background:var(--sf);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px}
 .mrow:active{background:var(--ac2)}.mrow .mi{font-size:22px;width:36px;height:36px;display:grid;place-items:center;background:var(--ac2);border-radius:10px;flex:none}
 .mrow .mt{flex:1;min-width:0}.mrow .mt b{display:block;font-size:15.5px}.mrow .mt small{display:block;color:var(--mute);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mrow .ar{color:var(--mute);font-size:20px}
+.pc>span{display:flex;flex-direction:column;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pcs{font-size:11px;color:var(--mute)}
 </style>
 </head>
 <body>
@@ -504,7 +505,7 @@ async function callProvider(p,history,onDelta){
   }finally{clearTimeout(to)}
 }
 let live='',raf=0,lastUsage=null;
-const fmtTok=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(n||0);
+const fmtTok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(n||0);
 const fmtCost=c=>'$'+(c<0.01?c.toFixed(4):c.toFixed(2));
 const usageStr=u=>u?' · ↑'+fmtTok(u.i)+' ↓'+fmtTok(u.o)+(u.e?'~':'')+(u.c!=null?' · '+fmtCost(u.c):''):'';
 function mkUsage(p,hist,out){const us=lastUsage;let i,o,e=0;if(us&&(us.i||us.o)){i=us.i||0;o=us.o||0}else{e=1;i=Math.ceil(hist.reduce((a,m)=>a+(m.content||'').length,0)/3);o=Math.ceil(out.length/3)}const r={i,o};if(e)r.e=1;if(p.pin||p.pout)r.c=(i*(+p.pin||0)+o*(+p.pout||0))/1e6;return r}
@@ -520,8 +521,17 @@ const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)retu
   updateFab();
 })};
 let pend=[];
-function fullText(m){return (m.content||'')+(m.files||[]).map(f=>'\n\n[File: '+f.name+']\n'+f.text).join('')}
-function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?'📕':'📄')+'<span>'+esc(a.name)+(a.kind==='text'?' · '+(a.text.length>=1000?Math.round(a.text.length/1000)+'KB':a.text.length+'B')+' · ~'+fmtTok(Math.ceil(a.text.length/3.5))+' tok':'')+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
+/* big text files live in IndexedDB (not localStorage); messages keep {name,id,size,tok} */
+const FT=new Map(),MAXF=5e6,etok=n=>Math.ceil((typeof n==='string'?n.length:n)/3.2),fmtSz=n=>n>=1e6?(n/1e6).toFixed(1)+'MB':Math.max(1,Math.round(n/1e3))+'KB';
+let fdb;
+const idb=()=>fdb||(fdb=new Promise((res,rej)=>{try{const r=indexedDB.open('orin-files',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}}));
+async function fput(id,text){FT.set(id,text);try{const d=await idb();await new Promise((res,rej)=>{const t=d.transaction('f','readwrite');t.objectStore('f').put(text,id);t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)});return true}catch(e){return false}}
+async function fload(){try{const d=await idb();await new Promise(res=>{const q=d.transaction('f').objectStore('f').openCursor();q.onsuccess=()=>{const c=q.result;if(c){FT.set(c.key,c.value);c.continue()}else res()};q.onerror=()=>res()})}catch(e){}}
+async function fclean(){try{const used=new Set();S.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>f.id&&used.add(f.id))));const d=await idb(),t=d.transaction('f','readwrite'),st=t.objectStore('f');for(const k of [...FT.keys()])if(!used.has(k)){st.delete(k);FT.delete(k)}}catch(e){}}
+const ftext=f=>f.text!==undefined?f.text:(FT.has(f.id)?FT.get(f.id):'[file content ei device e nai]');
+function fullText(m){return (m.content||'')+(m.files||[]).map(f=>'\n\n[File: '+f.name+']\n'+ftext(f)).join('')}
+const ctxOf=p=>+p.ctx||(p.type==='gemini'?1e6:p.type==='anthropic'?2e5:128e3);
+function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?'📕':'📄')+'<span>'+esc(a.name)+(a.kind==='text'&&a.tok?'<small class="pcs">'+fmtSz(a.size||a.text.length)+' · ~'+fmtTok(a.tok)+' token</small>':'')+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
 function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
 async function addFiles(list){
   for(const f of list){
@@ -529,8 +539,8 @@ async function addFiles(list){
     try{
       if(f.type.startsWith('image/'))pend.push({kind:'image',name:f.name,mime:'image/jpeg',data:await readImg(f)});
       else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){if(f.size>10e6)toast(f.name+' onek boro (max 10MB)');else pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)})}
-      else if(f.size>1000000)toast(f.name+' onek boro (max 1MB)');
-      else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': ei file support kore na');continue}pend.push({kind:'text',name:f.name,text:t});const tk=Math.ceil(t.length/3.5);if(tk>100000)toast(f.name+': ~'+fmtTok(tk)+' token, choto model e dhukbe na. Boro context er model (jemon Gemini) use koro')}
+      else if(f.size>MAXF)toast(f.name+' onek boro (max '+fmtSz(MAXF)+')');
+      else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': ei file support kore na');continue}pend.push({kind:'text',name:f.name,text:t,size:f.size,tok:etok(t)})}
     }catch(e){toast(f.name+' porte parlam na')}
   }
   renderTray();
@@ -1180,7 +1190,7 @@ function editMsg(i){
   if(i<c.msgs.length-1&&!confirm('Ei message er por er sob message muche jabe. Edit korbe?'))return;
   $('box').value=m.content||'';pend=[];
   (m.imgs||[]).forEach(x=>pend.push({kind:x.mime==='application/pdf'?'pdf':'image',name:x.name||'image',mime:x.mime,data:x.data}));
-  (m.files||[]).forEach(f=>pend.push({kind:'text',name:f.name,text:f.text}));
+  (m.files||[]).forEach(f=>{const t=ftext(f);pend.push({kind:'text',name:f.name,text:t,size:f.size||t.length,tok:etok(t)})});
   c.msgs.splice(i);save();render();renderTray();$('box').dispatchEvent(new Event('input'));$('box').focus();
 }
 let busy=false;
@@ -1191,11 +1201,15 @@ async function send(){
   if(recOn&&rec)rec.stop();
   if(imgMode){if(pend.length){toast('Image mode e attachment hobe na. Attachment soriye dao');return}if(!txt){toast('Chobir description likho');return}if(!imgReady()){toast('Age Settings e image provider add koro');spage='img';openSheet();return}}
   else if(!list.length){toast('Age Settings e provider add koro');spage='prov';openSheet();return}
+  if(!imgMode){
+    const lim=ctxOf(list[0]),oc=chat(),hist=oc?buildHistory(oc).reduce((a,m)=>a+(m.content||'').length,0):0,add=pend.reduce((a,x)=>a+(x.kind==='text'?x.text.length:0),0)+txt.length,est=etok(hist+add);
+    if(est>lim*0.85&&!confirm('Ei message e proy ~'+fmtTok(est)+' token jabe, kintu '+list[0].name+' er limit ~'+fmtTok(lim)+' token. Model error dite pare. Tobu pathabe?\n(Chhoto file dile ba Gemini model use korle bhalo. Settings e provider er "Context window" thik kora jay.)'))return;
+  }
   if(!chat())newChat();
   const c=chat();c.t=Date.now();const um={role:'user',content:txt};
   const ims=pend.filter(a=>a.kind==='image'||a.kind==='pdf'),fl=pend.filter(a=>a.kind==='text');
   if(ims.length){um.imgs=ims.map(a=>({mime:a.mime,data:a.data,name:a.name}));um.atts=ims.map(a=>({name:a.name,pdf:a.kind==='pdf'}))}
-  if(fl.length)um.files=fl.map(a=>({name:a.name,text:a.text}));
+  if(fl.length){um.files=[];for(const a of fl){const id=uid(),ok=await fput(id,a.text),f={name:a.name,id,size:a.size||a.text.length,tok:a.tok||etok(a.text)};if(!ok){if(a.text.length<=2e5)f.text=a.text;else{toast(a.name+': storage fail, file save hoyni');continue}}um.files.push(f)}}
   if(c.title==='New chat')c.title=(txt||(pend[0]&&pend[0].name)||'File').slice(0,32);
   c.msgs.push(um);pend=[];renderTray();
   $('box').value='';$('box').style.height='auto';busy=true;stopped=false;setBusyUI(true);save();render(true);
@@ -1284,6 +1298,7 @@ function drawSheet(){
     '<label>Base URL</label><input class="f" id="pu" value="'+esc(p.url||'')+'" placeholder="https://…/v1">'+
     '<label>API key</label><input class="f" id="pk" type="password" value="'+esc(p.key||'')+'" autocomplete="off">'+
     '<label>Model name</label><input class="f" id="pm" value="'+esc(p.model||'')+'" placeholder="e.g. llama-3.3-70b-versatile">'+
+    '<label>Context window (tokens, optional)</label><input class="f" id="pcx" inputmode="numeric" placeholder="auto: Gemini 1M · Claude 200k · baki 128k" value="'+qa(p.ctx||'')+'">'+
     '<label>Price per 1M input tokens $ (optional)</label><input class="f" id="pci" inputmode="decimal" value="'+qa(p.pin||'')+'">'+
     '<label>Price per 1M output tokens $ (optional)</label><input class="f" id="pco" inputmode="decimal" value="'+qa(p.pout||'')+'">'+
     '<div class="row"><button class="btn" data-act="psave">Save</button><button class="btn ghost" data-act="pcancel">Cancel</button>'+(p._new?'':'<button class="btn danger" data-rmed="1">Delete</button>')+'</div></div>';
@@ -1309,7 +1324,7 @@ function drawSheet(){
   const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
   ['iu','ik','im','is'].forEach((id,n)=>{const e=$(id);if(e)e.oninput=()=>{S.imgcfg=Object.assign({},S.imgcfg,{[['url','key','model','size'][n]]:e.value.trim()});save()}});
 }
-function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim(),pin:parseFloat($('pci').value)||0,pout:parseFloat($('pco').value)||0}}
+function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim(),ctx:parseInt($('pcx').value,10)||0,pin:parseFloat($('pci').value)||0,pout:parseFloat($('pco').value)||0}}
 
 document.addEventListener('click',e=>{
   const t=e.target.closest('button');if(!t)return;const d=t.dataset;
@@ -1336,7 +1351,7 @@ document.addEventListener('click',e=>{
   else if(d.hrest){restoreTo(d.hrest)}
   else if(d.fatt!==undefined){
     if(pend.length>=6){toast('Max 6 ta file');return}
-    readFull(chat()||{draft:null},d.fatt).then(tx=>{pend.push({kind:'text',name:d.fatt.split('/').pop(),text:tx.slice(0,60000)});renderTray();view='';$('sheet').classList.remove('on');render();toast('Attach hoyeche: '+d.fatt)}).catch(e=>toast(e.message));
+    readFull(chat()||{draft:null},d.fatt).then(tx=>{pend.push({kind:'text',name:d.fatt.split('/').pop(),text:tx.slice(0,MAXF),size:tx.length,tok:etok(tx)});renderTray();view='';$('sheet').classList.remove('on');render();toast('Attach hoyeche: '+d.fatt)}).catch(e=>toast(e.message));
   }
   else if(d.act==='rclear'){S.repo=null;ghTree=null;save();if(view==='repo')drawSheet();render()}
   else if(d.act==='rnew'){const n=$('nn').value.trim();if(!/^[A-Za-z0-9._-]{1,100}$/.test(n)){toast('Repo name e shudhu english okkhor, number, - _ . cholbe');return}
@@ -1370,8 +1385,8 @@ document.addEventListener('click',e=>{
   else if(d.act==='hnew')newChat()
   else if(d.sp){spage=d.sp;editing=null;drawSheet();$('sbody').scrollTop=0}
   else if(d.act==='hset'){editing=null;view='';spage=S.providers.length?'':'prov';openSheet()}
-  else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.assign({},S,{cloud:undefined}),strip)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
-  else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
+  else if(d.act==='exp'){const a=document.createElement('a');const ex=JSON.parse(JSON.stringify(Object.assign({},S,{cloud:undefined}),strip));ex.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text===undefined&&FT.has(f.id))f.text=FT.get(f.id)})));a.href=URL.createObjectURL(new Blob([JSON.stringify(ex)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
+  else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));S.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text!==undefined){fput(f.id,f.text);delete f.text}})));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
 $('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files</span></button><button class="pi" data-act="ropen"><span>📦 GitHub repo</span></button>');
@@ -1410,6 +1425,7 @@ $('box').addEventListener('paste',e=>{const fs=[...((e.clipboardData&&e.clipboar
 document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault()});
 document.addEventListener('drop',e=>{if(e.dataTransfer&&e.dataTransfer.files.length&&!home){e.preventDefault();addFiles([...e.dataTransfer.files])}});
 initIcons();applyTheme();render();updateModes();
+fload().then(()=>{fclean();render()});
 setMode('in');
 if(!C().session)showAuth(true);else syncNow(false);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow(false)});
