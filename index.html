@@ -521,7 +521,7 @@ const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)retu
 })};
 let pend=[];
 function fullText(m){return (m.content||'')+(m.files||[]).map(f=>'\n\n[File: '+f.name+']\n'+f.text).join('')}
-function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?'📕':'📄')+'<span>'+esc(a.name)+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
+function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?'📕':'📄')+'<span>'+esc(a.name)+(a.kind==='text'?' · '+(a.text.length>=1000?Math.round(a.text.length/1000)+'KB':a.text.length+'B')+' · ~'+fmtTok(Math.ceil(a.text.length/3.5))+' tok':'')+'</span><button data-rmp="'+i+'" aria-label="Remove">✕</button></div>').join('')}
 function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
 async function addFiles(list){
   for(const f of list){
@@ -529,8 +529,8 @@ async function addFiles(list){
     try{
       if(f.type.startsWith('image/'))pend.push({kind:'image',name:f.name,mime:'image/jpeg',data:await readImg(f)});
       else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){if(f.size>10e6)toast(f.name+' onek boro (max 10MB)');else pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)})}
-      else if(f.size>200000)toast(f.name+' onek boro (max 200KB)');
-      else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': ei file support kore na');continue}pend.push({kind:'text',name:f.name,text:t.slice(0,60000)})}
+      else if(f.size>1000000)toast(f.name+' onek boro (max 1MB)');
+      else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': ei file support kore na');continue}pend.push({kind:'text',name:f.name,text:t});const tk=Math.ceil(t.length/3.5);if(tk>100000)toast(f.name+': ~'+fmtTok(tk)+' token, choto model e dhukbe na. Boro context er model (jemon Gemini) use koro')}
     }catch(e){toast(f.name+' porte parlam na')}
   }
   renderTray();
