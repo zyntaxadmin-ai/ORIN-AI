@@ -717,6 +717,13 @@ const TOOLS=[
  {name:'edit_many',description:'Apply several exact-text replacements to ONE file in a single call (all-or-nothing). Each old_text must appear exactly once in the file at the moment it is applied.',parameters:{type:'object',properties:{path:{type:'string'},edits:{type:'array',items:{type:'object',properties:{old_text:{type:'string'},new_text:{type:'string'}},required:['old_text','new_text']}}},required:['path','edits']}},
  {name:'search_code',description:'Search code across the whole repository by text (GitHub code search; default branch only, does NOT include staged draft changes, may lag behind very recent pushes). Returns file paths with matching snippets. Use read_file afterwards.',parameters:{type:'object',properties:{query:{type:'string'}},required:['query']}},
  {name:'save_repo_notes',description:'Save a SHORT overview of this repository (purpose, structure, key files, conventions; max ~1500 chars) so that future chats already know it. Replaces previous notes.',parameters:{type:'object',properties:{notes:{type:'string'}},required:['notes']}},
+ {name:'list_issues',description:'List GitHub issues of the current repo (excludes pull requests).',parameters:{type:'object',properties:{state:{type:'string',description:'open (default), closed or all'}}}},
+ {name:'get_issue',description:'Read one issue with its comments.',parameters:{type:'object',properties:{number:{type:'integer'}},required:['number']}},
+ {name:'create_issue',description:'Create a new issue (asks the user to confirm).',parameters:{type:'object',properties:{title:{type:'string'},body:{type:'string'}},required:['title']}},
+ {name:'list_prs',description:'List pull requests of the current repo.',parameters:{type:'object',properties:{state:{type:'string',description:'open (default), closed or all'}}}},
+ {name:'get_pr',description:'Read one pull request: description, changed files, reviews and review comments, and its branch name.',parameters:{type:'object',properties:{number:{type:'integer'}},required:['number']}},
+ {name:'switch_branch',description:'Switch the working branch of the current repo (e.g. to a PR branch to fix review comments). Refused while there are staged draft changes.',parameters:{type:'object',properties:{branch:{type:'string'}},required:['branch']}},
+ {name:'pr_description',description:'Set the pull request description (markdown) used when the user opens a PR. Summarise what and why; add "Fixes #N" to link issues.',parameters:{type:'object',properties:{body:{type:'string'}},required:['body']}},
  {name:'commit_message',description:'Set a short commit message for the staged changes.',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}
 ];
 async function tool(c,name,a){
@@ -736,7 +743,38 @@ async function tool(c,name,a){
     const it=j.items||[];if(!it.length)return 'No matches (search only covers default branch & may lag; try list_files/read_file).';
     return it.map(x=>x.path+(x.text_matches?'\n'+x.text_matches.slice(0,2).map(m=>'  > '+String(m.fragment||'').replace(/\s+/g,' ').slice(0,200)).join('\n'):'')).join('\n');
   }
+  const RF='/repos/'+S.repo.full;
+  if(name==='list_issues'||name==='list_prs'){
+    const st=['open','closed','all'].includes(a.state)?a.state:'open',pr=name==='list_prs';
+    let l=pr?await gh(RF+'/pulls?state='+st+'&per_page=25'):(await gh(RF+'/issues?state='+st+'&per_page=40')).filter(x=>!x.pull_request).slice(0,25);
+    return l.length?l.map(x=>'#'+x.number+' ['+x.state+'] '+x.title+(pr&&x.head?' (branch '+x.head.ref+')':'')).join('\n'):'None';
+  }
+  if(name==='get_issue'||name==='get_pr'){
+    const n=parseInt(a.number,10);if(!(n>0))throw new Error('number dorkar');
+    if(name==='get_issue'){
+      const [i,cs]=await Promise.all([gh(RF+'/issues/'+n),gh(RF+'/issues/'+n+'/comments?per_page=30')]);
+      return '#'+i.number+' ['+i.state+'] '+i.title+'\n'+(i.body||'(no description)').slice(0,6000)+cs.map(x=>'\n--- '+(x.user&&x.user.login)+':\n'+String(x.body||'').slice(0,2000)).join('');
+    }
+    const [i,fl,rv,rc]=await Promise.all([gh(RF+'/pulls/'+n),gh(RF+'/pulls/'+n+'/files?per_page=60'),gh(RF+'/pulls/'+n+'/reviews?per_page=30'),gh(RF+'/pulls/'+n+'/comments?per_page=60')]);
+    return '#'+i.number+' ['+(i.merged?'merged':i.state)+'] '+i.title+'\nbranch: '+i.head.ref+' -> '+i.base.ref+'\n'+(i.body||'').slice(0,4000)+'\n\nFiles:\n'+fl.map(x=>x.status+' '+x.filename+' (+'+x.additions+' -'+x.deletions+')').join('\n')+
+      (rv.filter(x=>x.body).length?'\n\nReviews:\n'+rv.filter(x=>x.body).map(x=>(x.user&&x.user.login)+' ['+x.state+']: '+x.body.slice(0,1500)).join('\n'):'')+
+      (rc.length?'\n\nReview comments:\n'+rc.map(x=>(x.user&&x.user.login)+' on '+x.path+(x.line?':'+x.line:'')+': '+String(x.body).slice(0,1000)).join('\n'):'');
+  }
+  if(name==='create_issue'){
+    const t=String(a.title||'').trim().slice(0,250);if(!t)throw new Error('title dorkar');
+    if(!confirm('AI '+S.repo.full+' e issue khulte chay:\n"'+t+'"\nAllow?'))throw new Error('User allow kore ni');
+    const j=await gh(RF+'/issues',{method:'POST',body:{title:t,body:String(a.body||'').slice(0,60000)}});
+    return 'Created issue #'+j.number+' '+(j.html_url||'');
+  }
+  if(name==='switch_branch'){
+    const b=String(a.branch||'').trim();if(!b)throw new Error('branch dorkar');
+    if(c.draft&&dcount(c))throw new Error('Staged draft ache. Age push/discard korte hobe, tarpor branch bodlano jabe.');
+    await gh(RF+'/branches/'+encodeURIComponent(b));
+    S.repo=Object.assign({},S.repo,{branch:b});ghTree=null;c.draft=null;rawSave();updateChip&&updateChip();
+    return 'Switched to branch '+b;
+  }
   const d=dr(c);
+  if(name==='pr_description'){d.prBody=String(a.body||'').slice(0,60000);rawSave();return 'PR description saved'}
   if(name==='commit_message'){d.msg=String(a.message||'').slice(0,200);rawSave();return 'ok'}
   if(name==='list_files'){
     const t=await getTree(),ps=new Set(t.paths);
@@ -881,9 +919,9 @@ async function agentCall(p,history,work,sys,onLive){
 const buildHistory=c=>{let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
 function agentSys(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
-  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. Use search_code to find where something is used across the repo, and edit_many for several changes in one file. If there are no saved repo notes, after exploring call save_repo_notes once with a short overview. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the user will open a PR, call pr_description with a clear summary (add "Fixes #N" when relevant). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. If there are no saved repo notes, after exploring call save_repo_notes once with a short overview. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message',edit_many:'✂️ edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'🔎 search '+(a.query||''),save_repo_notes:'🧠 repo notes save'})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message',edit_many:'✂️ edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'🔎 search '+(a.query||''),list_issues:'🐞 issues',get_issue:'🐞 issue #'+(a.number||''),create_issue:'➕ issue '+(a.title||''),list_prs:'🔀 PR list',get_pr:'🔀 PR #'+(a.number||''),switch_branch:'🌿 branch '+(a.branch||''),pr_description:'📝 PR description',save_repo_notes:'🧠 repo notes save'})[k.name]||k.name};
 async function runAgent(c,list){
   const history=buildHistory(c),work=[],log=[],fails=[],sys=agentSys(c);
   let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0};
@@ -951,7 +989,7 @@ function draftHTML(c){
     h+='<div class="dc"><b>📝 Draft: '+fs.length+' file</b><small>'+esc(d.repo)+' · '+esc(d.branch)+'</small>'+
     fs.map(([p,f])=>'<div class="df"><div class="fr"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button><button class="fx" data-fx="'+qa(p)+'" aria-label="Ei file ta bad dao" title="Bad dao">'+IC.x+'</button></div>'+(dview[p]?fileDiffHTML(d,p,f):'')+'</div>').join('')+
     '<input class="f cm" placeholder="Commit message" value="'+qa(d.msg||defMsg(c))+'">'+
-    '<div class="seg"><button data-pm="direct" class="'+(pr?'':'on')+'">Sorasori push</button><button data-pm="pr" class="'+(pr?'on':'')+'">Branch + PR</button></div>'+
+    (pr?'<textarea class="f pb" rows="3" placeholder="PR description (optional — AI likhe dite pare)">'+esc(d.prBody||'')+'</textarea>':'')+'<div class="seg"><button data-pm="direct" class="'+(pr?'':'on')+'">Sorasori push</button><button data-pm="pr" class="'+(pr?'on':'')+'">Branch + PR</button></div>'+
     '<small>'+(pr?'Notun branch e jabe. Tumi Merge chaple \''+esc(d.branch)+'\' e mishbe. (Beshi nirapod)':'Sorasori \''+esc(d.branch)+'\' e jabe. Pore Undo kora jabe.')+'</small>'+
     '<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gpush">'+(pr?'🔀 PR kholo':'⬆ Push korbo')+'</button><button class="btn ghost sm" data-act="gdisc">Discard</button></div></div>';
   }
@@ -990,7 +1028,7 @@ async function pushDraft(c){
       const nc=await gh('/repos/'+R+'/git/commits',{method:'POST',body:{message:msg,tree:t.sha,parents:[prev]}});
       await gh('/repos/'+R+'/git/refs/heads/'+enc(target),{method:'PATCH',body:{sha:nc.sha}});sha=nc.sha;
       if(wantPR){
-        const pl=await gh('/repos/'+R+'/pulls',{method:'POST',body:{title:msg,head:target,base:B,body:'Created with Orin.'}});
+        const pl=await gh('/repos/'+R+'/pulls',{method:'POST',body:{title:msg,head:target,base:B,body:(f0=>f0.trim()?f0:'Created with Orin.')(String(c.draft.prBody||'')).slice(0,60000)}});
         pr={n:pl.number,head:target};prev=null;
       }
     }
@@ -1251,6 +1289,7 @@ $('dclose').onclick=closeDrawer;$('dset').onclick=()=>{closeDrawer();editing=nul
 $('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search ON':'Web search ON. Settings e Tavily key dao'):'Web search OFF')};
 $('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode ON':'Image mode ON. Settings e image provider dao'):'Image mode OFF')};
 document.addEventListener('input',e=>{const t=e.target;
+  if(t.classList&&t.classList.contains('pb')){const c=chat();if(c&&c.draft){c.draft.prBody=t.value;rawSave()}}
   if(t.classList&&t.classList.contains('cm')){const c=chat();if(c&&c.draft){c.draft.msg=t.value;rawSave()}}
   else if(t.id==='rq'){rfilter=t.value.toLowerCase();const l=$('rl');if(l)l.innerHTML=repoListHTML()}});
 $('cq').oninput=e=>{q=e.target.value.toLowerCase();renderList()};
