@@ -903,6 +903,14 @@ async function getTree(){
   catch(e){if(/ 409/.test(e.message))t.empty=true;else throw e}
   ghTree=t;return t;
 }
+function sliceRead(x,a){
+  const lim=60000,ls=x.split('\n'),n=ls.length,s0=Math.max(1,parseInt(a.start_line,10)||1),e0=Math.min(n,parseInt(a.end_line,10)||n);
+  if(s0===1&&e0===n&&x.length<=lim)return x;
+  const out=[];let len=0;
+  for(let i=s0-1;i<e0;i++){if(len+ls[i].length+1>lim&&out.length)break;out.push(ls[i]);len+=ls[i].length+1}
+  const last=s0-1+out.length;
+  return '[lines '+s0+'-'+last+' of '+n+' ('+x.length+' chars total)'+(last<Math.min(n,e0)||last<n&&!a.end_line?'. NOT finished: call read_file again with start_line='+(last+1)+' to read the rest':'')+']\n'+out.join('\n');
+}
 async function readFull(c,p){
   const d=dr(c),f=d.files[p];
   if(f){if(f.del)throw new Error('File draft e deleted');if(f.bin)throw new Error('Binary file, porte parbo na');return f.content}
@@ -914,7 +922,7 @@ async function readFull(c,p){
 const TOOLS=[
  {name:'list_repos',description:"List the user's GitHub repositories (optionally filtered by a text query).",parameters:{type:'object',properties:{query:{type:'string',description:'optional text filter'}}}},
  {name:'list_files',description:'List files in the current repository (with staged draft changes applied). Optionally only under a folder path.',parameters:{type:'object',properties:{path:{type:'string',description:'optional folder prefix, e.g. src'},repo:{type:'string',description:'optional other repo as owner/name (read-only, default branch)'}}}},
- {name:'read_file',description:'Read a text file from the current repository (staged draft version if changed). Optionally from another repo (owner/name, read-only, default branch).',parameters:{type:'object',properties:{path:{type:'string'},repo:{type:'string'}},required:['path']}},
+ {name:'read_file',description:'Read a text file from the current repository (staged draft version if changed). Optionally from another repo (owner/name, read-only, default branch).',parameters:{type:'object',properties:{path:{type:'string'},start_line:{type:'integer',description:'optional, 1-based; for big files read in ranges'},end_line:{type:'integer',description:'optional'},repo:{type:'string'}},required:['path']}},
  {name:'write_file',description:'Create or fully overwrite a file with COMPLETE content. Staged as a draft; the user pushes it.',parameters:{type:'object',properties:{path:{type:'string'},content:{type:'string',description:'full file content'}},required:['path','content']}},
  {name:'edit_file',description:'Replace one exact piece of text in an existing file. old_text must appear exactly once. Staged as draft.',parameters:{type:'object',properties:{path:{type:'string'},old_text:{type:'string'},new_text:{type:'string'}},required:['path','old_text','new_text']}},
  {name:'delete_file',description:'Delete a file (staged as draft).',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}},
@@ -962,7 +970,7 @@ async function tool(c,name,a){
     if(name==='read_file'){
       const pp=okPath(a.path),x=await gh('/repos/'+XR+'/contents/'+enc(pp),{raw:true});
       if(x.includes('\u0000'))throw new Error('Binary file');
-      return x.length>40000?x.slice(0,40000)+'\n[TRUNCATED]':x;
+      return sliceRead(x,a);
     }
     const q=String(a.query||'').trim();if(!q)throw new Error('query khali');
     const j=await gh('/search/code?q='+encodeURIComponent(q+' repo:'+XR)+'&per_page=12',{accept:'application/vnd.github.text-match+json'});
@@ -1026,7 +1034,7 @@ async function tool(c,name,a){
     return (l.length?l.slice(0,400).join('\n'):(t.empty?'(repo empty)':'(no files)'))+(l.length>400?'\n... '+(l.length-400)+' more':'')+(t.trunc?'\n(tree truncated by GitHub)':'');
   }
   const p=okPath(a.path);
-  if(name==='read_file'){const x=await readFull(c,p);return x.length>40000?x.slice(0,40000)+'\n[TRUNCATED: file is '+x.length+' chars; use edit_file for changes]':x}
+  if(name==='read_file'){return sliceRead(await readFull(c,p),a)}
   if(name==='write_file'){
     if(typeof a.content!=='string')throw new Error('content dorkar');
     if(a.content.length>300000)throw new Error('File onek boro (max 300KB)');
@@ -1167,7 +1175,7 @@ function attachNote(c){const fs=chatFiles(c);if(!fs.length)return '';const sm=sm
 function agentSys(c){return agentSys0(c)+attachNote(c)}
 function agentSys0(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
-  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
 const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save'})[k.name]||k.name};
 async function ensureNotes(c){
