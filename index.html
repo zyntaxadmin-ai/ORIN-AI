@@ -380,13 +380,13 @@ async function refreshTok(){
   setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:c.session.rt})},false));
 }
 async function push(){
-  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,search:S.search,imgcfg:S.imgcfg,gh:S.gh,repo:S.repo,ts:S.ts||Date.now()};
+  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,search:S.search,imgcfg:S.imgcfg,gh:S.gh,repo:S.repo,repoNotes:S.repoNotes,ts:S.ts||Date.now()};
   await sb('/rest/v1/orin_data?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:C().session.uid,data:d,updated_at:new Date().toISOString()},strip)});
   cst='synced '+new Date().toLocaleTimeString();
 }
 function schedPush(){if(!C().session)return;clearTimeout(pt);pt=setTimeout(()=>push().catch(e=>{cst='error: '+e.message}),1500)}
 function applyRemote(rd){
-  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.search=rd.search||S.search;S.imgcfg=rd.imgcfg||S.imgcfg;S.gh=rd.gh||S.gh;S.repo=rd.repo||S.repo;S.ts=rd.ts||0;
+  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.search=rd.search||S.search;S.imgcfg=rd.imgcfg||S.imgcfg;S.gh=rd.gh||S.gh;S.repo=rd.repo||S.repo;S.repoNotes=rd.repoNotes||S.repoNotes;S.ts=rd.ts||0;
   if(!chat())S.cur=S.chats[0]?S.chats[0].id:null;
   rawSave();applyTheme();render();
 }
@@ -647,7 +647,7 @@ function ghHTML(){return '<div class="sec"><h3>GitHub (agent mode)</h3><p class=
 async function gh(path,opt={}){
   const t=S.gh&&S.gh.token;if(!t)throw new Error('GitHub token nai');
   const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),30000);
-  const h={Authorization:'Bearer '+t,Accept:opt.raw?'application/vnd.github.raw+json':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
+  const h={Authorization:'Bearer '+t,Accept:opt.accept||(opt.raw?'application/vnd.github.raw+json':'application/vnd.github+json'),'X-GitHub-Api-Version':'2022-11-28'};
   if(opt.body)h['Content-Type']='application/json';
   try{
     const r=await fetch('https://api.github.com'+path,{method:opt.method||'GET',headers:h,body:opt.body?JSON.stringify(opt.body):undefined,signal:ctl.signal});
@@ -714,6 +714,9 @@ const TOOLS=[
  {name:'edit_file',description:'Replace one exact piece of text in an existing file. old_text must appear exactly once. Staged as draft.',parameters:{type:'object',properties:{path:{type:'string'},old_text:{type:'string'},new_text:{type:'string'}},required:['path','old_text','new_text']}},
  {name:'delete_file',description:'Delete a file (staged as draft).',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}},
  {name:'create_repo',description:'Create a NEW GitHub repository for the user (asks the user to confirm) and switch to it.',parameters:{type:'object',properties:{name:{type:'string'},description:{type:'string'},private:{type:'boolean',description:'default true'}},required:['name']}},
+ {name:'edit_many',description:'Apply several exact-text replacements to ONE file in a single call (all-or-nothing). Each old_text must appear exactly once in the file at the moment it is applied.',parameters:{type:'object',properties:{path:{type:'string'},edits:{type:'array',items:{type:'object',properties:{old_text:{type:'string'},new_text:{type:'string'}},required:['old_text','new_text']}}},required:['path','edits']}},
+ {name:'search_code',description:'Search code across the whole repository by text (GitHub code search; default branch only, does NOT include staged draft changes, may lag behind very recent pushes). Returns file paths with matching snippets. Use read_file afterwards.',parameters:{type:'object',properties:{query:{type:'string'}},required:['query']}},
+ {name:'save_repo_notes',description:'Save a SHORT overview of this repository (purpose, structure, key files, conventions; max ~1500 chars) so that future chats already know it. Replaces previous notes.',parameters:{type:'object',properties:{notes:{type:'string'}},required:['notes']}},
  {name:'commit_message',description:'Set a short commit message for the staged changes.',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}
 ];
 async function tool(c,name,a){
@@ -725,6 +728,13 @@ async function tool(c,name,a){
     const j=await gh('/user/repos',{method:'POST',body:{name:n,description:String(a.description||'').slice(0,300),private:pv,auto_init:true}});
     S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;rawSave();
     return 'Created '+j.full_name+' (branch '+S.repo.branch+') and selected it.';
+  }
+  if(name==='save_repo_notes'){const n=String(a.notes||'').slice(0,2500);S.repoNotes=Object.assign({},S.repoNotes);S.repoNotes[S.repo.full]=n;rawSave();return 'Notes saved ('+n.length+' chars)'}
+  if(name==='search_code'){
+    const q=String(a.query||'').trim();if(!q)throw new Error('query khali');
+    const j=await gh('/search/code?q='+encodeURIComponent(q+' repo:'+S.repo.full)+'&per_page=12',{accept:'application/vnd.github.text-match+json'});
+    const it=j.items||[];if(!it.length)return 'No matches (search only covers default branch & may lag; try list_files/read_file).';
+    return it.map(x=>x.path+(x.text_matches?'\n'+x.text_matches.slice(0,2).map(m=>'  > '+String(m.fragment||'').replace(/\s+/g,' ').slice(0,200)).join('\n'):'')).join('\n');
   }
   const d=dr(c);
   if(name==='commit_message'){d.msg=String(a.message||'').slice(0,200);rawSave();return 'ok'}
@@ -750,6 +760,13 @@ async function tool(c,name,a){
     const t=await getTree();d.files[p]={content:cur.replace(o,()=>String(a.new_text||'')),ex:t.paths.has(p)};rawSave();
     return 'Edited '+p;
   }
+  if(name==='edit_many'){
+    const es=Array.isArray(a.edits)?a.edits:[];if(!es.length)throw new Error('edits khali');
+    let cur=await readFull(c,p);
+    es.forEach((e,i)=>{const o=String(e&&e.old_text||'');if(!o)throw new Error('edit #'+(i+1)+': old_text khali');const n=cur.split(o).length-1;if(n!==1)throw new Error('edit #'+(i+1)+': '+(n?'old_text '+n+' jaygay ache':'old_text file e nai')+' (kono change apply hoyni)');cur=cur.replace(o,()=>String(e.new_text||''))});
+    const t=await getTree();d.files[p]={content:cur,ex:t.paths.has(p)};rawSave();
+    return 'Edited '+p+' ('+es.length+' changes)';
+  }
   if(name==='delete_file'){
     const t=await getTree(),f=d.files[p];
     if(f&&!f.ex){delete d.files[p];rawSave();return 'Removed draft file '+p}
@@ -768,9 +785,9 @@ function agentCall0(p,history,work,sys){
       if(w.role==='assistant'){tr=null;msgs.push({role:'assistant',content:(w.text?[{type:'text',text:w.text}]:[]).concat(w.calls.map(k=>({type:'tool_use',id:k.id,name:k.name,input:k.args})))})}
       else{const b={type:'tool_result',tool_use_id:w.id,content:w.result};if(tr)tr.content.push(b);else{tr={role:'user',content:[b]};msgs.push(tr)}}
     }
-    body={model:p.model,max_tokens:8192,system:sys,messages:msgs,tools:TOOLS.map(t=>({name:t.name,description:t.description,input_schema:t.parameters}))};
+    body={model:p.model,max_tokens:8192,stream:true,system:sys,messages:msgs,tools:TOOLS.map(t=>({name:t.name,description:t.description,input_schema:t.parameters}))};
   }else if(p.type==='gemini'){
-    url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':generateContent?key='+encodeURIComponent(p.key);
+    url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':streamGenerateContent?alt=sse&key='+encodeURIComponent(p.key);
     const cs=history.map(m=>cv(p,m));
     for(const w of work){
       if(w.role==='assistant'){tr=null;cs.push({role:'model',parts:w.raw||(w.text?[{text:w.text}]:[]).concat(w.calls.map(k=>({functionCall:{name:k.name,args:k.args}})))})}
@@ -784,37 +801,79 @@ function agentCall0(p,history,work,sys){
       if(w.role==='assistant')msgs.push({role:'assistant',content:w.text||null,tool_calls:w.calls.map(k=>({id:k.id,type:'function',function:{name:k.name,arguments:JSON.stringify(k.args)}}))});
       else msgs.push({role:'tool',tool_call_id:w.id,content:w.result});
     }
-    body={model:p.model,messages:msgs,stream:false,tools:TOOLS.map(t=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}}))};
+    body={model:p.model,messages:msgs,stream:true,tools:TOOLS.map(t=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}}))};
   }
   return {url,headers,body};
 }
-async function agentCall(p,history,work,sys){
-  const ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),120000);
+async function agentCall(p,history,work,sys,onLive){
+  const ctl=new AbortController();curCtl=ctl;let to=setTimeout(()=>ctl.abort(),120000);
   try{
     const {url,headers,body}=agentCall0(p,history,work,sys);const isz=JSON.stringify(body).length;
+    if(p.type==='openai'&&/api\.(openai|groq|deepseek|together)\.|openrouter\.ai/.test(p.url))body.stream_options={include_usage:true};
     const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok){const e=Array.isArray(j)?j[0]:j,x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
-    let text='',calls=[],raw;
-    if(p.type==='anthropic'){
-      for(const b of j.content||[]){if(b.type==='text')text+=b.text;else if(b.type==='tool_use')calls.push({id:b.id,name:b.name,args:b.input||{}})}
-    }else if(p.type==='gemini'){
-      const parts=(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[];raw=parts.length?parts:undefined;
-      parts.forEach((x,i)=>{if(x.text&&!x.thought)text+=x.text;if(x.functionCall)calls.push({id:'g'+Date.now().toString(36)+i,name:x.functionCall.name,args:x.functionCall.args||{}})});
+    let text='',calls=[],raw,us=null;
+    const ct=r.headers.get('content-type')||'';
+    if(!r.ok||!/event-stream/.test(ct)){
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){const e=Array.isArray(j)?j[0]:j,x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
+      if(p.type==='anthropic'){
+        for(const b of j.content||[]){if(b.type==='text')text+=b.text;else if(b.type==='tool_use')calls.push({id:b.id,name:b.name,args:b.input||{}})}
+        if(j.usage)us={i:j.usage.input_tokens||0,o:j.usage.output_tokens||0};
+      }else if(p.type==='gemini'){
+        const jj=Array.isArray(j)?j[0]:j;const parts=(jj.candidates&&jj.candidates[0]&&jj.candidates[0].content&&jj.candidates[0].content.parts)||[];raw=parts.length?parts:undefined;
+        parts.forEach((x,i)=>{if(x.text&&!x.thought)text+=x.text;if(x.functionCall)calls.push({id:'g'+Date.now().toString(36)+i,name:x.functionCall.name,args:x.functionCall.args||{}})});
+        if(jj.usageMetadata)us={i:jj.usageMetadata.promptTokenCount||0,o:(jj.usageMetadata.candidatesTokenCount||0)+(jj.usageMetadata.thoughtsTokenCount||0)};
+      }else{
+        const m=j.choices&&j.choices[0]&&j.choices[0].message;if(!m)throw new Error('Empty reply');
+        text=typeof m.content==='string'?m.content:Array.isArray(m.content)?m.content.map(x=>x.text||'').join(''):'';
+        calls=(m.tool_calls||[]).filter(t=>t.function).map(t=>({id:t.id||('c'+Math.random().toString(36).slice(2,9)),name:t.function.name,args:sp(t.function.arguments)}));
+        if(j.usage&&j.usage.prompt_tokens!=null)us={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
+      }
     }else{
-      const m=j.choices&&j.choices[0]&&j.choices[0].message;if(!m)throw new Error('Empty reply');
-      text=typeof m.content==='string'?m.content:Array.isArray(m.content)?m.content.map(x=>x.text||'').join(''):'';
-      calls=(m.tool_calls||[]).filter(t=>t.function).map(t=>({id:t.id||('c'+Math.random().toString(36).slice(2,9)),name:t.function.name,args:sp(t.function.arguments)}));
+      const rd=r.body.getReader(),dec=new TextDecoder();let buf='';const tc={},ab={},gp=[];us=null;
+      const note=()=>{if(onLive){const pend=Object.values(tc).concat(Object.values(ab)).map(x=>x.name).filter(Boolean).pop();onLive(text,pend)}};
+      for(;;){
+        clearTimeout(to);to=setTimeout(()=>ctl.abort(),60000);
+        const {done,value}=await rd.read();if(done)break;
+        buf+=dec.decode(value,{stream:true});
+        const lines=buf.split('\n');buf=lines.pop();
+        for(const ln of lines){
+          if(!ln.startsWith('data:'))continue;
+          const d=ln.slice(5).trim();if(!d||d==='[DONE]')continue;
+          let j;try{j=JSON.parse(d)}catch(_){continue}
+          if(j.error)throw new Error((typeof j.error==='string'?j.error:j.error.message)||JSON.stringify(j.error));
+          if(p.type==='anthropic'){
+            if(j.type==='message_start'&&j.message&&j.message.usage)us={i:j.message.usage.input_tokens||0,o:j.message.usage.output_tokens||0};
+            else if(j.type==='message_delta'&&j.usage)us=Object.assign(us||{i:0,o:0},{o:j.usage.output_tokens||0});
+            else if(j.type==='content_block_start'&&j.content_block&&j.content_block.type==='tool_use'){ab[j.index]={id:j.content_block.id,name:j.content_block.name,js:''}}
+            else if(j.type==='content_block_delta'&&j.delta){
+              if(j.delta.type==='text_delta'){text+=j.delta.text||''}
+              else if(j.delta.type==='input_json_delta'&&ab[j.index])ab[j.index].js+=j.delta.partial_json||'';
+            }
+          }else if(p.type==='gemini'){
+            const u=j.usageMetadata;if(u)us={i:u.promptTokenCount||0,o:(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0)};
+            for(const x of (j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]){
+              gp.push(x);if(x.text&&!x.thought)text+=x.text;
+              if(x.functionCall)calls.push({id:'g'+Date.now().toString(36)+calls.length,name:x.functionCall.name,args:x.functionCall.args||{}});
+            }
+          }else{
+            if(j.usage&&(j.usage.prompt_tokens!=null||j.usage.completion_tokens!=null))us={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
+            const dl=j.choices&&j.choices[0]&&j.choices[0].delta;if(!dl)continue;
+            if(typeof dl.content==='string')text+=dl.content;
+            for(const t of dl.tool_calls||[]){const k=t.index!=null?t.index:0,o=tc[k]||(tc[k]={id:'',name:'',js:''});if(t.id)o.id=t.id;if(t.function){if(t.function.name)o.name+=t.function.name;if(t.function.arguments)o.js+=t.function.arguments}}
+          }
+        }
+        note();
+      }
+      if(p.type==='anthropic')calls=Object.keys(ab).sort((x,y)=>x-y).map(k=>({id:ab[k].id,name:ab[k].name,args:sp(ab[k].js)}));
+      else if(p.type==='gemini')raw=gp.length?gp:undefined;
+      else calls=Object.keys(tc).sort((x,y)=>x-y).map(k=>tc[k]).filter(t=>t.name).map(t=>({id:t.id||('c'+Math.random().toString(36).slice(2,9)),name:t.name,args:sp(t.js)}));
     }
     if(!text.trim()&&!calls.length)throw new Error('Empty reply');
-    let us=null;
-    if(p.type==='anthropic'&&j.usage)us={i:j.usage.input_tokens||0,o:j.usage.output_tokens||0};
-    else if(p.type==='gemini'&&j.usageMetadata)us={i:j.usageMetadata.promptTokenCount||0,o:(j.usageMetadata.candidatesTokenCount||0)+(j.usageMetadata.thoughtsTokenCount||0)};
-    else if(j.usage&&j.usage.prompt_tokens!=null)us={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
     if(!us)us={i:Math.ceil(isz/3),o:Math.ceil((text.length+JSON.stringify(calls).length)/3),e:1};
     return {text,calls,raw,us};
   }catch(e){
-    if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout (120s)');
+    if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout');
     if(e instanceof TypeError)throw new Error('Network/CORS block');
     throw e;
   }finally{clearTimeout(to)}
@@ -822,9 +881,9 @@ async function agentCall(p,history,work,sys){
 const buildHistory=c=>{let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
 function agentSys(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
-  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. Finish with a short plain summary of what you changed.'+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. Use search_code to find where something is used across the repo, and edit_many for several changes in one file. If there are no saved repo notes, after exploring call save_repo_notes once with a short overview. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message'})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'📦 repo list',list_files:'📂 list '+p,read_file:'📄 read '+p,write_file:'✏️ write '+p,edit_file:'✂️ edit '+p,delete_file:'🗑 delete '+p,create_repo:'➕ create repo '+p,commit_message:'💬 commit message',edit_many:'✂️ edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'🔎 search '+(a.query||''),save_repo_notes:'🧠 repo notes save'})[k.name]||k.name};
 async function runAgent(c,list){
   const history=buildHistory(c),work=[],log=[],fails=[],sys=agentSys(c);
   let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0};
@@ -832,7 +891,7 @@ async function runAgent(c,list){
     for(let step=0;step<30&&!stopped&&!done&&!failedAll;step++){
       let res=null;
       while(pi<list.length&&!stopped){
-        try{res=await agentCall(list[pi],history,work,sys);by=list[pi].name;break}
+        try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{live=(log.length?log.map(l=>'- '+l).join('\n')+'\n\n':'')+(t||'')+(pn?'\n⏳ '+pn+'…':'');draw()});by=list[pi].name;break}
         catch(e){if(stopped||e.message==='STOP')break;fails.push(list[pi].name+': '+e.message);pi++}
       }
       if(!res){if(!stopped)failedAll=true;break}
