@@ -199,6 +199,11 @@ form.in{padding:4px 12px 10px}
 .ca button{flex:1;color:#fff;font-weight:600;font-size:14px}.ca .pa{background:var(--ac);color:var(--acink)}.ca .da{background:var(--err);color:#fff}
 .sw .ci{position:relative;background:var(--sf);transition:transform .18s ease;touch-action:pan-y;user-select:none;-webkit-user-select:none}
 .sw:not(.act) .ca{visibility:hidden}.sw .ci.cur{background:var(--ac2)}.sw .ci.drag{transition:none}
+.dif{font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:280px;margin:6px 0;background:var(--bg)}
+.dif div{padding:0 8px;white-space:pre-wrap;word-break:break-all}.dif .da{background:rgba(34,197,94,.2)}.dif .dd{background:rgba(239,68,68,.2)}
+.dif .dk{color:var(--mute);text-align:center}.dif .ds{color:var(--mute);border-bottom:1px solid var(--line);font-family:system-ui,sans-serif;padding:4px 8px}
+.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px;margin-top:6px}
+.seg button{flex:1;padding:7px 6px;border-radius:9px;font-size:13px;font-weight:600;color:var(--mute)}.seg button.on{background:var(--ac);color:var(--acink)}
 </style>
 </head>
 <body>
@@ -655,6 +660,12 @@ async function gh(path,opt={}){
   }finally{clearTimeout(to)}
 }
 async function fetchRepos(){let all=[];for(let pg=1;pg<=3;pg++){const j=await gh('/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member&page='+pg);all=all.concat(j);if(j.length<100)break}return all}
+let ghBr=null;
+function branchHTML(){const cur=S.repo.branch,l=ghBr&&ghBr.repo===S.repo.full?ghBr.list:[cur],ls=l.includes(cur)?l:[cur].concat(l);return '<select class="f" id="rbr">'+ls.map(b=>'<option value="'+qa(b)+'"'+(b===cur?' selected':'')+'>'+esc(b)+'</option>').join('')+'</select>'}
+function loadBranches(){const R=S.repo.full;gh('/repos/'+R+'/branches?per_page=100').then(j=>{ghBr={repo:R,list:j.map(x=>x.name)}}).catch(()=>{ghBr={repo:R,list:[S.repo.branch]}}).finally(()=>{if(view==='repo'&&$('rbw')&&S.repo&&S.repo.full===R)$('rbw').innerHTML=branchHTML()})}
+document.addEventListener('change',e=>{if(e.target.id!=='rbr'||!S.repo)return;const nb=e.target.value,c=chat();
+  if(c&&dcount(c)&&c.draft.branch!==nb){if(!confirm('Ei chat er draft muche jabe. Branch bodlabe?')){e.target.value=S.repo.branch;return}c.draft=null}
+  S.repo.branch=nb;ghTree=null;save();render();toast('Branch: '+nb)});
 function loadRepos(){if(rloading)return;rloading=true;fetchRepos().then(l=>{ghRepos=l}).catch(e=>{ghRepos=e.message}).finally(()=>{rloading=false;if(view==='repo'&&$('rl'))$('rl').innerHTML=repoListHTML()})}
 function repoListHTML(){
   if(ghRepos===undefined)return '<p class="h">Loading…</p>';
@@ -841,25 +852,62 @@ async function runAgent(c,list){
   busy=false;live='';setBusyUI(false);save();render();
 }
 const logHTML=m=>m.log&&m.log.length?'<details class="lg"><summary>🔧 '+m.log.length+' step</summary>'+m.log.map(esc).join('<br>')+'</details>':'';
+const origC={};
+const okey=(d,p)=>d.repo+'@'+d.branch+':'+p;
+async function loadOrig(d,p){const k=okey(d,p);if(k in origC)return;try{origC[k]=await gh('/repos/'+d.repo+'/contents/'+enc(p)+'?ref='+encodeURIComponent(d.branch),{raw:true})}catch(e){origC[k]=''}}
+function lineDiff(a,b){
+  const A=a.split('\n'),B=b.split('\n');let st=0;
+  while(st<A.length&&st<B.length&&A[st]===B[st])st++;
+  let ea=A.length,eb=B.length;while(ea>st&&eb>st&&A[ea-1]===B[eb-1]){ea--;eb--}
+  const a2=A.slice(st,ea),b2=B.slice(st,eb),n=a2.length,m=b2.length,mid=[];
+  if(n*m>4e6){a2.forEach(x=>mid.push(['-',x]));b2.forEach(x=>mid.push(['+',x]))}
+  else{
+    const w=m+1,L=new Uint32Array((n+1)*w);
+    for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i*w+j]=a2[i]===b2[j]?L[(i+1)*w+j+1]+1:Math.max(L[(i+1)*w+j],L[i*w+j+1]);
+    let i=0,j=0;
+    while(i<n&&j<m){if(a2[i]===b2[j]){mid.push([' ',a2[i]]);i++;j++}else if(L[(i+1)*w+j]>=L[i*w+j+1]){mid.push(['-',a2[i]]);i++}else{mid.push(['+',b2[j]]);j++}}
+    while(i<n)mid.push(['-',a2[i++]]);while(j<m)mid.push(['+',b2[j++]]);
+  }
+  return A.slice(0,st).map(x=>[' ',x]).concat(mid,A.slice(ea).map(x=>[' ',x]));
+}
+function diffHTML(ops){
+  const keep=new Array(ops.length).fill(false);let ad=0,de=0;
+  ops.forEach((o,i)=>{if(o[0]!==' '){if(o[0]==='+')ad++;else de++;for(let k=Math.max(0,i-3);k<=Math.min(ops.length-1,i+3);k++)keep[k]=true}});
+  const rows=[];let gap=false;
+  ops.forEach((o,i)=>{if(!keep[i]){if(!gap){rows.push('<div class="dk">…</div>');gap=true}return}gap=false;rows.push('<div class="'+(o[0]==='+'?'da':o[0]==='-'?'dd':'dn')+'">'+o[0]+' '+esc(o[1])+'</div>')});
+  const more=rows.length>400;
+  return '<div class="dif"><div class="ds">+'+ad+' −'+de+'</div>'+rows.slice(0,400).join('')+(more?'<div class="dk">… (baki dekhano hoyni)</div>':'')+'</div>';
+}
+function fileDiffHTML(d,p,f){
+  if(!f.ex)return diffHTML(f.content.split('\n').map(x=>['+',x]));
+  const o=origC[okey(d,p)];if(o===undefined)return '<div class="dif"><div class="ds">Loading…</div></div>';
+  return f.del?diffHTML(o.split('\n').map(x=>['-',x])):diffHTML(lineDiff(o,f.content));
+}
 function draftHTML(c){
   let h='';const d=c.draft;
   if(d&&dcount(c)){
-    const fs=Object.entries(d.files);
+    const fs=Object.entries(d.files),pr=S.pushMode==='pr';
     h+='<div class="dc"><b>📝 Draft: '+fs.length+' file</b><small>'+esc(d.repo)+' · '+esc(d.branch)+'</small>'+
-    fs.map(([p,f])=>'<div class="df"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button>'+(dview[p]&&!f.del?'<pre>'+esc((f.content||'').slice(0,6000))+((f.content||'').length>6000?'\n…':'')+'</pre>':'')+'</div>').join('')+
-    '<input class="f cm" placeholder="Commit message" value="'+qa(d.msg||defMsg(c))+'"><div class="row" style="margin-top:4px"><button class="btn sm" data-act="gpush">⬆ Push korbo</button><button class="btn ghost sm" data-act="gdisc">Discard</button></div></div>';
+    fs.map(([p,f])=>'<div class="df"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button>'+(dview[p]?fileDiffHTML(d,p,f):'')+'</div>').join('')+
+    '<input class="f cm" placeholder="Commit message" value="'+qa(d.msg||defMsg(c))+'">'+
+    '<div class="seg"><button data-pm="direct" class="'+(pr?'':'on')+'">Sorasori push</button><button data-pm="pr" class="'+(pr?'on':'')+'">Branch + PR</button></div>'+
+    '<small>'+(pr?'Notun branch e jabe. Tumi Merge chaple \''+esc(d.branch)+'\' e mishbe. (Beshi nirapod)':'Sorasori \''+esc(d.branch)+'\' e jabe. Pore Undo kora jabe.')+'</small>'+
+    '<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gpush">'+(pr?'🔀 PR kholo':'⬆ Push korbo')+'</button><button class="btn ghost sm" data-act="gdisc">Discard</button></div></div>';
   }
   const u=c.pushed;
-  if(u)h+='<div class="dc">'+(u.undone?'↩️ Undo hoyeche ('+esc(u.repo)+')':'✅ Pushed '+u.n+' file → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/commit/'+qa(u.sha)+'" target="_blank" rel="noopener">'+esc(u.sha.slice(0,7))+'</a>'+(u.prev?' <button class="btn ghost sm" data-act="gundo">↩ Undo</button>':''))+'</div>';
+  if(u&&u.pr){
+    const st=u.merged?'✅ Merge hoyeche':u.closed?'✖ PR close hoyeche':'🔀 Pull Request khola hoyeche';
+    h+='<div class="dc">'+st+' → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/pull/'+u.pr.n+'" target="_blank" rel="noopener">#'+u.pr.n+'</a>'+(u.merged||u.closed?'':'<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gmerge">Merge koro</button><button class="btn ghost sm" data-act="gclose">Close</button></div>')+'</div>';
+  }else if(u)h+='<div class="dc">'+(u.undone?'↩️ Undo hoyeche ('+esc(u.repo)+')':'✅ Pushed '+u.n+' file → '+esc(u.repo)+' · <a href="https://github.com/'+qa(u.repo)+'/commit/'+qa(u.sha)+'" target="_blank" rel="noopener">'+esc(u.sha.slice(0,7))+'</a>'+(u.prev?' <button class="btn ghost sm" data-act="gundo">↩ Undo</button>':''))+'</div>';
   return h;
 }
 async function pushDraft(c){
   const d=c.draft;if(!d||!dcount(c)||pushing)return;
-  const R=d.repo,B=d.branch,msg=(d.msg||'').trim()||defMsg(c),fs=Object.entries(d.files);
-  if(!confirm(R+' ('+B+') e '+fs.length+' ta file push korbe?'))return;
-  pushing=true;toast('Push hocche…');
+  const R=d.repo,B=d.branch,msg=(d.msg||'').trim()||defMsg(c),fs=Object.entries(d.files),wantPR=S.pushMode==='pr';
+  if(!confirm(wantPR?R+' e notun branch banie '+fs.length+' ta file er PR kholbe?':R+' ('+B+') e '+fs.length+' ta file push korbe?'))return;
+  pushing=true;toast(wantPR?'PR banano hocche…':'Push hocche…');
   try{
-    const br=enc(B);let head=null,sha,prev=null,modes={};
+    const br=enc(B);let head=null,sha,prev=null,modes={},pr=null;
     try{head=await gh('/repos/'+R+'/git/ref/heads/'+br)}catch(e){if(!/ 409/.test(e.message))throw e}
     if(!head){
       for(const [p,f] of fs){if(f.del)continue;const j=await gh('/repos/'+R+'/contents/'+enc(p),{method:'PUT',body:{message:msg,content:btoa(unescape(encodeURIComponent(f.content))),branch:B}});sha=j.commit.sha}
@@ -867,6 +915,11 @@ async function pushDraft(c){
     }else{
       prev=head.object.sha;
       if(S.repo&&S.repo.full===R&&S.repo.branch===B){try{modes=(await getTree()).modes}catch(e){}}
+      let target=B;
+      if(wantPR){
+        target='orin/'+(msg.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30)||'update')+'-'+Math.random().toString(36).slice(2,6);
+        await gh('/repos/'+R+'/git/refs',{method:'POST',body:{ref:'refs/heads/'+target,sha:prev}});
+      }
       const cm=await gh('/repos/'+R+'/git/commits/'+prev),tree=[];
       for(const [p,f] of fs){
         if(f.del)tree.push({path:p,mode:modes[p]||'100644',type:'blob',sha:null});
@@ -874,10 +927,29 @@ async function pushDraft(c){
       }
       const t=await gh('/repos/'+R+'/git/trees',{method:'POST',body:{base_tree:cm.tree.sha,tree}});
       const nc=await gh('/repos/'+R+'/git/commits',{method:'POST',body:{message:msg,tree:t.sha,parents:[prev]}});
-      await gh('/repos/'+R+'/git/refs/heads/'+br,{method:'PATCH',body:{sha:nc.sha}});sha=nc.sha;
+      await gh('/repos/'+R+'/git/refs/heads/'+enc(target),{method:'PATCH',body:{sha:nc.sha}});sha=nc.sha;
+      if(wantPR){
+        const pl=await gh('/repos/'+R+'/pulls',{method:'POST',body:{title:msg,head:target,base:B,body:'Created with Orin.'}});
+        pr={n:pl.number,head:target};prev=null;
+      }
     }
-    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false};c.draft=null;ghTree=null;save();toast('Pushed ✓');
-  }catch(e){c.msgs.push({role:'error',content:'Push fail: '+e.message});save()}
+    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false,pr};c.draft=null;ghTree=null;for(const k in origC)delete origC[k];save();toast(pr?'PR #'+pr.n+' khola hoyeche ✓':'Pushed ✓');
+  }catch(e){c.msgs.push({role:'error',content:(wantPR?'PR':'Push')+' fail: '+e.message});save()}
+  pushing=false;render();
+}
+async function prAct(c,kind){
+  const u=c.pushed;if(!u||!u.pr||u.merged||u.closed||pushing)return;
+  if(!confirm(kind==='merge'?'PR #'+u.pr.n+' merge korbe? ('+u.branch+' e mishbe)':'PR #'+u.pr.n+' close korbe?'))return;
+  pushing=true;
+  try{
+    if(kind==='merge'){
+      try{await gh('/repos/'+u.repo+'/pulls/'+u.pr.n+'/merge',{method:'PUT',body:{merge_method:'squash'}})}
+      catch(e){if(/ 405/.test(e.message))await gh('/repos/'+u.repo+'/pulls/'+u.pr.n+'/merge',{method:'PUT',body:{merge_method:'merge'}});else throw e}
+      u.merged=true;
+    }else{await gh('/repos/'+u.repo+'/pulls/'+u.pr.n,{method:'PATCH',body:{state:'closed'}});u.closed=true}
+    try{await gh('/repos/'+u.repo+'/git/refs/heads/'+enc(u.pr.head),{method:'DELETE'})}catch(e){}
+    ghTree=null;save();toast(kind==='merge'?'Merge hoyeche ✓':'PR close hoyeche');
+  }catch(e){c.msgs.push({role:'error',content:(kind==='merge'?'Merge':'Close')+' fail: '+e.message});save()}
   pushing=false;render();
 }
 async function undoPush(c){
@@ -978,10 +1050,11 @@ function drawSheet(){
   if(view==='repo'){
     const has=!!(S.gh&&S.gh.token);
     b.innerHTML='<div class="sec"><h3>GitHub token</h3>'+(has?'<p class="h">Token save ache. Bodlate chaile notun ta paste koro.</p>':GH_HELP)+'<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn sm" data-act="gsave">'+(has?'Reload repos':'Connect')+'</button></div></div>'+
-    (has?'<div class="sec"><h3>Repo bechhe nao</h3>'+(S.repo?'<p class="h">Ekhon: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Bondho koro</button></p>':'')+'<input class="f" id="rq" placeholder="Search repo…" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
+    (has?'<div class="sec"><h3>Repo bechhe nao</h3>'+(S.repo?'<p class="h">Ekhon: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Bondho koro</button></p>':'')+(S.repo?'<label>Branch</label><div id="rbw">'+branchHTML()+'</div><label>Repo</label>':'')+'<input class="f" id="rq" placeholder="Search repo…" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
     '<div class="sec"><h3>Notun repo banao</h3><label>Name</label><input class="f" id="nn" placeholder="my-project"><label>Description (optional)</label><input class="f" id="nd"><label><input type="checkbox" id="np" checked> Private</label><div class="row"><button class="btn sm" data-act="rnew">Create repo</button></div></div>':'');
     const gt=$('gt');if(gt)gt.oninput=()=>{S.gh={token:gt.value.trim()};save()};
     if(has&&ghRepos===undefined)loadRepos();
+    if(has&&S.repo&&(!ghBr||ghBr.repo!==S.repo.full))loadBranches();
     return;
   }
   if(editing){
@@ -1022,7 +1095,10 @@ document.addEventListener('click',e=>{
   else if(d.add){closePop();$(d.add).click()}
   else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
   else if(d.lang){S.lang=d.lang;rawSave();drawSheet()}
-  else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();}
+  else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();if(dview[d.dv]){const c=chat(),f=c&&c.draft&&c.draft.files[d.dv];if(f&&f.ex&&!(okey(c.draft,d.dv) in origC))loadOrig(c.draft,d.dv).then(render)}}
+  else if(d.pm){S.pushMode=d.pm==='pr'?'pr':'direct';rawSave();render()}
+  else if(d.act==='gmerge'){const c=chat();if(c)prAct(c,'merge')}
+  else if(d.act==='gclose'){const c=chat();if(c)prAct(c,'close')}
   else if(d.cc){const code=t.parentElement.querySelector('code');if(code)copyText(code.textContent).then(()=>{t.textContent='Copied ✓';setTimeout(()=>{t.textContent='Copy'},1200)})}
   else if(d.rp){const r=(Array.isArray(ghRepos)?ghRepos:[]).find(x=>x.full_name===d.rp);if(!r)return;
     const c=chat();if(c&&dcount(c)&&c.draft.repo!==r.full_name){if(!confirm('Ei chat er draft muche jabe. Repo bodlabe?'))return;c.draft=null}
