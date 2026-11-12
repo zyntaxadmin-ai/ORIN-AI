@@ -143,6 +143,56 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 .lg{font-size:12.5px;color:var(--mute);margin-bottom:6px}.lg summary{cursor:pointer}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:14px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
 #toast.on{opacity:1}
+/* ---- UI refresh ---- */
+body{-webkit-font-smoothing:antialiased}
+button:active:not(:disabled){transform:scale(.96)}
+header{border-bottom:0;background:var(--bg);padding:8px 10px}
+header h1{font-size:16px;font-weight:650;padding-left:2px}
+.ib{color:var(--ink)}.ib svg{width:22px;height:22px}
+#msgs{gap:18px;padding:12px 16px 22px}
+.m.a{background:transparent;border:0;border-radius:0;padding:2px;max-width:100%;align-self:stretch;line-height:1.65}
+.m.u{border-radius:20px 20px 6px 20px;padding:10px 16px;max-width:85%}
+.m.e{border-radius:14px}
+.meta{margin-top:-14px;align-items:center;gap:2px;flex-wrap:wrap}.meta.r{margin-top:-14px}
+.meta span{margin-right:6px}
+.meta button{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;text-decoration:none;color:var(--mute)}
+.meta button:hover{background:var(--ac2);color:var(--ink)}.meta button svg{width:16px;height:16px}
+.cw{background:var(--sf)}.m table{background:var(--sf)}
+.m p{margin:0 0 .6em}.sp{height:.15em}
+form.in{padding:4px 12px 10px}
+.comp{border-radius:26px;box-shadow:0 2px 14px rgba(15,27,51,.08)}
+.comp:focus-within{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac2)}
+.cb{border:0;width:36px;height:36px;color:var(--mute)}.cb svg{width:20px;height:20px}
+.cb:hover{background:var(--ac2);color:var(--ink)}
+.cb.on{background:var(--ac);color:var(--acink)}.cb.rec{background:var(--err);color:#fff}
+.pill{border:0;background:var(--ac2);height:34px;font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:4px}.pill svg{width:14px;height:14px;flex:none}
+.send{width:38px;height:38px;display:grid;place-items:center}.send svg{width:20px;height:20px}
+.empty{margin:auto;padding:20px;max-width:520px;width:100%}
+.empty .logo{width:52px;height:52px;border-radius:17px;margin:0 auto 14px}.empty .logo i{width:20px;height:20px;border-width:5px}
+.sug{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;text-align:left}
+.sug button{display:flex;flex-direction:column;justify-content:flex-start;background:var(--sf);border:1px solid var(--line);border-radius:16px;padding:12px 14px;text-align:left;font-size:14px;line-height:1.35;color:var(--ink)}
+.sug button b{display:block;font-size:14.5px;margin-bottom:2px}.sug button span{color:var(--mute);font-size:13px}
+.sug button:hover{border-color:var(--ac)}
+.home{padding:6px 0 20px}.hero{text-align:center;padding:18px 0 4px}.hero .logo{margin:0 auto 14px;width:60px;height:60px;border-radius:19px}
+.hero h2{font-size:26px}.hero p{margin-top:2px}.home>.btn{width:100%;margin:14px 0 0}.home .sug{margin-top:14px}
+.prv{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--mute);background:var(--sf);border:1px solid var(--line);border-radius:99px;padding:8px 14px;margin:16px auto 0;width:fit-content;max-width:100%}
+.prv i{width:8px;height:8px;border-radius:50%;background:#22c55e;flex:none}.prv span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gl2{font-size:13px;font-weight:700;color:var(--mute);margin:22px 4px 0;text-transform:uppercase;letter-spacing:.05em}
+.drawer{transition:transform .22s ease}
+.dh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;padding:6px 8px;border-radius:12px;color:var(--ink)}
+.brand i{width:28px;height:28px;border-radius:9px;background:var(--ac);position:relative}.brand i::after{content:'';position:absolute;inset:8px;border:3px solid var(--acink);border-radius:50%}
+.gh{font-size:12px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;padding:14px 12px 4px}
+.ci{padding:0 2px 0 12px}.ci .x svg{width:18px;height:18px}.ci .pn{display:inline-block;vertical-align:-2px;margin-right:6px;color:var(--ac)}.ci .pn svg{width:14px;height:14px}
+.dfoot{border-top:1px solid var(--line);padding-top:10px;margin-top:8px}
+.dfoot button{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;font-weight:600;width:100%;color:var(--ink)}.dfoot button:hover{background:var(--ac2)}.dfoot svg{width:20px;height:20px}
+.gl{font-size:12.5px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;margin:22px 4px 8px}.gl:first-child{margin-top:4px}
+.pr{gap:8px;padding:12px 0}.pr.off{opacity:1}.pr.off .n{opacity:.5}.pr .n small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mv{display:flex;flex-direction:column}.mv .sm-ib{width:28px;height:18px;border-radius:6px;display:grid;place-items:center}.mv svg{width:14px;height:14px}
+.sm-ib{display:grid;place-items:center}.sm-ib svg{width:18px;height:18px}
+.tgl{width:44px;height:26px;border-radius:99px;background:var(--line);position:relative;flex:none;transition:background .15s}.tgl.on{background:var(--ac)}
+.tgl::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}.tgl.on::after{left:21px}
+.btn.danger{background:transparent;color:var(--err);border:1px solid var(--err)}
 </style>
 </head>
 <body>
@@ -177,9 +227,10 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:10px 0 4px}
 
 <div class="ov" id="ov"></div>
 <aside class="drawer" id="drawer">
-  <button class="btn ghost" id="homeb" style="margin-bottom:8px">⌂ Home</button>
+  <div class="dh"><button class="brand" id="homeb" aria-label="Home"><i></i>Orin</button><button class="ib" id="dclose" aria-label="Close">✕</button></div>
   <button class="btn" id="newc2">+ New chat</button>
   <input class="f" id="cq" placeholder="Search chats…" style="margin-top:10px"><div class="list" id="clist"></div>
+  <div class="dfoot"><button id="dset">Settings</button></div>
 </aside>
 
 <section class="sheet" id="sheet">
@@ -211,6 +262,31 @@ try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catc
 if(S.theme==='auto'&&!S.t2){S.theme='light';S.t2=1}
 const $=id=>document.getElementById(id);
 const uid=()=>Math.random().toString(36).slice(2,10);
+const _s=(p,w)=>'<svg viewBox="0 0 24 24" width="'+(w||20)+'" height="'+(w||20)+'" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+p+'</svg>';
+const IC={
+ menu:_s('<path d="M4 7h16M4 12h16M4 17h10"/>'),
+ edit:_s('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>'),
+ gear:_s('<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>'),
+ plus:_s('<path d="M12 5v14M5 12h14"/>'),
+ globe:_s('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/>'),
+ image:_s('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-9 9"/>'),
+ mic:_s('<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>'),
+ up:_s('<path d="M12 19V5M5 12l7-7 7 7"/>'),
+ stop:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>',
+ copy:_s('<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 017.5 4H16"/>'),
+ refresh:_s('<path d="M20 11a8 8 0 10-2.2 5.6M20 4v7h-7"/>'),
+ dl:_s('<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>'),
+ chev:_s('<path d="M6 9l6 6 6-6"/>',14),
+ cup:_s('<path d="M6 15l6-6 6 6"/>',14),
+ cdn:_s('<path d="M6 9l6 6 6-6"/>',14),
+ dots:'<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>',
+ pin:_s('<path d="M12 17v5M8 3h8l-1 6 3 4H6l3-4z"/>',14),
+ x:_s('<path d="M6 6l12 12M18 6L6 18"/>')
+};
+const ibtn=(a,l,k)=>'<button '+a+' aria-label="'+l+'" title="'+l+'">'+IC[k]+'</button>';
+function initIcons(){const m={menu:'menu',newc:'edit',gear:'gear',plus:'plus',webb:'globe',imgb:'image',mic:'mic',dclose:'x'};for(const k in m){const e=$(k);if(e)e.innerHTML=IC[m[k]]}$('dset').innerHTML=IC.gear+'<span>Settings</span>';setBusyUI(false)}
+const SUG=[['Email likho','Professional email draft','Ekta professional email likhte help koro: '],['Code bujhao','Step by step explain','Ei code ta step by step bujhiye dao:\n'],['Idea dao','Notun project er idea','Amake ekta project er jonno 5 ta notun idea dao.'],['Bangla te likho','Golpo, kobita, lekha','Bangla te ekta chotto golpo likho.']];
+const sugHTML=()=>'<div class="sug">'+SUG.map((x,i)=>'<button data-sug="'+i+'"><b>'+x[0]+'</b><span>'+x[1]+'</span></button>').join('')+'</div>';
 const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 let qw=0;
 function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S,strip))}catch(e){if(Date.now()-qw>30000){qw=Date.now();toast('Storage bhore geche! Purono chat delete koro ba Backup export koro')}}}
@@ -268,7 +344,7 @@ function md(t){
 function copyText(t){return (navigator.clipboard&&window.isSecureContext?navigator.clipboard.writeText(t):Promise.reject()).catch(()=>{const a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';document.body.append(a);a.select();try{document.execCommand('copy')}catch(e){}a.remove()})}
 function applyTheme(){if(S.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=S.theme}
 function chat(){return S.chats.find(c=>c.id===S.cur)}
-function newChat(){const c={id:uid(),title:'New chat',msgs:[]};S.chats.unshift(c);S.cur=c.id;home=false;save();closeDrawer();render();$('box').focus()}
+function newChat(){const c={id:uid(),title:'New chat',msgs:[],t:Date.now()};S.chats.unshift(c);S.cur=c.id;home=false;save();closeDrawer();render();$('box').focus()}
 
 
 /* ---------- Cloud sync (Supabase) ---------- */
@@ -344,11 +420,11 @@ function cloudHTML(){
 }
 function homeHTML(){
   const c=C(),on=S.providers.filter(p=>p.on&&p.model&&p.url),nm=(c.email||'').split('@')[0];
-  const pv=on.length?'<b>'+esc(on[0].name)+'</b> ('+esc(on[0].model)+')'+(on.length>1?'<br>Fallback: '+on.slice(1).map(p=>esc(p.name)).join(', '):''):'Kono provider chalu nai. Settings e add koro.';
-  return '<div class="home"><div class="logo"><i></i></div><h2>Hello, '+esc(nm)+'</h2><p>'+esc(c.email||'')+'</p><button class="btn" data-act="hnew">+ New chat</button>'+
-  '<div class="sec" style="margin:12px 0 0"><h3>Provider</h3><p class="h" style="margin:0">'+pv+'</p></div>'+
-  '<h3 style="margin-top:18px">Recent chats</h3>'+(S.chats.slice(0,6).map(x=>'<button class="rc" data-open="'+x.id+'">'+esc(x.title)+'</button>').join('')||'<p>Kono chat nai</p>')+
-  '<div class="row"><button class="btn ghost sm" data-act="hset">Settings</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
+  const rec=S.chats.slice().sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,6);
+  return '<div class="home"><div class="hero"><div class="logo"><i></i></div><h2>Hello, '+esc(nm)+'</h2><p>Ki niye kaj korbo ajke?</p></div><button class="btn" data-act="hnew">+ New chat</button>'+sugHTML()+
+  (on.length?'<div class="prv"><i></i><span><b>'+esc(on[0].name)+'</b> · '+esc(on[0].model)+(on.length>1?' · +'+(on.length-1)+' fallback':'')+'</span></div>':'<button class="prv" data-act="hset">Provider add koro →</button>')+
+  (rec.length?'<h3 class="gl2">Recent chats</h3>'+rec.map(x=>'<button class="rc" data-open="'+x.id+'">'+esc(x.title)+'</button>').join(''):'')+
+  '<div class="row" style="justify-content:center;margin-top:20px"><button class="btn ghost sm" data-act="hset">Settings</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
 }
 
 /* ---------- Providers ---------- */
@@ -437,7 +513,7 @@ async function addFiles(list){
   }
   renderTray();
 }
-function updatePill(){const p=S.pick&&S.providers.find(x=>x.id===S.pick&&x.on);$('modelb').textContent=(p?p.name:'Auto')+' ▾'}
+function updatePill(){const p=S.pick&&S.providers.find(x=>x.id===S.pick&&x.on);$('modelb').innerHTML=esc(p?p.name:'Auto')+IC.chev}
 function closePop(){['pov','pop'].forEach(i=>{const e=$(i);if(e)e.remove()})}
 function pop(anchor,html){
   closePop();const r=anchor.getBoundingClientRect();
@@ -464,6 +540,8 @@ function toggleMic(){
   rec.onend=()=>{recOn=false;$('mic').classList.remove('rec')};
   try{rec.start()}catch(e){toast('Mic chalu hoy ni')}
 }
+const gl=t=>'<div class="gl">'+t+'</div>';
+function themeHTML(){return '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+t+'</button>').join('')+'</div></div>'}
 function webHTML(){return '<div class="sec"><h3>Web search</h3><p class="h">Composer er 🌐 chalu korle message pathanor age web e khuje AI ke dewa hobe. <b>Tavily</b> API key lagbe (tavily.com e free plan ache).</p><input class="f" id="tk" type="password" autocomplete="off" placeholder="tvly-…" value="'+qa((S.search||{}).key)+'"></div>'}
 function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image generation</h3><p class="h">Composer er 🎨 chalu korle message ta chobir prompt hishebe jabe. OpenAI-compatible <code>/images/generations</code> API lagbe.</p><div class="chips">'+IMGP.map((x,i)=>'<button type="button" class="chip" data-ipre="'+i+'">'+x[0]+'</button>').join('')+'</div>'+
  '<label>Base URL</label><input class="f" id="iu" value="'+qa(g.url)+'" placeholder="https://api.openai.com/v1">'+
@@ -473,7 +551,7 @@ function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image gener
 const IMGP=[['OpenAI','https://api.openai.com/v1','gpt-image-1',''],['Together','https://api.together.xyz/v1','black-forest-labs/FLUX.1-schnell','']];
 function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">Mic er bhasha. Chrome e bhalo kaj kore.</p><div class="row" style="margin-top:0">'+[['bn-BD','Bangla'],['en-US','English'],['hi-IN','Hindi']].map(x=>'<button class="btn '+((S.lang||'bn-BD')===x[0]?'':'ghost')+' sm" data-lang="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>'}
 let curCtl=null,stopped=false;
-function setBusyUI(on){const b=$('sendb');b.textContent=on?'■':'↑';b.setAttribute('aria-label',on?'Stop':'Send')}
+function setBusyUI(on){const b=$('sendb');b.innerHTML=on?IC.stop:IC.up;b.setAttribute('aria-label',on?'Stop':'Send')}
 function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>ok(r.result.split(',')[1]);r.readAsDataURL(f)})}
 function provList(){let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=[o]}return l}
 const qa=t=>esc(t||'').replace(/"/g,'&quot;');
@@ -828,7 +906,7 @@ async function send(){
   if(imgMode){if(pend.length){toast('Image mode e attachment hobe na. Attachment soriye dao');return}if(!txt){toast('Chobir description likho');return}if(!imgReady()){toast('Age Settings e image provider add koro');openSheet();return}}
   else if(!list.length){toast('Age Settings e provider add koro');openSheet();return}
   if(!chat())newChat();
-  const c=chat();const um={role:'user',content:txt};
+  const c=chat();c.t=Date.now();const um={role:'user',content:txt};
   const ims=pend.filter(a=>a.kind==='image'||a.kind==='pdf'),fl=pend.filter(a=>a.kind==='text');
   if(ims.length){um.imgs=ims.map(a=>({mime:a.mime,data:a.data,name:a.name}));um.atts=ims.map(a=>({name:a.name,pdf:a.kind==='pdf'}))}
   if(fl.length)um.files=fl.map(a=>({name:a.name,text:a.text}));
@@ -851,13 +929,13 @@ function render(typing){
   if(home){$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();return}$('title').textContent=c?c.title:'Orin';
   const el=$('msgs');
   if(!c||!c.msgs.length&&!typing){
-    el.innerHTML='<div class="empty"><h2>Ki jante chao?</h2><p>'+(S.providers.length?'Prothom provider fail korle porer ta te auto cole jabe.':'Shuru korar age ⚙ Settings e akta provider add koro.')+'</p></div>';return}
+    el.innerHTML='<div class="empty"><div class="logo"><i></i></div><h2>Ki jante chao?</h2><p>'+(S.providers.length?'Likhte shuru koro, ba niche theke ekta bachho.':'Shuru korar age ekta provider add korte hobe.')+'</p>'+(S.providers.length?sugHTML():'<button class="btn" data-act="hset" style="margin-top:14px">Provider add koro</button>')+'</div>';return}
   let h='';
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
-    if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r"><button data-edit="'+i+'">Edit</button></div>';
+    if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">📕 '+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?'📕 ':'🖼 ')+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">📄 '+esc(f.name)+'</span>').join('')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r">'+ibtn('data-edit="'+i+'"','Edit','edit')+'</div>';
     else if(m.role==='assistant'){
-      h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+usageStr(m.u)+'</span>'+(m.pic?'<button data-save="'+i+'">Save</button>':'<button data-copy="'+i+'">Copy</button>')+(i===c.msgs.length-1?'<button data-regen="1">Regenerate</button>':'')+'</div>';
-    }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta"><button data-regen="1">Retry</button></div>':'');
+      h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+usageStr(m.u)+'</span>'+(m.pic?ibtn('data-save="'+i+'"','Save image','dl'):ibtn('data-copy="'+i+'"','Copy','copy'))+(i===c.msgs.length-1?ibtn('data-regen="1"','Regenerate','refresh'):'')+'</div>';
+    }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta">'+ibtn('data-regen="1"','Retry','refresh')+'<span>Retry</span></div>':'');
   });
   {const tu=c.msgs.reduce((a,m)=>{if(m.u){a.i+=m.u.i;a.o+=m.u.o;if(m.u.c!=null){a.c+=m.u.c;a.hc=1}if(m.u.e)a.e=1;a.n++}return a},{i:0,o:0,c:0,n:0});
   if(tu.n>1)h+='<div class="src" style="align-self:center;margin-top:0">Total: ↑'+fmtTok(tu.i)+' ↓'+fmtTok(tu.o)+(tu.e?'~':'')+(tu.hc?' · '+fmtCost(tu.c):'')+'</div>'}
@@ -868,8 +946,16 @@ function render(typing){
 let q='';
 function renderList(){
   const l=S.chats.filter(c=>!q||c.title.toLowerCase().includes(q)||c.msgs.some(m=>(m.content||'').toLowerCase().includes(q)));
-  const o=l.filter(c=>c.pin).concat(l.filter(c=>!c.pin));
-  $('clist').innerHTML=o.map(c=>'<div class="ci '+(c.id===S.cur?'cur':'')+'"><button class="t" data-open="'+c.id+'">'+(c.pin?'📌 ':'')+esc(c.title)+'</button><button class="x" data-more="'+c.id+'" aria-label="Options">⋯</button></div>').join('')||'<p class="empty">Kono chat nai</p>';
+  const item=c=>'<div class="ci '+(c.id===S.cur?'cur':'')+'"><button class="t" data-open="'+c.id+'">'+(c.pin?'<span class="pn">'+IC.pin+'</span>':'')+esc(c.title)+'</button><button class="x" data-more="'+c.id+'" aria-label="Options">'+IC.dots+'</button></div>';
+  let h;
+  if(q)h=l.map(item).join('');
+  else{
+    const today=new Date().setHours(0,0,0,0),g={};
+    const nm=c=>{if(c.pin)return 'Pinned';if(!c.t)return 'Older';const d=c.t>=today?0:Math.ceil((today-c.t)/864e5);return d===0?'Today':d===1?'Yesterday':d<=7?'Previous 7 days':'Older'};
+    l.slice().sort((a,b)=>(b.t||0)-(a.t||0)).forEach(c=>{const k=nm(c);(g[k]=g[k]||[]).push(c)});
+    h=['Pinned','Today','Yesterday','Previous 7 days','Older'].filter(k=>g[k]).map(k=>'<div class="gh">'+k+'</div>'+g[k].map(item).join('')).join('');
+  }
+  $('clist').innerHTML=h||'<p class="empty">Kono chat nai</p>';
 }
 function openDrawer(){renderList();$('drawer').classList.add('on');$('ov').classList.add('on')}
 function closeDrawer(){$('drawer').classList.remove('on');$('ov').classList.remove('on')}
@@ -899,17 +985,16 @@ function drawSheet(){
     '<label>Model name</label><input class="f" id="pm" value="'+esc(p.model||'')+'" placeholder="e.g. llama-3.3-70b-versatile">'+
     '<label>Price per 1M input tokens $ (optional)</label><input class="f" id="pci" inputmode="decimal" value="'+qa(p.pin||'')+'">'+
     '<label>Price per 1M output tokens $ (optional)</label><input class="f" id="pco" inputmode="decimal" value="'+qa(p.pout||'')+'">'+
-    '<div class="row"><button class="btn" data-act="psave">Save</button><button class="btn ghost" data-act="pcancel">Cancel</button></div></div>';
+    '<div class="row"><button class="btn" data-act="psave">Save</button><button class="btn ghost" data-act="pcancel">Cancel</button>'+(p._new?'':'<button class="btn danger" data-rmed="1">Delete</button>')+'</div></div>';
     $('pt').value=p.type||'openai';return;
   }
-  b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Upor theke nichey order e try hobe. Fail korle porer ta.</p>'+
+  b.innerHTML=gl('Models')+'<div class="sec"><h3>Providers</h3><p class="h">Upor theke nichey order e try hobe. Fail korle porer ta.</p>'+
    (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></div>'+
-   '<button class="sm-ib" data-up="'+i+'" aria-label="Move up">▲</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">▼</button>'+
-   '<button class="sm-ib" data-tg="'+i+'" aria-label="Toggle">'+(p.on?'●':'○')+'</button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">✎</button><button class="sm-ib" data-rm="'+i+'" aria-label="Delete">✕</button></div>').join('')||'<p class="h">Kono provider nai.</p>')+
+   '<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
+   '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">Kono provider nai.</p>')+
    '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>'+
    '<div class="sec"><h3>System prompt</h3><p class="h">Prothom e AI ke ki bole dibe (optional).</p><textarea class="f" id="sp" rows="3">'+esc(S.system)+'</textarea></div>'+
-   '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+t+'</button>').join('')+'</div></div>'+
-   webHTML()+imgHTML()+ghHTML()+voiceHTML()+cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
+   gl('Tools')+webHTML()+imgHTML()+ghHTML()+gl('App')+themeHTML()+voiceHTML()+gl('Account & data')+cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
    '<p class="h" style="margin-top:10px">API key shudhu ei browser e save thake. Backup file onno kauke dio na.</p></div>';
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
   const gt2=$('gt');if(gt2)gt2.oninput=()=>{S.gh={token:gt2.value.trim()};save()};
@@ -951,6 +1036,8 @@ document.addEventListener('click',e=>{
   else if(d.up!==undefined||d.dn!==undefined){const i=+(d.up??d.dn),j=d.up!==undefined?i-1:i+1;if(S.providers[j]){[S.providers[i],S.providers[j]]=[S.providers[j],S.providers[i]];save();drawSheet()}}
   else if(d.tg){S.providers[+d.tg].on=!S.providers[+d.tg].on;save();drawSheet()}
   else if(d.ed){editing=Object.assign({},S.providers[+d.ed],{_idx:+d.ed});drawSheet()}
+  else if(d.rmed){if(confirm('Delete this provider?')){S.providers.splice(editing._idx,1);editing=null;save();drawSheet()}}
+  else if(d.sug!==undefined){const x=SUG[+d.sug];if(home||!chat())newChat();const b=$('box');b.value=x[2];b.dispatchEvent(new Event('input'));b.focus();b.setSelectionRange(b.value.length,b.value.length)}
   else if(d.rm){if(confirm('Delete this provider?')){S.providers.splice(+d.rm,1);save();drawSheet()}}
   else if(d.theme){S.theme=d.theme;save();applyTheme();drawSheet()}
   else if(d.act==='padd'){editing={_new:true,type:'openai'};drawSheet()}
@@ -969,6 +1056,7 @@ document.addEventListener('click',e=>{
 $('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>🖼 Photos</span></button><button class="pi" data-add="fcam"><span>📷 Camera</span></button><button class="pi" data-add="fi"><span>📄 Files</span></button><button class="pi" data-act="ropen"><span>📦 GitHub repo</span></button>');
 $('modelb').onclick=e=>pop(e.currentTarget,modelMenu());
 $('mic').onclick=toggleMic;
+$('dclose').onclick=closeDrawer;$('dset').onclick=()=>{closeDrawer();editing=null;view='';openSheet()};
 $('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search ON':'Web search ON. Settings e Tavily key dao'):'Web search OFF')};
 $('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode ON':'Image mode ON. Settings e image provider dao'):'Image mode OFF')};
 document.addEventListener('input',e=>{const t=e.target;
@@ -985,7 +1073,7 @@ let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationF
 $('box').addEventListener('paste',e=>{const fs=[...((e.clipboardData&&e.clipboardData.files)||[])].filter(f=>/^image\//.test(f.type)||f.type==='application/pdf');if(fs.length){e.preventDefault();addFiles(fs)}});
 document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault()});
 document.addEventListener('drop',e=>{if(e.dataTransfer&&e.dataTransfer.files.length&&!home){e.preventDefault();addFiles([...e.dataTransfer.files])}});
-applyTheme();render();updateModes();
+initIcons();applyTheme();render();updateModes();
 setMode('in');
 if(!C().session)showAuth(true);else syncNow(false);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow(false)});
