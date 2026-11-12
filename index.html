@@ -208,6 +208,9 @@ form.in{padding:4px 12px 10px}
 .dep{font-size:13px;margin-top:6px}.dep.bad{color:var(--err)}
 .hi{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-top:6px;display:flex;flex-direction:column;gap:3px;align-items:flex-start}.hi small{color:var(--mute)}
 .fl button{display:block;width:100%;text-align:left;padding:7px 8px;border-radius:8px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fl button:hover{background:var(--ac2)}
+.mrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 14px;background:var(--sf);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px}
+.mrow:active{background:var(--ac2)}.mrow .mi{font-size:22px;width:36px;height:36px;display:grid;place-items:center;background:var(--ac2);border-radius:10px;flex:none}
+.mrow .mt{flex:1;min-width:0}.mrow .mt b{display:block;font-size:15.5px}.mrow .mt small{display:block;color:var(--mute);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mrow .ar{color:var(--mute);font-size:20px}
 </style>
 </head>
 <body>
@@ -1186,8 +1189,8 @@ async function send(){
   let list=S.providers.filter(p=>p.on&&p.model&&p.url);
   if(S.pick){const o=list.find(p=>p.id===S.pick);if(o)list=[o]}
   if(recOn&&rec)rec.stop();
-  if(imgMode){if(pend.length){toast('Image mode e attachment hobe na. Attachment soriye dao');return}if(!txt){toast('Chobir description likho');return}if(!imgReady()){toast('Age Settings e image provider add koro');openSheet();return}}
-  else if(!list.length){toast('Age Settings e provider add koro');openSheet();return}
+  if(imgMode){if(pend.length){toast('Image mode e attachment hobe na. Attachment soriye dao');return}if(!txt){toast('Chobir description likho');return}if(!imgReady()){toast('Age Settings e image provider add koro');spage='img';openSheet();return}}
+  else if(!list.length){toast('Age Settings e provider add koro');spage='prov';openSheet();return}
   if(!chat())newChat();
   const c=chat();c.t=Date.now();const um={role:'user',content:txt};
   const ims=pend.filter(a=>a.kind==='image'||a.kind==='pdf'),fl=pend.filter(a=>a.kind==='text');
@@ -1244,8 +1247,21 @@ function openDrawer(){renderList();$('drawer').classList.add('on');$('ov').class
 function closeDrawer(){$('drawer').classList.remove('on');$('ov').classList.remove('on')}
 
 /* ---------- Settings ---------- */
-let editing=null,view='';
+let editing=null,view='',spage='';
 function openSheet(){view=view||'';drawSheet();$('sheet').classList.add('on')}
+function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'],search:['Web search'],img:['Image generation'],gh:['GitHub'],app:['Appearance & Voice'],acct:['Account & Sync'],bk:['Backup']}}
+function settingsMenu(){
+  const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session;
+  const row=(k,ic,t,sub)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+esc(sub)+'</small></span><span class="ar">›</span></button>';
+  return gl('AI')+row('prov','🤖','Providers & Models',S.providers.length?S.providers.length+' provider · '+(on[0]?on[0].model:'sob off'):'Kono provider nai — add koro')+
+   row('sys','💬','System prompt',S.system.trim()?S.system.trim().slice(0,50):'Set kora nai')+
+   gl('Tools')+row('search','🌐','Web search',S.search&&S.search.key?'Chalu (Tavily)':'Key dewa nai')+
+   row('img','🖼','Image generation',im.model?im.model:'Set kora nai')+
+   row('gh','🐙','GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token ache, repo bechhe nai'):'Connect kora nai')+
+   gl('App')+row('app','🎨','Appearance & Voice','Theme: '+(S.theme||'auto')+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||''))+
+   gl('Account & data')+row('acct','☁️','Account & Sync',cl?(S.cloud.email||'Logged in'):'Log in kora nai')+
+   row('bk','💾','Backup','Export / Import');
+}
 function drawSheet(){
   const b=$('sbody');$('sheet').querySelector('h1').textContent=view==='repo'?'GitHub':'Settings';
   if(view==='repo'){
@@ -1273,14 +1289,21 @@ function drawSheet(){
     '<div class="row"><button class="btn" data-act="psave">Save</button><button class="btn ghost" data-act="pcancel">Cancel</button>'+(p._new?'':'<button class="btn danger" data-rmed="1">Delete</button>')+'</div></div>';
     $('pt').value=p.type||'openai';return;
   }
-  b.innerHTML=gl('Models')+'<div class="sec"><h3>Providers</h3><p class="h">Upor theke nichey order e try hobe. Fail korle porer ta.</p>'+
+  const SP=settingsPages();
+  if(!spage||!SP[spage]){$('sheet').querySelector('h1').textContent='Settings';b.innerHTML=settingsMenu();return}
+  $('sheet').querySelector('h1').textContent=SP[spage][0];
+  if(spage==='prov')b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Upor theke nichey order e try hobe. Fail korle porer ta.</p>'+
    (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></div>'+
    '<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
    '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">Kono provider nai.</p>')+
-   '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>'+
-   '<div class="sec"><h3>System prompt</h3><p class="h">Prothom e AI ke ki bole dibe (optional).</p><textarea class="f" id="sp" rows="3">'+esc(S.system)+'</textarea></div>'+
-   gl('Tools')+webHTML()+imgHTML()+ghHTML()+gl('App')+themeHTML()+voiceHTML()+gl('Account & data')+cloudHTML()+'<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div>'+
-   '<p class="h" style="margin-top:10px">API key shudhu ei browser e save thake. Backup file onno kauke dio na.</p></div>';
+   '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>';
+  else if(spage==='sys')b.innerHTML='<div class="sec"><h3>System prompt</h3><p class="h">Prothom e AI ke ki bole dibe (optional). Shob chat e lagbe.</p><textarea class="f" id="sp" rows="8">'+esc(S.system)+'</textarea></div>';
+  else if(spage==='search')b.innerHTML=webHTML();
+  else if(spage==='img')b.innerHTML=imgHTML();
+  else if(spage==='gh')b.innerHTML=ghHTML();
+  else if(spage==='app')b.innerHTML=themeHTML()+voiceHTML();
+  else if(spage==='acct')b.innerHTML=cloudHTML();
+  else if(spage==='bk')b.innerHTML='<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div><p class="h" style="margin-top:10px">API key shudhu ei browser e save thake. Backup file onno kauke dio na.</p></div>';
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
   const gt2=$('gt');if(gt2)gt2.oninput=()=>{S.gh={token:gt2.value.trim()};save()};
   const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
@@ -1345,7 +1368,8 @@ document.addEventListener('click',e=>{
   else if(d.act==='csync')syncNow().then(drawSheet)
   else if(d.act==='cout')logout()
   else if(d.act==='hnew')newChat()
-  else if(d.act==='hset'){editing=null;view='';openSheet()}
+  else if(d.sp){spage=d.sp;editing=null;drawSheet();$('sbody').scrollTop=0}
+  else if(d.act==='hset'){editing=null;view='';spage=S.providers.length?'':'prov';openSheet()}
   else if(d.act==='exp'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.assign({},S,{cloud:undefined}),strip)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
@@ -1367,7 +1391,7 @@ $('msgs').addEventListener('scroll',updateFab,{passive:true});addEventListener('
   L.addEventListener('pointerup',end);L.addEventListener('pointercancel',end);
   L.addEventListener('click',e=>{const r=e.target.closest('.ci');if(!r)return;const fresh=r===sr&&Date.now()-swiped<350;if(fresh||r.dataset.o){e.stopPropagation();e.preventDefault();if(!fresh){close(r);open=null}}},true);
 })();
-$('dclose').onclick=closeDrawer;$('dset').onclick=()=>{closeDrawer();editing=null;view='';openSheet()};
+$('dclose').onclick=closeDrawer;$('dset').onclick=()=>{closeDrawer();editing=null;view='';spage='';openSheet()};
 $('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search ON':'Web search ON. Settings e Tavily key dao'):'Web search OFF')};
 $('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode ON':'Image mode ON. Settings e image provider dao'):'Image mode OFF')};
 document.addEventListener('input',e=>{const t=e.target;if(t.id==='fq'){fq=t.value;if($('fl'))$('fl').innerHTML=fileListHTML();return}
@@ -1377,8 +1401,8 @@ document.addEventListener('input',e=>{const t=e.target;if(t.id==='fq'){fq=t.valu
 $('cq').oninput=e=>{q=e.target.value.toLowerCase();renderList()};
 $('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
 $('newc').onclick=$('newc2').onclick=newChat;
-$('gear').onclick=()=>{editing=null;view='';openSheet()};
-$('back').onclick=()=>{if(view){view='';$('sheet').classList.remove('on');render();return}if(editing){editing=null;drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
+$('gear').onclick=()=>{editing=null;view='';spage='';openSheet()};
+$('back').onclick=()=>{if(view){view='';$('sheet').classList.remove('on');render();return}if(editing){editing=null;drawSheet()}else if(spage){spage='';drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
 $('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});
