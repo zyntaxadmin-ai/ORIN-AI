@@ -610,6 +610,26 @@ function retrieveChunks(id,text,query,maxChars){
 const fbudget=ctx=>Math.floor(ctx*0.55);
 const curCtx=()=>{let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=[o]}return l.length?ctxOf(l[0]):128e3};
 function chatFiles(c){const o=[];(c.msgs||[]).forEach(m=>(m.files||[]).forEach(f=>{const t=ftext(f);o.push({id:f.id||f.name,name:f.name,text:t,tok:etok(t)})}));return o}
+const LAZY_TOK=6000,attEnt=new Map();
+function attEntries(id,text){
+  const k=id+':'+text.length;let r=attEnt.get(k);if(r)return r;
+  r=[];const re=/(?:^|\n)=== (.+?) ===\n/g,ms=[];let m;
+  while((m=re.exec(text)))ms.push({name:m[1],s:m.index,b:re.lastIndex});
+  ms.forEach((x,i)=>r.push({name:x.name,text:text.slice(x.b,i+1<ms.length?ms[i+1].s:text.length)}));
+  attEnt.set(k,r);return r;
+}
+const isPack=t=>/^=== .+? ===\n/.test(t);
+/* Agent mode: big attachments are NOT pasted into every step (that costs tokens on each of 30+ steps); the agent gets an index and tools instead */
+function lazyPlan(c){
+  const fs=chatFiles(c);if(!fs.length||fs.reduce((a,f)=>a+f.tok,0)<=LAZY_TOK)return null;
+  const res=new Map();let n=0;
+  fs.forEach(f=>{
+    if(f.tok<=1500)return;n++;
+    const es=isPack(f.text)?attEntries(f.id,f.text):null;
+    res.set(f.id,'\n[Agent mode: this file ('+fmtSz(f.text.length)+', '+f.text.split('\n').length+' lines, ~'+fmtTok(f.tok)+' token) is NOT pasted here, to save tokens. '+(es?'It is a zip/folder with '+es.length+' files:\n'+es.slice(0,120).map(e=>'- '+e.name+' ('+e.text.split('\n').length+' lines)').join('\n').slice(0,6000)+'\nTo update the repo from it use compare_attachment (which files are new/changed) and then apply_attachment (stages them without you rewriting them); use read_attachment/search_attachment only to look at details.':'Use search_attachment / read_attachment to look at it.')+']');
+  });
+  return n?{res,n,lazy:1}:null;
+}
 function smartPlan(c){
   const fs=chatFiles(c),tot=fs.reduce((a,f)=>a+f.tok,0),fb=fbudget(curCtx());
   if(!fs.length||tot<=fb)return null;
@@ -976,7 +996,7 @@ addEventListener('message',e=>{
   else if(m.t==='nav'&&pvc&&pvc.draft){const p=m.h;if(/\.html?$/i.test(p)||p===''||p.endsWith('/'))openPreview(pvc,p===''||p.endsWith('/')?p+'index.html':p);else toast('Ei link preview te khule na')}
 });
 function sliceRead(x,a){
-  const lim=50000,ls=x.split('\n'),n=ls.length,s0=Math.max(1,parseInt(a.start_line,10)||1),e0=Math.min(n,parseInt(a.end_line,10)||n);
+  const lim=30000,ls=x.split('\n'),n=ls.length,s0=Math.max(1,parseInt(a.start_line,10)||1),e0=Math.min(n,parseInt(a.end_line,10)||n);
   if(s0===1&&e0===n&&x.length<=lim)return x;
   const out=[];let len=0;
   for(let i=s0-1;i<e0;i++){if(len+ls[i].length+1>lim&&out.length)break;out.push(ls[i]);len+=ls[i].length+1}
@@ -1022,6 +1042,9 @@ const TOOLS=[
  {name:'get_actions_log',description:'Read GitHub Actions results for the current branch. Finds the latest failed workflow run (or the given run_id) and returns the failed jobs, failed steps and the error part of the log, so you can fix the cause with edit_file/write_file. Use it when a deploy/build failed.',parameters:{type:'object',properties:{run_id:{type:'integer',description:'optional workflow run id'}}}},
  {name:'generate_image',description:'Generate an image with the image provider the user configured in Settings and stage it as a binary file in the repo (saved as JPEG, max ~896px; use a .jpg path). Needs the image provider to be set up.',parameters:{type:'object',properties:{prompt:{type:'string'},path:{type:'string',description:'e.g. images/hero.jpg'}},required:['prompt','path']}},
  {name:'search_docs',description:'Search the web for official documentation / how-to answers (needs the Tavily key from Settings > Web search). Optionally pass url to read one documentation page as text.',parameters:{type:'object',properties:{query:{type:'string'},url:{type:'string',description:'optional https URL of a docs page to read'}}}},
+ {name:'read_files',description:'Read several small/medium text files of the current repo in ONE call (max 12 paths, total ~30000 chars; each file is cut if too long: use read_file with start_line for the rest). Cheaper than many read_file calls.',parameters:{type:'object',properties:{paths:{type:'array',items:{type:'string'}}},required:['paths']}},
+ {name:'compare_attachment',description:'For a zip/folder the user attached: compare every text file in it with the repo (draft included) and list which are NEW, CHANGED (with +added/-removed line counts) or SAME. Use this INSTEAD of reading repo files one by one. A single top folder in the zip is stripped automatically when the repo has no such folder.',parameters:{type:'object',properties:{name:{type:'string',description:'attachment name (optional if only one zip/folder)'},strip:{type:'string',description:'optional folder prefix to remove from the zip paths'},no_strip:{type:'boolean',description:'do not auto-strip a single top folder'},only:{type:'array',items:{type:'string'},description:'optional: only these paths (after stripping)'}}}},
+ {name:'apply_attachment',description:'Stage the NEW and CHANGED text files of an attached zip/folder into the repo as draft changes, WITHOUT you reading or rewriting their content (identical files are skipped). Needs plan approval when plan-first mode is on. Use compare_attachment first. Does not delete files. Afterwards review only the files you really have to, and call commit_message.',parameters:{type:'object',properties:{name:{type:'string'},strip:{type:'string'},no_strip:{type:'boolean'},only:{type:'array',items:{type:'string'},description:'optional: only these paths (after stripping)'},skip:{type:'array',items:{type:'string'},description:'optional: paths NOT to apply'}}}},
  {name:'commit_message',description:'Set a short commit message for the staged changes.',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}
 ];
 async function tool(c,name,a){
@@ -1166,6 +1189,42 @@ async function tool(c,name,a){
     }
     rawSave();return 'Scaffolded '+a.template+': '+added.join(', ')+(skipped.length?' | skipped existing: '+skipped.join(', '):'')+'. Now customise these files for the user\'s needs.';
   }
+  if(name==='compare_attachment'||name==='apply_attachment'){
+    const ap=name==='apply_attachment';
+    if(ap&&needPlan(c,'apply_attachment',''))throw new Error('Plan approval dorkar (plan-first mode). Age propose_plan call koro, tarpor thamo ar user er approval er opekkha koro.');
+    const fs=chatFiles(c).filter(f=>(!a.name||f.name===a.name)&&isPack(f.text));
+    if(!fs.length)throw new Error('Zip/folder attachment pai ni'+(a.name?' ('+a.name+')':'')+'. User ke zip ba folder attach korte bolo.');
+    const f=fs[fs.length-1],t=await getTree();
+    let es=attEntries(f.id,f.text).map(e=>({path:e.name.replace(/\\/g,'/').replace(/^\.?\/+/,''),text:e.text})),strip=String(a.strip||'').replace(/^\/+|\/+$/g,''),note='';
+    if(!strip&&!a.no_strip){const tops=new Set(es.map(e=>e.path.split('/')[0]));if(tops.size===1&&es.every(e=>e.path.includes('/'))){const top=[...tops][0];if(![...t.paths].some(q=>q.startsWith(top+'/'))){strip=top;note='(auto-stripped top folder "'+top+'/"; pass no_strip=true if that is wrong)\n'}}}
+    if(strip)es=es.filter(e=>e.path.startsWith(strip+'/')).map(e=>({path:e.path.slice(strip.length+1),text:e.text}));
+    if(Array.isArray(a.only)&&a.only.length){const on=new Set(a.only.map(x=>String(x).replace(/^\/+/,'')));es=es.filter(e=>on.has(e.path))}
+    if(ap&&Array.isArray(a.skip)&&a.skip.length){const sk=new Set(a.skip.map(x=>String(x).replace(/^\/+/,'')));es=es.filter(e=>!sk.has(e.path))}
+    if(!es.length)throw new Error('Kono file pai ni (strip/only/skip check koro)');
+    const lim=ap?300:250,over=es.length-lim;es=es.slice(0,lim);
+    const nz=x=>x.replace(/\r\n/g,'\n').trimEnd(),cur=async q=>{const df=d.files[q];if(df&&df.del)return undefined;if(df&&df.bin)return null;if(df)return df.content;if(!t.paths.has(q))return undefined;try{return await gh('/repos/'+S.repo.full+'/contents/'+enc(q)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true})}catch(e){return null}};
+    const res=new Array(es.length);let ix=0;
+    await Promise.all(Array.from({length:6},async()=>{while(ix<es.length){const i=ix++,e=es[i];
+      try{okPath(e.path)}catch(er){res[i]={st:'BAD',e,why:'invalid path'};continue}
+      if(e.text.length>300000){res[i]={st:'BAD',e,why:'file too big (>300KB)'};continue}
+      const o=await cur(e.path);
+      if(o===undefined)res[i]={st:'NEW',e};
+      else if(o===null)res[i]={st:'CHANGED',e,unk:1};
+      else if(nz(o)===nz(e.text))res[i]={st:'SAME',e};
+      else{const A=o.replace(/\r\n/g,'\n').split('\n'),B=e.text.replace(/\r\n/g,'\n').split('\n');let s=0;while(s<A.length&&s<B.length&&A[s]===B[s])s++;let ea=A.length,eb=B.length;while(ea>s&&eb>s&&A[ea-1]===B[eb-1]){ea--;eb--}res[i]={st:'CHANGED',e,add:eb-s,del:ea-s}}
+    }}));
+    const by=s=>res.filter(r=>r.st===s),nw=by('NEW'),ch=by('CHANGED'),sm=by('SAME'),bad=by('BAD');
+    const ln=r=>r.e.path+(r.st==='NEW'?' ('+r.e.text.split('\n').length+' lines)':r.unk?' (binary/unreadable in repo)':' (+'+r.add+' -'+r.del+')');
+    if(!ap){
+      return (note+'Attachment "'+f.name+'": '+es.length+' text files compared with the repo ('+S.repo.full+' / '+S.repo.branch+'): '+nw.length+' NEW, '+ch.length+' CHANGED, '+sm.length+' SAME'+(bad.length?', '+bad.length+' skipped':'')+(over>0?', '+over+' more not compared':'')+'.\n'+
+        (nw.length?'\nNEW:\n'+nw.map(ln).join('\n'):'')+(ch.length?'\n\nCHANGED:\n'+ch.map(ln).join('\n'):'')+(sm.length?'\n\nSAME (nothing to do): '+sm.map(r=>r.e.path).join(', '):'')+(bad.length?'\n\nSKIPPED: '+bad.map(r=>r.e.path+' ('+r.why+')').join(', '):'')+
+        '\n\nNext: apply_attachment stages NEW+CHANGED without you rewriting them. Read a CHANGED file only if you must review it.').slice(0,14000);
+    }
+    const warn=[];
+    for(const r of [...nw,...ch]){d.files[r.e.path]={content:r.e.text,ex:t.paths.has(r.e.path)};const w=lintFile(r.e.path,r.e.text);if(w.length&&warn.length<12)warn.push(r.e.path+': '+w.join('; '))}
+    rawSave();
+    return (note+'Staged '+(nw.length+ch.length)+' files from "'+f.name+'" ('+nw.length+' new, '+ch.length+' changed); skipped '+sm.length+' identical'+(bad.length?', '+bad.length+' invalid/too big ('+bad.map(r=>r.e.path).join(', ')+')':'')+(over>0?', '+over+' more files were over the limit of '+lim:'')+'.\n'+[...nw,...ch].map(r=>(r.st==='NEW'?'+ ':'~ ')+r.e.path).join('\n').slice(0,3000)+(warn.length?'\nWARNING (fix before finishing):\n'+warn.join('\n'):'')+'\nZip does not delete files: tell the user if some old files may need deleting.').slice(0,9000);
+  }
   if(name==='propose_plan'){
     c.plan={summary:String(a.summary||'').slice(0,600),files:(Array.isArray(a.files)?a.files:[]).map(x=>String(x).slice(0,200)).slice(0,30),steps:(Array.isArray(a.steps)?a.steps:[]).map(x=>String(x).slice(0,300)).slice(0,20),ok:false};
     planStop=true;rawSave();return 'Plan shown to the user. STOP now: reply with one short sentence asking for approval. Do not change anything until the user approves.';
@@ -1201,6 +1260,15 @@ async function tool(c,name,a){
     let l=[...ps].sort();const pre=String(a.path||'').replace(/^\/+|\/+$/g,'');
     if(pre)l=l.filter(x=>x===pre||x.startsWith(pre+'/'));
     return (l.length?l.slice(0,400).join('\n'):(t.empty?'(repo empty)':'(no files)'))+(l.length>400?'\n... '+(l.length-400)+' more':'')+(t.trunc?'\n(tree truncated by GitHub)':'');
+  }
+  if(name==='read_files'){
+    const ps=(Array.isArray(a.paths)?a.paths:[]).map(x=>String(x)).slice(0,12);if(!ps.length)throw new Error('paths khali');
+    const per=Math.max(2500,Math.floor(30000/ps.length));let out='';
+    for(const q of ps){
+      try{const pp=okPath(q),x=await readFull(c,pp);out+='\n=== '+pp+' ('+x.split('\n').length+' lines) ===\n'+(x.length>per?x.slice(0,per)+'\n[... cut at '+per+' chars of '+x.length+'; use read_file with start_line for the rest]':x)+'\n'}
+      catch(e){out+='\n=== '+q+' ===\nError: '+e.message+'\n'}
+    }
+    return out.trim();
   }
   const p=okPath(a.path);
   if(name==='read_file'){return sliceRead(await readFull(c,p),a)}
@@ -1238,10 +1306,25 @@ async function tool(c,name,a){
 }
 const sp=x=>{try{return typeof x==='string'?JSON.parse(x||'{}'):(x||{})}catch(e){return {}}};
 const cacheLast=msgs=>{const m=msgs[msgs.length-1];if(!m)return msgs;if(typeof m.content==='string')m.content=[{type:'text',text:m.content,cache_control:{type:'ephemeral'}}];else if(Array.isArray(m.content)&&m.content.length){const b=m.content[m.content.length-1];if(b&&b.type!=='thinking')b.cache_control={type:'ephemeral'}}return msgs};
+function shrinkArgs(a){
+  if(!a||typeof a!=='object')return a;
+  const o=Object.assign({},a);
+  for(const k of ['content','old_text','new_text','body','notes'])if(typeof o[k]==='string'&&o[k].length>400)o[k]=o[k].slice(0,150)+'\n[... '+o[k].length+' chars left out of the history to save tokens; the change itself is already staged]';
+  if(Array.isArray(o.edits))o.edits=o.edits.map(e=>e&&typeof e==='object'?shrinkArgs(e):e);
+  return o;
+}
 function trimWork(work){
-  /* keep last 4 tool results whole; shrink older big ones (they are re-sent every step) */
-  const idx=[];work.forEach((w,i)=>{if(w.role==='tool')idx.push(i)});const old=new Set(idx.slice(0,-4));
-  return work.map((w,i)=>old.has(i)&&w.result.length>3000?Object.assign({},w,{result:w.result.slice(0,500)+'\n[... older tool output trimmed to save tokens ('+w.result.length+' chars). Call the tool again if you need it.]'}):w);
+  /* everything below is re-sent on every step, so: keep the last 4 tool results whole, shrink older big ones,
+     and cut the big arguments (file contents) of tool calls older than the last 2 turns */
+  const ti=[],ai=[];work.forEach((w,i)=>{if(w.role==='tool')ti.push(i);else ai.push(i)});
+  const oldT=new Set(ti.slice(0,-4)),oldA=new Set(ai.slice(0,-2));
+  return work.map((w,i)=>{
+    if(w.role==='tool')return oldT.has(i)&&w.result.length>2000?Object.assign({},w,{result:w.result.slice(0,400)+'\n[... older tool output trimmed to save tokens ('+w.result.length+' chars). Call the tool again if you need it.]'}):w;
+    if(!oldA.has(i)||!w.calls)return w;
+    const nw=Object.assign({},w,{calls:w.calls.map(k=>Object.assign({},k,{args:shrinkArgs(k.args)}))});
+    if(w.raw)nw.raw=w.raw.map(pt=>pt&&pt.functionCall?Object.assign({},pt,{functionCall:Object.assign({},pt.functionCall,{args:shrinkArgs(pt.functionCall.args)})}):pt);
+    return nw;
+  });
 }
 function agentCall0(p,history,work0,sys){
   const work=trimWork(work0);
@@ -1347,8 +1430,8 @@ async function agentCall(p,history,work,sys,onLive){
     throw e;
   }finally{clearTimeout(to)}
 }
-const buildHistory=c=>{const sm=smartPlan(c);{const lu=[...c.msgs].reverse().find(m=>m.role==='user');if(lu){if(sm)lu.sm=sm.n;else delete lu.sm}}let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m,sm)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
-function attachNote(c){const fs=chatFiles(c);if(!fs.length)return '';const sm=smartPlan(c);return '\nFiles attached by the user in this chat: '+fs.map(f=>f.name+' ('+f.text.split('\n').length+' lines)').join(', ')+'.'+(sm?' They are too big for the context, so only excerpts are included in the messages; use search_attachment and read_attachment to look at other parts.':'')}
+const buildHistory=(c,agent)=>{const lz=agent?lazyPlan(c):null,sm=lz||smartPlan(c);{const lu=[...c.msgs].reverse().find(m=>m.role==='user');if(lu){if(sm&&!lz)lu.sm=sm.n;else delete lu.sm}}let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m,sm)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
+function attachNote(c){const fs=chatFiles(c);if(!fs.length)return '';const sm=smartPlan(c);return '\nFiles attached by the user in this chat: '+fs.map(f=>f.name+' ('+f.text.split('\n').length+' lines)').join(', ')+'.'+(sm?' They are too big for the context, so only excerpts are included in the messages; use search_attachment and read_attachment to look at other parts.':'')+(lazyPlan(c)?' Big attached files are not pasted in the messages (to save tokens): for a zip/folder of updated files call compare_attachment and then apply_attachment instead of reading and rewriting each file; use search_attachment/read_attachment for anything else.':'')}
 function taskNote(c){if(!c.tasks||!c.tasks.length)return '';return '\nTASK CHECKLIST (continue with the first unfinished task, call complete_task after each):\n'+c.tasks.map((x,i)=>(i+1)+'. ['+(x.done?'x':' ')+'] '+x.t).join('\n')}
 function agentSys(c){return agentSys0(c)+attachNote(c)+planNote(c)+taskNote(c)}
 function planNote(c){
@@ -1360,9 +1443,9 @@ function planNote(c){
 }
 function agentSys0(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
-  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. For a NEW project call scaffold first (static, map, pwa, react or worker) and then customise; for jobs with more than ~3 steps call set_tasks and tick them with complete_task. After the first push, offer enable_pages (static/map/pwa: mode branch; react: mode workflow) and set_repo_info. When a deploy/build fails call get_actions_log, find the cause and fix the files; use search_docs when unsure about an API or tool, and generate_image when the project needs a picture (needs image provider in Settings). Tool results may end with WARNING lines (syntax errors or possible secrets): fix them before finishing. NEVER write real API keys, tokens or passwords into files: use placeholders and a .env.example, and mention it to the user. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: be economical, every step and token costs the user money: call list_files once, read ONLY the files you must change or really need (use search_code, read_files for several small files, and read_file with start_line/end_line instead of whole big files), never re-read a file you already read, and when tool calls are independent make them ALL in the same turn instead of one per turn; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~30000 chars with a header telling you the line range: read further pages only if you really need that part, or use search_code to locate it and then read just that line range. Never tell the user you cannot read a large file. For a NEW project call scaffold first (static, map, pwa, react or worker) and then customise; for jobs with more than ~3 steps call set_tasks and tick them with complete_task. After the first push, offer enable_pages (static/map/pwa: mode branch; react: mode workflow) and set_repo_info. When a deploy/build fails call get_actions_log, find the cause and fix the files; use search_docs when unsure about an API or tool, and generate_image when the project needs a picture (needs image provider in Settings). Tool results may end with WARNING lines (syntax errors or possible secrets): fix them before finishing. NEVER write real API keys, tokens or passwords into files: use placeholders and a .env.example, and mention it to the user. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: if you have already read the key files while doing the task, call save_repo_notes once with a better short overview (purpose, structure, conventions) before your final answer; NEVER read extra files only to write notes, and always call it when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',scaffold:'box:scaffold '+(a.template||''),set_tasks:'note:task list',complete_task:'okc:task '+(a.index||'')+' done',enable_pages:'globe:enable Pages',set_repo_info:'note:repo info',propose_plan:'note:plan',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save',get_actions_log:'wrench:Actions log porchi',generate_image:'image:generate image '+p,search_docs:'search:docs: '+(a.query||a.url||'')})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',scaffold:'box:scaffold '+(a.template||''),set_tasks:'note:task list',complete_task:'okc:task '+(a.index||'')+' done',enable_pages:'globe:enable Pages',set_repo_info:'note:repo info',propose_plan:'note:plan',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save',read_files:'file:read '+((a.paths||[]).length)+' files',compare_attachment:'search:zip vs repo',apply_attachment:'edit:zip theke stage',get_actions_log:'wrench:Actions log porchi',generate_image:'image:generate image '+p,search_docs:'search:docs: '+(a.query||a.url||'')})[k.name]||k.name};
 async function ensureNotes(c){
   const R=S.repo.full;if(S.repoNotes&&S.repoNotes[R])return;
   const t=await getTree();if(t.empty||!t.paths.size)return;
@@ -1377,15 +1460,15 @@ async function ensureNotes(c){
 let planStop=false;
 function needPlan(c,name,p){
   const m=S.planMode||'big';if(m==='off'||(c.plan&&c.plan.ok))return false;
-  if(m==='always'||name==='scaffold')return true;
+  if(m==='always'||name==='scaffold'||name==='apply_attachment')return true;
   const d=c.draft;return name==='delete_file'||!!(d&&d.files&&Object.keys(d.files).length&&!(p in d.files));
 }
 async function runAgent(c,list){
   try{await ensureNotes(c)}catch(e){}
-  const history=buildHistory(c),work=[],log=[],fails=[],sys=agentSys(c);
+  const history=buildHistory(c,true),work=[],log=[],fails=[],sys=agentSys(c);
   let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
   try{
-    for(let step=0;step<30&&!stopped&&!done&&!failedAll;step++){
+    for(let step=0;step<40&&!stopped&&!done&&!failedAll;step++){
       let res=null;
       while(pi<list.length&&!stopped){
         try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{live=(log.length?log.map(l=>'- '+logTxt(l)).join('\n')+'\n\n':'')+(t||'')+(pn?'\n→ '+pn+'…':'');draw()});by=list[pi].name;break}
