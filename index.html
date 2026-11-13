@@ -214,6 +214,11 @@ form.in{padding:4px 12px 10px}
 .pc>span{display:flex;flex-direction:column;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pcs{font-size:11px;color:var(--mute)}
 svg.ic{vertical-align:-3px;margin-right:6px;flex:none}.mi svg.ic,.pc svg.ic,.pc button svg.ic,.ib svg.ic{margin:0}.pi span{display:flex;align-items:center}
 .pf{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.pst{margin:6px 0 4px;padding-left:20px;font-size:14px;line-height:1.5}
+.lw{color:var(--err);font-size:13px;margin:6px 0;line-height:1.45}
+.pv{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}.pv.on{display:flex}
+.pvh{display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--sf)}.pvh b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pvw{flex:1;display:flex;justify-content:center;background:#cbd5e1;overflow:auto;min-height:0}.pvw iframe{border:0;background:#fff;height:100%;width:100%}
+.pve{background:var(--sf);border-top:1px solid var(--line);padding:8px 12px;max-height:32%;overflow:auto;font-size:13px;display:none}.pve.on{display:block}.pve div{color:var(--err);margin:3px 0;word-break:break-word}
 </style>
 </head>
 <body>
@@ -256,6 +261,7 @@ svg.ic{vertical-align:-3px;margin-right:6px;flex:none}.mi svg.ic,.pc svg.ic,.pc 
   <div class="dfoot"><button id="dset">Settings</button></div>
 </aside>
 
+<section class="pv" id="pv"><div class="pvh"><button class="ib" id="pvx" aria-label="Close"></button><b id="pvt">Preview</b><span style="flex:1"></span><button class="chip" id="pvd">Phone</button><button class="chip" id="pvr">Reload</button></div><div class="pvw"><iframe id="pvf" sandbox="allow-scripts allow-forms allow-modals allow-popups" title="preview"></iframe></div><div class="pve" id="pve"></div></section>
 <section class="sheet" id="sheet">
   <header><button class="ib" id="back" aria-label="Back">←</button><h1>Settings</h1></header>
   <div class="body" id="sbody"></div>
@@ -904,6 +910,70 @@ async function getTree(){
   catch(e){if(/ 409/.test(e.message))t.empty=true;else throw e}
   ghTree=t;return t;
 }
+/* ---- pre-push checks ---- */
+const SECRET_RES=[['AWS key',/AKIA[0-9A-Z]{16}/],['GitHub token',/\b(gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/],['Google API key (Firebase/Maps web key hole domain restrict koro)',/AIza[0-9A-Za-z_\-]{35}/],['OpenAI/Anthropic key',/\bsk-(ant-|proj-)?[A-Za-z0-9_\-]{20,}/],['Slack token',/xox[baprs]-[A-Za-z0-9-]{10,}/],['Stripe secret key',/\b[sr]k_live_[A-Za-z0-9]{16,}/],['Private key',/-----BEGIN [A-Z ]*PRIVATE KEY-----/],['Tavily key',/tvly-[A-Za-z0-9]{16,}/],['Supabase service key',/service_role/i],['Secret/password assignment',/(?:api[_-]?key|secret|passwd|password|token|private[_-]?key)["']?\s*[:=]\s*["']([A-Za-z0-9_\-+\/=]{20,})["']/i]];
+function scanSecrets(path,text){
+  const out=[];if(/(^|\/)\.env(\.|$)/.test(path)&&!/\.(example|sample|template)$/.test(path))out.push('.env file commit korbe na (secret thake)');
+  text.split('\n').forEach((ln,i)=>{if(ln.length>3000||out.length>=4)return;for(const [k,re] of SECRET_RES){const m=re.exec(ln);if(m&&!(m[1]&&/your|example|placeholder|xxxx|changeme|\*{4}|<.*>/i.test(m[1]))){if(k==='Supabase service key'&&!/eyJ/.test(ln))continue;out.push(k+' (line '+(i+1)+')');break}}});
+  return out;
+}
+function lintFile(path,text){
+  const ext=((path.match(/\.([a-z0-9]+)$/i)||[])[1]||'').toLowerCase(),out=[];
+  const okErr=e=>/await|import|export|Cannot use/i.test(e.message);
+  try{
+    if(ext==='json')JSON.parse(text);
+    else if(/^(js|mjs|cjs)$/.test(ext)){if(!/^\s*(import|export)\s/m.test(text))new Function(text)}
+    else if(/^html?$/.test(ext)){
+      const re=/<script\b([^>]*)>([\s\S]*?)<\/script>/gi;let m;
+      while((m=re.exec(text))){if(/\bsrc\s*=/i.test(m[1]))continue;const ty=(m[1].match(/type\s*=\s*["']?([^"'\s>]+)/i)||[])[1]||'';if(ty&&!/javascript|ecmascript/i.test(ty))continue;if(/^\s*(import|export)\s/m.test(m[2]))continue;if(m[2].trim()){try{new Function(m[2])}catch(e){if(!okErr(e))throw e}}}
+      if((text.match(/<script\b/gi)||[]).length!==(text.match(/<\/script>/gi)||[]).length)out.push('<script> tag thikmoto bondho hoyni');
+    }else if(ext==='css'){const t=text.replace(/\/\*[\s\S]*?\*\//g,'').replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,'');if((t.match(/{/g)||[]).length!==(t.match(/}/g)||[]).length)out.push('CSS e { } milche na')}
+  }catch(e){if(!okErr(e))out.push('Syntax error: '+e.message)}
+  return out.map(x=>path+': '+x).concat(scanSecrets(path,text).map(x=>path+': SECRET? '+x));
+}
+function checkDraft(c){const d=c.draft,out=[];if(!d)return out;for(const [p,f] of Object.entries(d.files)){if(f.del||f.bin||typeof f.content!=='string')continue;out.push(...lintFile(p,f.content))}return out}
+const lintNote=(p,t)=>{const l=lintFile(p,t);return l.length?'\nWARNING (fix this before finishing): '+l.join('; '):''};
+/* ---- live preview ---- */
+const MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',ico:'image/x-icon',woff:'font/woff',woff2:'font/woff2',ttf:'font/ttf',otf:'font/otf',json:'application/json',css:'text/css'};
+const mimeOf=p=>MIME[((p.match(/\.([a-z0-9]+)$/i)||[])[1]||'').toLowerCase()]||'application/octet-stream';
+let pvc=null,pvEntry='',pvErrs=[],pvMode=0;
+const isRel=u=>u&&!/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(u);
+const resolveP=(base,ref)=>{try{return decodeURIComponent(new URL(ref.split('#')[0].split('?')[0],'http://p/'+base).pathname.slice(1))}catch(e){return ''}};
+function pickEntry(d){const h=Object.keys(d.files).filter(p=>/\.html?$/i.test(p)&&!d.files[p].del).sort((a,b)=>a.split('/').length-b.split('/').length);return h[0]||''}
+async function buildPreview(c,entry){
+  const d=c.draft,R=d.repo,B=d.branch,cache={};
+  const text=async p=>{if(p in cache)return cache[p];const f=d.files[p];let t=null;if(f){if(f.del)t=null;else if(!f.bin)t=f.content}else{try{t=await gh('/repos/'+R+'/contents/'+enc(p)+'?ref='+encodeURIComponent(B),{raw:true})}catch(e){t=null}}return cache[p]=t};
+  const bin=async p=>{const f=d.files[p];if(f&&f.bin)return 'data:'+(f.mime||mimeOf(p))+';base64,'+f.bin;
+    try{const r=await fetch('https://api.github.com/repos/'+R+'/contents/'+enc(p)+'?ref='+encodeURIComponent(B),{headers:{Authorization:'Bearer '+S.gh.token,Accept:'application/vnd.github.raw+json'}});if(!r.ok)return null;const b=await r.blob();if(b.size>2.5e6)return null;
+      return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b)})}catch(e){return null}};
+  const cssUrls=async(css,base)=>{const m=[...css.matchAll(/url\(\s*(['"]?)([^)'"]+)\1\s*\)/g)].filter(x=>isRel(x[2].trim()));for(const x of m){const u=await bin(resolveP(base,x[2].trim()));if(u)css=css.split(x[0]).join('url('+u+')')}return css};
+  let html=await text(entry);if(html==null)throw new Error('Entry HTML pai ni: '+entry);
+  const dir=entry.includes('/')?entry.slice(0,entry.lastIndexOf('/')+1):'';
+  const files={};
+  async function repl(re,fn){const ms=[...html.matchAll(re)];for(const m of ms){const r=await fn(m);if(r!=null)html=html.replace(m[0],()=>r)}}
+  await repl(/<link\b[^>]*>/gi,async m=>{const t=m[0];if(!/rel\s*=\s*["']?stylesheet/i.test(t))return null;const h=(t.match(/href\s*=\s*["']([^"']+)["']/i)||[])[1];if(!isRel(h))return null;const p=resolveP(entry,h);let css=await text(p);if(css==null)return null;css=await cssUrls(css,p);return '<style data-src="'+esc(p)+'">'+css.replace(/<\/style/gi,'<\\/style')+'</style>'});
+  await repl(/<script\b([^>]*)\bsrc\s*=\s*["']([^"']+)["']([^>]*)>\s*<\/script>/gi,async m=>{if(!isRel(m[2])||/type\s*=\s*["']?module/i.test(m[1]+m[3]))return null;const js=await text(resolveP(entry,m[2]));if(js==null)return null;return '<script'+(m[1]+m[3]).replace(/\s+$/,'')+'>'+js.replace(/<\/script/gi,'<\\/script')+'<\/script>'});
+  await repl(/(<(?:img|source|video|audio)\b[^>]*?\b(?:src|poster)\s*=\s*["'])([^"']+)(["'])/gi,async m=>{if(!isRel(m[2]))return null;const u=await bin(resolveP(entry,m[2]));return u?m[1]+u+m[3]:null});
+  for(const m of new Set([...html.matchAll(/["'`]([\w./-]+\.(?:json|geojson|csv|txt))["'`]/g)].map(x=>x[1]))){if(!isRel(m))continue;const p=resolveP(entry,m),t=await text(p);if(t!=null&&t.length<1.5e6)files[p]=t}
+  for(const [p,f] of Object.entries(d.files)){if(!f.del&&!f.bin&&/\.(json|geojson|csv|txt)$/i.test(p)&&f.content.length<1.5e6)files[p]=f.content}
+  const shim='<script>(function(){var F='+JSON.stringify(files).replace(/</g,'\\u003c').replace(/\u2028|\u2029/g,'')+',D='+JSON.stringify(dir)+';function S(m){try{parent.postMessage(Object.assign({orin:1},m),"*")}catch(e){}}function N(u){try{return decodeURIComponent(new URL(String(u).split("#")[0].split("?")[0],"http://p/"+D).pathname.slice(1))}catch(e){return ""}}'+
+   'addEventListener("error",function(e){S({t:"err",m:(e.message||"error")+(e.lineno?" (line "+e.lineno+")":"")})});addEventListener("unhandledrejection",function(e){S({t:"err",m:"Promise: "+((e.reason&&e.reason.message)||e.reason)})});'+
+   'var ce=console.error;console.error=function(){S({t:"err",m:[].slice.call(arguments).map(String).join(" ")});ce.apply(console,arguments)};'+
+   'var of=window.fetch;window.fetch=function(u){try{var p=N(typeof u==="string"?u:u.url);if(F[p]!==undefined)return Promise.resolve(new Response(F[p],{headers:{"Content-Type":p.slice(-4)===".csv"?"text/csv":"application/json"}}))}catch(e){}return of.apply(this,arguments)};'+
+   'document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[href]");if(!a)return;var h=a.getAttribute("href");if(/^(#|[a-z][a-z0-9+.-]*:|\\/\\/)/i.test(h))return;e.preventDefault();S({t:"nav",h:N(h)})},true);})()<\/script>';
+  return /<head[^>]*>/i.test(html)?html.replace(/<head[^>]*>/i,m=>m+shim):shim+html;
+}
+async function openPreview(c,entry){
+  pvc=c;pvEntry=entry||pickEntry(c.draft)||'index.html';pvErrs=[];
+  $('pv').classList.add('on');$('pvt').textContent=pvEntry;renderPvErrs();
+  try{$('pvf').srcdoc=await buildPreview(c,pvEntry)}catch(e){$('pvf').srcdoc='<p style="font:16px sans-serif;padding:16px">'+esc(e.message)+'</p>'}
+}
+function renderPvErrs(){const e=$('pve');if(!pvErrs.length){e.classList.remove('on');e.innerHTML='';return}e.classList.add('on');e.innerHTML=pvErrs.slice(0,8).map(x=>'<div>'+esc(x)+'</div>').join('')+'<button class="btn sm" id="pvs">'+ico('chat',15)+'AI ke fix korte bolo</button>'}
+addEventListener('message',e=>{
+  const m=e.data;if(!m||!m.orin||e.source!==$('pvf').contentWindow)return;
+  if(m.t==='err'){if(!pvErrs.includes(m.m)&&pvErrs.length<20){pvErrs.push(m.m);renderPvErrs()}}
+  else if(m.t==='nav'&&pvc&&pvc.draft){const p=m.h;if(/\.html?$/i.test(p)||p===''||p.endsWith('/'))openPreview(pvc,p===''||p.endsWith('/')?p+'index.html':p);else toast('Ei link preview te khule na')}
+});
 function sliceRead(x,a){
   const lim=50000,ls=x.split('\n'),n=ls.length,s0=Math.max(1,parseInt(a.start_line,10)||1),e0=Math.min(n,parseInt(a.end_line,10)||n);
   if(s0===1&&e0===n&&x.length<=lim)return x;
@@ -1050,22 +1120,22 @@ async function tool(c,name,a){
     if(t.paths.has(p)){let o=null;try{o=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true})}catch(e){}
       if(o!==null&&o.trimEnd()===a.content.trimEnd()){delete d.files[p];rawSave();return 'NO CHANGE: new content is identical to the current file, nothing staged. Tell the user the file already looks like this.'}}
     d.files[p]={content:a.content,ex:t.paths.has(p)};rawSave();
-    return 'Staged '+p+' ('+a.content.split('\n').length+' lines)';
+    return 'Staged '+p+' ('+a.content.split('\n').length+' lines)'+lintNote(p,a.content);
   }
   if(name==='edit_file'){
     const o=String(a.old_text||'');if(!o)throw new Error('old_text khali');
     const cur=await readFull(c,p),n=cur.split(o).length-1;
     if(n!==1)throw new Error(n?'old_text '+n+' jaygay ache, aro boro kore dao':'old_text file e nai');
     if(o===String(a.new_text||''))throw new Error('old_text ar new_text same, kono change nai');
-    const t=await getTree();d.files[p]={content:cur.replace(o,()=>String(a.new_text||'')),ex:t.paths.has(p)};rawSave();
-    return 'Edited '+p;
+    const t=await getTree(),nc=cur.replace(o,()=>String(a.new_text||''));d.files[p]={content:nc,ex:t.paths.has(p)};rawSave();
+    return 'Edited '+p+lintNote(p,nc);
   }
   if(name==='edit_many'){
     const es=Array.isArray(a.edits)?a.edits:[];if(!es.length)throw new Error('edits khali');
     let cur=await readFull(c,p);
     es.forEach((e,i)=>{const o=String(e&&e.old_text||'');if(!o)throw new Error('edit #'+(i+1)+': old_text khali');const n=cur.split(o).length-1;if(n!==1)throw new Error('edit #'+(i+1)+': '+(n?'old_text '+n+' jaygay ache':'old_text file e nai')+' (kono change apply hoyni)');cur=cur.replace(o,()=>String(e.new_text||''))});
     const t=await getTree();d.files[p]={content:cur,ex:t.paths.has(p)};rawSave();
-    return 'Edited '+p+' ('+es.length+' changes)';
+    return 'Edited '+p+' ('+es.length+' changes)'+lintNote(p,cur);
   }
   if(name==='delete_file'){
     const t=await getTree(),f=d.files[p];
@@ -1198,7 +1268,7 @@ function planNote(c){
 }
 function agentSys0(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
-  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. Tool results may end with WARNING lines (syntax errors or possible secrets): fix them before finishing. NEVER write real API keys, tokens or passwords into files: use placeholders and a .env.example, and mention it to the user. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
 const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',propose_plan:'note:plan',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save'})[k.name]||k.name};
 async function ensureNotes(c){
@@ -1296,10 +1366,11 @@ function draftHTML(c){
     const fs=Object.entries(d.files),pr=S.pushMode==='pr';
     h+='<div class="dc"><b>'+ico('note')+'Draft: '+fs.length+' file</b><small>'+esc(d.repo)+' · '+esc(d.branch)+'</small>'+
     fs.map(([p,f])=>'<div class="df"><div class="fr"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button><button class="fx" data-fx="'+qa(p)+'" aria-label="Ei file ta bad dao" title="Bad dao">'+IC.x+'</button></div>'+(dview[p]?fileDiffHTML(d,p,f):'')+'</div>').join('')+
+    (()=>{const iss=checkDraft(c);return iss.length?'<div class="lw">'+iss.slice(0,6).map(x=>ico('xc',14)+esc(x)).join('<br>')+'</div>':''})()+
     '<input class="f cm" placeholder="Commit message" value="'+qa(d.msg||defMsg(c))+'">'+
     (pr?'<textarea class="f pb" rows="3" placeholder="PR description (optional — AI likhe dite pare)">'+esc(d.prBody||'')+'</textarea>':'')+'<div class="seg"><button data-pm="direct" class="'+(pr?'':'on')+'">Sorasori push</button><button data-pm="pr" class="'+(pr?'on':'')+'">Branch + PR</button></div>'+
     '<small>'+(pr?'Notun branch e jabe. Tumi Merge chaple \''+esc(d.branch)+'\' e mishbe. (Beshi nirapod)':'Sorasori \''+esc(d.branch)+'\' e jabe. Pore Undo kora jabe.')+'</small>'+
-    '<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gpush">'+(pr?ico('pr',15)+'PR kholo':ico('up',15)+'Push korbo')+'</button><button class="btn ghost sm" data-act="gdisc">Discard</button></div></div>';
+    '<div class="row" style="margin-top:4px"><button class="btn sm" data-act="gpush">'+(pr?ico('pr',15)+'PR kholo':ico('up',15)+'Push korbo')+'</button><button class="btn ghost sm" data-act="gdisc">Discard</button>'+(Object.keys(d.files).some(x=>/\.(html?|css|js|svg)$/i.test(x)&&!d.files[x].del)?'<button class="btn ghost sm" data-act="pview">'+ico('globe',15)+'Preview</button>':'')+'</div></div>';
   }
   const u=c.pushed;
   if(u&&u.pr){
@@ -1577,7 +1648,8 @@ document.addEventListener('click',e=>{
   else if(d.act==='rclear'){S.repo=null;ghTree=null;save();if(view==='repo')drawSheet();render()}
   else if(d.act==='rnew'){const n=$('nn').value.trim();if(!/^[A-Za-z0-9._-]{1,100}$/.test(n)){toast('Repo name e shudhu english okkhor, number, - _ . cholbe');return}
     t.disabled=true;gh('/user/repos',{method:'POST',body:{name:n,description:$('nd').value.trim().slice(0,300),private:$('np').checked,auto_init:true}}).then(j=>{S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;const c=chat();if(c)c.draft=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo banano hoyeche: '+j.full_name)}).catch(e=>{t.disabled=false;toast(e.message)})}
-  else if(d.act==='gpush'){const c=chat();if(c)pushDraft(c)}
+  else if(d.act==='gpush'){const c=chat();if(c){const iss=checkDraft(c);if(iss.length&&!confirm('Push er age somossha pawa geche:\n\n'+iss.slice(0,6).join('\n')+'\n\nTobu push korbe?'))return;pushDraft(c)}}
+  else if(d.act==='pview'){const c=chat();if(c&&c.draft)openPreview(c)}
   else if(d.act==='gundo'){const c=chat();if(c)undoPush(c)}
   else if(d.act==='plok'){const c=chat();if(c&&c.plan&&!busy){c.plan.ok=true;save();$('box').value='Plan OK, kaj shuru koro.';send()}}
   else if(d.act==='plno'){const c=chat();if(c){c.plan=null;save();render();$('box').focus();toast('Ki bodlate chao likho')}}
@@ -1612,6 +1684,10 @@ document.addEventListener('click',e=>{
   else if(d.act==='exp'){const a=document.createElement('a');const ex=JSON.parse(JSON.stringify(Object.assign({},S,{cloud:undefined}),strip));ex.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text===undefined&&FT.has(f.id))f.text=FT.get(f.id)})));a.href=URL.createObjectURL(new Blob([JSON.stringify(ex)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));S.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text!==undefined){fput(f.id,f.text);delete f.text}})));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
+$('pvx').innerHTML=IC.x;$('pvx').onclick=()=>{$('pv').classList.remove('on');$('pvf').srcdoc=''};
+$('pvr').onclick=()=>{if(pvc&&pvc.draft)openPreview(pvc,pvEntry)};
+$('pvd').onclick=()=>{pvMode=(pvMode+1)%3;const w=[['Phone','390px'],['Tablet','768px'],['Desktop','100%']][pvMode];$('pvd').textContent=w[0];$('pvf').style.width=w[1]};$('pvf').style.width='390px';
+$('pve').addEventListener('click',e=>{if(e.target.closest('#pvs')){const t='Preview te ei error gulo ashche, fix koro:\n- '+pvErrs.slice(0,8).join('\n- ');$('pvx').click();$('box').value=t;if(!busy)send()}});
 $('fdir').onchange=e=>{addDir([...e.target.files]);e.target.value=''};
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
 $('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>'+ico('image',16)+'Photos</span></button><button class="pi" data-add="fcam"><span>'+ico('camera',16)+'Camera</span></button><button class="pi" data-add="fi"><span>'+ico('file',16)+'Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>'+ico('folder',16)+'Folder</span></button><button class="pi" data-act="ropen"><span>'+ico('box',16)+'GitHub repo</span></button>');
