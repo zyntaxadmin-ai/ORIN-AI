@@ -1019,6 +1019,9 @@ const TOOLS=[
  {name:'complete_task',description:'Mark a checklist task as done (1-based index).',parameters:{type:'object',properties:{index:{type:'integer'}},required:['index']}},
  {name:'enable_pages',description:'Turn on GitHub Pages for the current repo (asks the user to confirm). mode "branch" serves the branch root (plain static sites); mode "workflow" uses GitHub Actions (Vite/React etc). The branch must already be pushed.',parameters:{type:'object',properties:{mode:{type:'string',enum:['branch','workflow']}},required:['mode']}},
  {name:'set_repo_info',description:'Set the repo description, homepage URL and topics (asks the user to confirm).',parameters:{type:'object',properties:{description:{type:'string'},homepage:{type:'string'},topics:{type:'array',items:{type:'string'}}}}},
+ {name:'get_actions_log',description:'Read GitHub Actions results for the current branch. Finds the latest failed workflow run (or the given run_id) and returns the failed jobs, failed steps and the error part of the log, so you can fix the cause with edit_file/write_file. Use it when a deploy/build failed.',parameters:{type:'object',properties:{run_id:{type:'integer',description:'optional workflow run id'}}}},
+ {name:'generate_image',description:'Generate an image with the image provider the user configured in Settings and stage it as a binary file in the repo (saved as JPEG, max ~896px; use a .jpg path). Needs the image provider to be set up.',parameters:{type:'object',properties:{prompt:{type:'string'},path:{type:'string',description:'e.g. images/hero.jpg'}},required:['prompt','path']}},
+ {name:'search_docs',description:'Search the web for official documentation / how-to answers (needs the Tavily key from Settings > Web search). Optionally pass url to read one documentation page as text.',parameters:{type:'object',properties:{query:{type:'string'},url:{type:'string',description:'optional https URL of a docs page to read'}}}},
  {name:'commit_message',description:'Set a short commit message for the staged changes.',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}
 ];
 async function tool(c,name,a){
@@ -1071,6 +1074,48 @@ async function tool(c,name,a){
     if(!confirm('AI '+S.repo.full+' e GitHub Pages on korte chay ('+(a.mode==='workflow'?'GitHub Actions':S.repo.branch+' branch')+'). Allow?'))throw new Error('User allow kore ni');
     try{const j=await gh(RF+'/pages',{method:'POST',body:a.mode==='workflow'?{build_type:'workflow'}:{source:{branch:S.repo.branch,path:'/'}}});return 'Pages enabled. URL: '+(j.html_url||'https://'+S.repo.full.split('/')[0]+'.github.io/'+S.repo.full.split('/')[1]+'/')+' (first deploy takes 1-2 min)'}
     catch(e){throw new Error(e.message+' | Hint: branch ke age push korte hobe, ar token e repo (admin) permission lagbe.')}
+  }
+  if(name==='get_actions_log'){
+    let rid=parseInt(a.run_id,10),run=null,head='';
+    if(!rid){
+      const j=await gh(RF+'/actions/runs?branch='+encodeURIComponent(S.repo.branch)+'&per_page=10'),rs=j.workflow_runs||[];
+      if(!rs.length)return 'No workflow runs on branch '+S.repo.branch+' yet (nothing pushed, or no workflow).';
+      head='Recent runs:\n'+rs.slice(0,6).map(x=>'#'+x.id+' '+(x.name||'')+' ['+x.status+'/'+(x.conclusion||'-')+'] '+String(x.head_commit&&x.head_commit.message||'').split('\n')[0].slice(0,60)).join('\n')+'\n\n';
+      run=rs.find(x=>x.conclusion==='failure')||rs[0];rid=run.id;
+    }else run=await gh(RF+'/actions/runs/'+rid);
+    if(run.conclusion==='success')return head+'Run #'+rid+' ('+(run.name||'')+') succeeded. Nothing to fix.';
+    if(run.status!=='completed')return head+'Run #'+rid+' is still '+run.status+'. Try again in a minute.';
+    const jobs=((await gh(RF+'/actions/runs/'+rid+'/jobs?per_page=30')).jobs||[]).filter(x=>x.conclusion==='failure');
+    let out=head+'Run #'+rid+' '+(run.name||'')+' => '+run.conclusion+' ('+(run.html_url||'')+')\n';
+    if(!jobs.length)return out+'No failed job found (run was '+run.conclusion+').';
+    for(const jo of jobs.slice(0,2)){
+      out+='\nFAILED JOB: '+jo.name+'\nFailed steps: '+((jo.steps||[]).filter(s=>s.conclusion==='failure').map(s=>s.name).join(', ')||'?')+'\n';
+      let log=null;try{log=await gh(RF+'/actions/jobs/'+jo.id+'/logs',{raw:true,accept:'application/vnd.github+json'})}catch(e){}
+      if(log){
+        log=log.replace(/\x1b\[[0-9;]*m/g,'').replace(/^\uFEFF?\d{4}-\d\d-\d\dT[\d:.]+Z ?/gm,'');
+        const ls=log.split('\n'),ei=[];ls.forEach((x,i)=>{if(/error|failed|fatal|cannot|not found|exception/i.test(x))ei.push(i)});
+        const tail=ls.slice(-60).join('\n'),first=ei.length?ls.slice(Math.max(0,ei[0]-5),ei[0]+15).join('\n'):'';
+        out+='\nFirst error context:\n'+first.slice(0,3000)+'\n\nLog tail:\n'+tail.slice(-4000)+'\n';
+      }else{
+        try{const an=await gh('/repos/'+S.repo.full+'/check-runs/'+jo.id+'/annotations');out+=(an.length?an.slice(0,10).map(x=>'- '+(x.path||'')+(x.start_line?':'+x.start_line:'')+' '+x.message).join('\n'):'(log not readable from browser; no annotations)')+'\n'}
+        catch(e){out+='(log not readable: '+e.message+')\n'}
+      }
+    }
+    return out.slice(0,14000)+'\nNow find the cause in the repo files and fix it (edit_file/write_file).';
+  }
+  if(name==='search_docs'){
+    const u=String(a.url||'').trim();
+    if(u){
+      if(!/^https:\/\//i.test(u))throw new Error('url must start with https://');
+      const ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),20000);
+      try{const r=await fetch('https://r.jina.ai/'+u,{signal:ctl.signal});if(!r.ok)throw new Error('Page read fail '+r.status);return (await r.text()).slice(0,14000)}
+      catch(e){if(e.name==='AbortError')throw new Error('Timeout');if(e instanceof TypeError)throw new Error('Network/CORS block');throw e}
+      finally{clearTimeout(to)}
+    }
+    const q=String(a.query||'').trim();if(!q)throw new Error('query ba url dorkar');
+    if(!(S.search&&S.search.key))throw new Error('Settings > Web search e Tavily key dao, tarpor docs search kaj korbe');
+    const rs=await webSearch(q+' documentation');
+    return rs.length?rs.map((x,i)=>'['+(i+1)+'] '+x.title+' ('+x.url+')\n'+x.content).join('\n\n'):'No results';
   }
   if(name==='set_repo_info'){
     if(!confirm('AI repo info bodlate chay (description/homepage/topics). Allow?'))throw new Error('User allow kore ni');
@@ -1125,7 +1170,7 @@ async function tool(c,name,a){
     c.plan={summary:String(a.summary||'').slice(0,600),files:(Array.isArray(a.files)?a.files:[]).map(x=>String(x).slice(0,200)).slice(0,30),steps:(Array.isArray(a.steps)?a.steps:[]).map(x=>String(x).slice(0,300)).slice(0,20),ok:false};
     planStop=true;rawSave();return 'Plan shown to the user. STOP now: reply with one short sentence asking for approval. Do not change anything until the user approves.';
   }
-  if(['write_file','edit_file','edit_many','delete_file','save_attachment'].includes(name)&&a.path&&needPlan(c,name,okPath(a.path)))
+  if(['write_file','edit_file','edit_many','delete_file','save_attachment','generate_image'].includes(name)&&a.path&&needPlan(c,name,okPath(a.path)))
     throw new Error('Plan approval dorkar (plan-first mode). Age propose_plan call koro, tarpor thamo ar user er approval er opekkha koro.');
   if(name==='save_attachment'){
     const p=okPath(a.path),all=[];
@@ -1136,6 +1181,16 @@ async function tool(c,name,a){
     if(im.data.length>2.5e6)throw new Error('Image onek boro (max ~1.8MB)');
     const t=await getTree();d.files[p]={bin:im.data,mime:im.mime,ex:t.paths.has(p)};rawSave();
     return 'Staged binary '+p+' ('+Math.round(im.data.length*0.75/1024)+' KB)';
+  }
+  if(name==='generate_image'){
+    const p=okPath(a.path),pr=String(a.prompt||'').trim();if(!pr)throw new Error('prompt dorkar');
+    if(!imgReady())throw new Error('Image provider set kora nai. Settings > Image generation e URL, key, model dao.');
+    if(!/\.(jpe?g)$/i.test(p))throw new Error('Path .jpg hote hobe (image JPEG hishebe save hoy)');
+    const pic=await genImage(pr),b=String(pic).split(',')[1];
+    if(!b||!/^data:image\//.test(pic))throw new Error('Image pawa gelo na (CORS ba format)');
+    if(b.length>2.5e6)throw new Error('Image onek boro');
+    const t=await getTree();d.files[p]={bin:b,mime:'image/jpeg',ex:t.paths.has(p)};rawSave();
+    return 'Generated and staged '+p+' ('+Math.round(b.length*0.75/1024)+' KB). Use it in the project (e.g. <img src="'+p+'">).';
   }
   if(name==='pr_description'){d.prBody=String(a.body||'').slice(0,60000);rawSave();return 'PR description saved'}
   if(name==='commit_message'){d.msg=String(a.message||'').slice(0,200);rawSave();return 'ok'}
@@ -1304,9 +1359,9 @@ function planNote(c){
 }
 function agentSys0(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
-  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. For a NEW project call scaffold first (static, map, pwa, react or worker) and then customise; for jobs with more than ~3 steps call set_tasks and tick them with complete_task. After the first push, offer enable_pages (static/map/pwa: mode branch; react: mode workflow) and set_repo_info. Tool results may end with WARNING lines (syntax errors or possible secrets): fix them before finishing. NEVER write real API keys, tokens or passwords into files: use placeholders and a .env.example, and mention it to the user. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. For a NEW project call scaffold first (static, map, pwa, react or worker) and then customise; for jobs with more than ~3 steps call set_tasks and tick them with complete_task. After the first push, offer enable_pages (static/map/pwa: mode branch; react: mode workflow) and set_repo_info. When a deploy/build fails call get_actions_log, find the cause and fix the files; use search_docs when unsure about an API or tool, and generate_image when the project needs a picture (needs image provider in Settings). Tool results may end with WARNING lines (syntax errors or possible secrets): fix them before finishing. NEVER write real API keys, tokens or passwords into files: use placeholders and a .env.example, and mention it to the user. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',scaffold:'box:scaffold '+(a.template||''),set_tasks:'note:task list',complete_task:'okc:task '+(a.index||'')+' done',enable_pages:'globe:enable Pages',set_repo_info:'note:repo info',propose_plan:'note:plan',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save'})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',scaffold:'box:scaffold '+(a.template||''),set_tasks:'note:task list',complete_task:'okc:task '+(a.index||'')+' done',enable_pages:'globe:enable Pages',set_repo_info:'note:repo info',propose_plan:'note:plan',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save',get_actions_log:'wrench:Actions log porchi',generate_image:'image:generate image '+p,search_docs:'search:docs: '+(a.query||a.url||'')})[k.name]||k.name};
 async function ensureNotes(c){
   const R=S.repo.full;if(S.repoNotes&&S.repoNotes[R])return;
   const t=await getTree();if(t.empty||!t.paths.size)return;
