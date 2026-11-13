@@ -213,6 +213,7 @@ form.in{padding:4px 12px 10px}
 .mrow .mt{flex:1;min-width:0}.mrow .mt b{display:block;font-size:15.5px}.mrow .mt small{display:block;color:var(--mute);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mrow .ar{color:var(--mute);font-size:20px}
 .pc>span{display:flex;flex-direction:column;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pcs{font-size:11px;color:var(--mute)}
 svg.ic{vertical-align:-3px;margin-right:6px;flex:none}.mi svg.ic,.pc svg.ic,.pc button svg.ic,.ib svg.ic{margin:0}.pi span{display:flex;align-items:center}
+.pf{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.pst{margin:6px 0 4px;padding-left:20px;font-size:14px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -505,7 +506,7 @@ async function callProvider(p,history,onDelta){
     let url,headers={'Content-Type':'application/json'},body;
     if(p.type==='anthropic'){
       url=base+'/v1/messages';headers['x-api-key']=p.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
-      body={model:p.model,max_tokens:4096,stream:true,messages:history.map(m=>cv(p,m))};if(sys)body.system=sys;
+      body={model:p.model,max_tokens:4096,stream:true,messages:cacheLast(history.map(m=>cv(p,m)))};if(sys)body.system=[{type:'text',text:sys,cache_control:{type:'ephemeral'}}];
     }else if(p.type==='gemini'){
       url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':streamGenerateContent?alt=sse&key='+encodeURIComponent(p.key);
       body={contents:history.map(m=>cv(p,m))};
@@ -528,7 +529,7 @@ async function callProvider(p,history,onDelta){
         const d=ln.slice(5).trim();if(!d||d==='[DONE]')continue;
         let j;try{j=JSON.parse(d)}catch(_){continue}
         if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
-        if(p.type==='anthropic'){if(j.type==='message_start'&&j.message&&j.message.usage)lastUsage={i:j.message.usage.input_tokens||0,o:j.message.usage.output_tokens||0};else if(j.type==='message_delta'&&j.usage)lastUsage=Object.assign(lastUsage||{i:0,o:0},{o:j.usage.output_tokens||0})}
+        if(p.type==='anthropic'){if(j.type==='message_start'&&j.message&&j.message.usage){const mu=j.message.usage,k=mu.cache_read_input_tokens||0;lastUsage={i:(mu.input_tokens||0)+k+(mu.cache_creation_input_tokens||0),o:mu.output_tokens||0,k}}else if(j.type==='message_delta'&&j.usage)lastUsage=Object.assign(lastUsage||{i:0,o:0},{o:j.usage.output_tokens||0})}
         else if(p.type==='gemini'){const u=j.usageMetadata;if(u)lastUsage={i:u.promptTokenCount||0,o:(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0)}}
         else if(j.usage&&(j.usage.prompt_tokens!=null||j.usage.completion_tokens!=null))lastUsage={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
         const t=p.type==='anthropic'?(j.type==='content_block_delta'?j.delta&&j.delta.text:''):
@@ -548,8 +549,8 @@ async function callProvider(p,history,onDelta){
 let live='',raf=0,lastUsage=null;
 const fmtTok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(n||0);
 const fmtCost=c=>'$'+(c<0.01?c.toFixed(4):c.toFixed(2));
-const usageStr=u=>u?' · ↑'+fmtTok(u.i)+' ↓'+fmtTok(u.o)+(u.e?'~':'')+(u.c!=null?' · '+fmtCost(u.c):''):'';
-function mkUsage(p,hist,out){const us=lastUsage;let i,o,e=0;if(us&&(us.i||us.o)){i=us.i||0;o=us.o||0}else{e=1;i=Math.ceil(hist.reduce((a,m)=>a+(m.content||'').length,0)/3);o=Math.ceil(out.length/3)}const r={i,o};if(e)r.e=1;if(p.pin||p.pout)r.c=(i*(+p.pin||0)+o*(+p.pout||0))/1e6;return r}
+const usageStr=u=>u?' · ↑'+fmtTok(u.i)+(u.k?' ('+fmtTok(u.k)+' cached)':'')+' ↓'+fmtTok(u.o)+(u.e?'~':'')+(u.c!=null?' · '+fmtCost(u.c):''):'';
+function mkUsage(p,hist,out){const us=lastUsage;let i,o,e=0;if(us&&(us.i||us.o)){i=us.i||0;o=us.o||0}else{e=1;i=Math.ceil(hist.reduce((a,m)=>a+(m.content||'').length,0)/3);o=Math.ceil(out.length/3)}const k=(us&&us.k)||0,r={i,o};if(k)r.k=k;if(e)r.e=1;if(p.pin||p.pout)r.c=((i-k+k*0.1)*(+p.pin||0)+o*(+p.pout||0))/1e6;return r}
 function updateFab(){const f=$('tobot'),m=$('msgs');if(!f)return;const far=!home&&m.scrollHeight-m.scrollTop-m.clientHeight>240;f.classList.toggle('on',far);if(far){const r=m.getBoundingClientRect();f.style.left=(r.right-54)+'px';f.style.top=(r.bottom-52)+'px'}}
 let lastT=0;
 const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)return;
@@ -822,7 +823,7 @@ const agentOn=()=>!!(S.repo&&S.gh&&S.gh.token);
 let rsub='',hist=null,flist,fq='';
 let ghTree=null,ghRepos,rfilter='',dview={},pushing=false,rloading=false;
 const GH_HELP='<p class="h">AI ke repo te kaj korate GitHub token lagbe (ekbar). Steps: <b>github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)</b>. Note e Orin likho, Expiration dao, <b>repo</b> box tick koro, Generate koro, token copy kore niche paste koro. Token kauke dio na.</p>';
-function ghHTML(){return '<div class="sec"><h3>GitHub (agent mode)</h3><p class="h">AI nijei repo er file porbe, likhbe, ar tumi Push chaple GitHub e jabe. Composer er + → GitHub repo theke repo bechhe nao.</p><input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn ghost sm" data-act="ropen">Repo bechhe nao</button></div></div>'}
+function ghHTML(){const pm=S.planMode||'big';return '<div class="sec"><h3>Plan-first (nirapotta)</h3><p class="h">AI file bodlanor age plan dekhabe, tumi Approve korle tarpor kaj korbe.</p><div class="seg">'+[['off','Off'],['big','Boro kaj e'],['always','Shob kaj e']].map(x=>'<button data-plm="'+x[0]+'" class="'+(pm===x[0]?'on':'')+'">'+x[1]+'</button>').join('')+'</div><p class="h" style="margin-top:8px">"Boro kaj e" = ek file e AI nijei bodlay; ek-er beshi file ba delete e age plan lage.</p></div><div class="sec"><h3>GitHub (agent mode)</h3><p class="h">AI nijei repo er file porbe, likhbe, ar tumi Push chaple GitHub e jabe. Composer er + → GitHub repo theke repo bechhe nao.</p><input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn ghost sm" data-act="ropen">Repo bechhe nao</button></div></div>'}
 async function gh(path,opt={}){
   const t=S.gh&&S.gh.token;if(!t)throw new Error('GitHub token nai');
   const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),30000);
@@ -940,6 +941,7 @@ const TOOLS=[
  {name:'get_pr',description:'Read one pull request: description, changed files, reviews and review comments, and its branch name.',parameters:{type:'object',properties:{number:{type:'integer'}},required:['number']}},
  {name:'switch_branch',description:'Switch the working branch of the current repo (e.g. to a PR branch to fix review comments). Refused while there are staged draft changes.',parameters:{type:'object',properties:{branch:{type:'string'}},required:['branch']}},
  {name:'pr_description',description:'Set the pull request description (markdown) used when the user opens a PR. Summarise what and why; add "Fixes #N" to link issues.',parameters:{type:'object',properties:{body:{type:'string'}},required:['body']}},
+ {name:'propose_plan',description:'Show the user a short plan and wait for approval BEFORE changing files. After calling this, stop and write one short sentence; do not make changes until the user approves.',parameters:{type:'object',properties:{summary:{type:'string',description:'1-2 plain sentences: what will change and why'},files:{type:'array',items:{type:'string'},description:'file paths that will be created/edited/deleted'},steps:{type:'array',items:{type:'string'},description:'short ordered steps'}},required:['summary','steps']}},
  {name:'commit_message',description:'Set a short commit message for the staged changes.',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}
 ];
 async function tool(c,name,a){
@@ -1014,6 +1016,12 @@ async function tool(c,name,a){
     return 'Switched to branch '+b;
   }
   const d=dr(c);
+  if(name==='propose_plan'){
+    c.plan={summary:String(a.summary||'').slice(0,600),files:(Array.isArray(a.files)?a.files:[]).map(x=>String(x).slice(0,200)).slice(0,30),steps:(Array.isArray(a.steps)?a.steps:[]).map(x=>String(x).slice(0,300)).slice(0,20),ok:false};
+    planStop=true;rawSave();return 'Plan shown to the user. STOP now: reply with one short sentence asking for approval. Do not change anything until the user approves.';
+  }
+  if(['write_file','edit_file','edit_many','delete_file','save_attachment'].includes(name)&&a.path&&needPlan(c,name,okPath(a.path)))
+    throw new Error('Plan approval dorkar (plan-first mode). Age propose_plan call koro, tarpor thamo ar user er approval er opekkha koro.');
   if(name==='save_attachment'){
     const p=okPath(a.path),all=[];
     for(const m of [...c.msgs].reverse()){if(m.role==='user'&&m.imgs&&m.imgs.some(i=>/^image\//.test(i.mime))){m.imgs.filter(i=>/^image\//.test(i.mime)).forEach(i=>all.push(i));break}}
@@ -1068,7 +1076,14 @@ async function tool(c,name,a){
   throw new Error('Unknown tool '+name);
 }
 const sp=x=>{try{return typeof x==='string'?JSON.parse(x||'{}'):(x||{})}catch(e){return {}}};
-function agentCall0(p,history,work,sys){
+const cacheLast=msgs=>{const m=msgs[msgs.length-1];if(!m)return msgs;if(typeof m.content==='string')m.content=[{type:'text',text:m.content,cache_control:{type:'ephemeral'}}];else if(Array.isArray(m.content)&&m.content.length){const b=m.content[m.content.length-1];if(b&&b.type!=='thinking')b.cache_control={type:'ephemeral'}}return msgs};
+function trimWork(work){
+  /* keep last 4 tool results whole; shrink older big ones (they are re-sent every step) */
+  const idx=[];work.forEach((w,i)=>{if(w.role==='tool')idx.push(i)});const old=new Set(idx.slice(0,-4));
+  return work.map((w,i)=>old.has(i)&&w.result.length>3000?Object.assign({},w,{result:w.result.slice(0,500)+'\n[... older tool output trimmed to save tokens ('+w.result.length+' chars). Call the tool again if you need it.]'}):w);
+}
+function agentCall0(p,history,work0,sys){
+  const work=trimWork(work0);
   const base=p.url.replace(/\/+$/,'');let url,headers={'Content-Type':'application/json'},body,tr=null;
   if(p.type==='anthropic'){
     url=base+'/v1/messages';headers['x-api-key']=p.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
@@ -1077,7 +1092,8 @@ function agentCall0(p,history,work,sys){
       if(w.role==='assistant'){tr=null;msgs.push({role:'assistant',content:(w.text?[{type:'text',text:w.text}]:[]).concat(w.calls.map(k=>({type:'tool_use',id:k.id,name:k.name,input:k.args})))})}
       else{const b={type:'tool_result',tool_use_id:w.id,content:w.result};if(tr)tr.content.push(b);else{tr={role:'user',content:[b]};msgs.push(tr)}}
     }
-    body={model:p.model,max_tokens:8192,stream:true,system:sys,messages:msgs,tools:TOOLS.map(t=>({name:t.name,description:t.description,input_schema:t.parameters}))};
+    const tl=TOOLS.map(t=>({name:t.name,description:t.description,input_schema:t.parameters}));tl[tl.length-1].cache_control={type:'ephemeral'};
+    body={model:p.model,max_tokens:8192,stream:true,system:[{type:'text',text:sys,cache_control:{type:'ephemeral'}}],messages:cacheLast(msgs),tools:tl};
   }else if(p.type==='gemini'){
     url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':streamGenerateContent?alt=sse&key='+encodeURIComponent(p.key);
     const cs=history.map(m=>cv(p,m));
@@ -1110,7 +1126,7 @@ async function agentCall(p,history,work,sys,onLive){
       if(!r.ok){const e=Array.isArray(j)?j[0]:j,x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
       if(p.type==='anthropic'){
         for(const b of j.content||[]){if(b.type==='text')text+=b.text;else if(b.type==='tool_use')calls.push({id:b.id,name:b.name,args:b.input||{}})}
-        if(j.usage)us={i:j.usage.input_tokens||0,o:j.usage.output_tokens||0};
+        if(j.usage){const k=j.usage.cache_read_input_tokens||0;us={i:(j.usage.input_tokens||0)+k+(j.usage.cache_creation_input_tokens||0),o:j.usage.output_tokens||0,k}}
       }else if(p.type==='gemini'){
         const jj=Array.isArray(j)?j[0]:j;const parts=(jj.candidates&&jj.candidates[0]&&jj.candidates[0].content&&jj.candidates[0].content.parts)||[];raw=parts.length?parts:undefined;
         parts.forEach((x,i)=>{if(x.text&&!x.thought)text+=x.text;if(x.functionCall)calls.push({id:'g'+Date.now().toString(36)+i,name:x.functionCall.name,args:x.functionCall.args||{}})});
@@ -1135,7 +1151,7 @@ async function agentCall(p,history,work,sys,onLive){
           let j;try{j=JSON.parse(d)}catch(_){continue}
           if(j.error)throw new Error((typeof j.error==='string'?j.error:j.error.message)||JSON.stringify(j.error));
           if(p.type==='anthropic'){
-            if(j.type==='message_start'&&j.message&&j.message.usage)us={i:j.message.usage.input_tokens||0,o:j.message.usage.output_tokens||0};
+            if(j.type==='message_start'&&j.message&&j.message.usage){const mu=j.message.usage,k=mu.cache_read_input_tokens||0;us={i:(mu.input_tokens||0)+k+(mu.cache_creation_input_tokens||0),o:mu.output_tokens||0,k}}
             else if(j.type==='message_delta'&&j.usage)us=Object.assign(us||{i:0,o:0},{o:j.usage.output_tokens||0});
             else if(j.type==='content_block_start'&&j.content_block&&j.content_block.type==='tool_use'){ab[j.index]={id:j.content_block.id,name:j.content_block.name,js:''}}
             else if(j.type==='content_block_delta'&&j.delta){
@@ -1172,12 +1188,19 @@ async function agentCall(p,history,work,sys,onLive){
 }
 const buildHistory=c=>{const sm=smartPlan(c);{const lu=[...c.msgs].reverse().find(m=>m.role==='user');if(lu){if(sm)lu.sm=sm.n;else delete lu.sm}}let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m,sm)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
 function attachNote(c){const fs=chatFiles(c);if(!fs.length)return '';const sm=smartPlan(c);return '\nFiles attached by the user in this chat: '+fs.map(f=>f.name+' ('+f.text.split('\n').length+' lines)').join(', ')+'.'+(sm?' They are too big for the context, so only excerpts are included in the messages; use search_attachment and read_attachment to look at other parts.':'')}
-function agentSys(c){return agentSys0(c)+attachNote(c)}
+function agentSys(c){return agentSys0(c)+attachNote(c)+planNote(c)}
+function planNote(c){
+  const m=S.planMode||'big';let t='';
+  if(c.plan&&c.plan.ok)t+='\nAPPROVED PLAN (the user approved it, now implement it): '+c.plan.summary+(c.plan.steps.length?' Steps: '+c.plan.steps.join(' | '):'')+(c.plan.files.length?' Files: '+c.plan.files.join(', '):'');
+  else if(m==='always')t+='\nPLAN-FIRST MODE: before changing ANY file, call propose_plan (plain-language summary, files, steps) and then stop and wait for the user to approve. Edits are blocked until then.';
+  else if(m==='big')t+='\nPLAN-FIRST MODE: you may edit a single file directly. If the task needs changing more than one file or deleting a file, first call propose_plan (plain-language summary, files, steps), then stop and wait for approval. Edits to a second file are blocked until the user approves.';
+  return t;
+}
 function agentSys0(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
   return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save'})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',propose_plan:'note:plan',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save'})[k.name]||k.name};
 async function ensureNotes(c){
   const R=S.repo.full;if(S.repoNotes&&S.repoNotes[R])return;
   const t=await getTree();if(t.empty||!t.paths.size)return;
@@ -1189,10 +1212,16 @@ async function ensureNotes(c){
   const n=('[auto] '+ps.length+' files. Folders: '+Object.entries(top).slice(0,15).map(([k,v])=>k+' ('+v+')').join(', ')+'. Root files: '+key+'.'+(rd?' README: '+rd:'')).slice(0,1500);
   S.repoNotes=Object.assign({},S.repoNotes);S.repoNotes[R]=n;rawSave();
 }
+let planStop=false;
+function needPlan(c,name,p){
+  const m=S.planMode||'big';if(m==='off'||(c.plan&&c.plan.ok))return false;
+  if(m==='always')return true;
+  const d=c.draft;return name==='delete_file'||!!(d&&d.files&&Object.keys(d.files).length&&!(p in d.files));
+}
 async function runAgent(c,list){
   try{await ensureNotes(c)}catch(e){}
   const history=buildHistory(c),work=[],log=[],fails=[],sys=agentSys(c);
-  let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0};
+  let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
   try{
     for(let step=0;step<30&&!stopped&&!done&&!failedAll;step++){
       let res=null;
@@ -1201,7 +1230,7 @@ async function runAgent(c,list){
         catch(e){if(stopped||e.message==='STOP')break;fails.push(list[pi].name+': '+e.message);pi++}
       }
       if(!res){if(!stopped)failedAll=true;break}
-      {const u=res.us,pp=list[pi];tot.i+=u.i;tot.o+=u.o;if(u.e)tot.e=1;if(pp.pin||pp.pout){tot.c+=(u.i*(+pp.pin||0)+u.o*(+pp.pout||0))/1e6;tot.hc=1}}
+      {const u=res.us,pp=list[pi],k=u.k||0;tot.i+=u.i;tot.o+=u.o;tot.k+=k;if(u.e)tot.e=1;if(pp.pin||pp.pout){tot.c+=((u.i-k+k*0.1)*(+pp.pin||0)+u.o*(+pp.pout||0))/1e6;tot.hc=1}}
       if(!res.calls.length){final=res.text;done=true;break}
       work.push({role:'assistant',text:res.text,calls:res.calls,raw:res.raw});
       for(const k of res.calls){
@@ -1209,9 +1238,10 @@ async function runAgent(c,list){
         let out;try{out=await tool(c,k.name,k.args||{})}catch(e){out='Error: '+e.message}
         work.push({role:'tool',id:k.id,name:k.name,result:String(out).slice(0,66000)});
       }
+      if(planStop){planStop=false;final=(res.text||'').trim()||'Plan ready. Niche dekho, thik hole Approve koro.';done=true;break}
     }
   }catch(e){fails.push('agent: '+e.message);failedAll=!done&&!stopped}
-  const src=srcOf(c),u=tot.i||tot.o?{i:tot.i,o:tot.o,e:tot.e||undefined,c:tot.hc?tot.c:undefined}:undefined;
+  const src=srcOf(c),u=tot.i||tot.o?{i:tot.i,o:tot.o,k:tot.k||undefined,e:tot.e||undefined,c:tot.hc?tot.c:undefined}:undefined;
   if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Kaj sesh. Niche draft dekho.':'Done.'),by,skipped:fails.slice(),log,src,u});
   else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,skipped:[],log,u})}
   else if(failedAll)c.msgs.push({role:'error',content:'Sob provider fail korse. Agent mode e model ke tool calling support korte hobe.\n'+fails.join('\n')});
@@ -1252,6 +1282,13 @@ function fileDiffHTML(d,p,f){
   if(!f.ex)return diffHTML(f.content.split('\n').map(x=>['+',x]));
   const o=origC[okey(d,p)];if(o===undefined)return '<div class="dif"><div class="ds">Loading…</div></div>';
   return f.del?diffHTML(o.split('\n').map(x=>['-',x])):diffHTML(lineDiff(o,f.content));
+}
+function planHTML(c){
+  const pl=c.plan;if(!pl)return '';
+  return '<div class="dc"><b>'+ico('note')+'Plan '+(pl.ok?'(approved)':'')+'</b><small>'+esc(pl.summary)+'</small>'+
+   (pl.files.length?'<div class="pf">'+pl.files.map(f=>'<span class="tag">'+ico('file',13)+esc(f)+'</span>').join('')+'</div>':'')+
+   (pl.steps.length?'<ol class="pst">'+pl.steps.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>':'')+
+   (pl.ok?'':'<div class="row" style="margin-top:4px"><button class="btn sm" data-act="plok">'+ico('okc',15)+'Approve, shuru koro</button><button class="btn ghost sm" data-act="plno">Bodlao</button></div>')+'</div>';
 }
 function draftHTML(c){
   let h='';const d=c.draft;
@@ -1304,7 +1341,7 @@ async function pushDraft(c){
         pr={n:pl.number,head:target};prev=null;
       }
     }
-    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false,pr};c.draft=null;ghTree=null;for(const k in origC)delete origC[k];save();toast(pr?'PR #'+pr.n+' khola hoyeche':'Pushed');if(!pr)watchDeploy(c,R,sha,B);
+    c.pushed={repo:R,branch:B,sha,prev,n:fs.length,undone:false,pr};c.draft=null;c.plan=null;ghTree=null;for(const k in origC)delete origC[k];save();toast(pr?'PR #'+pr.n+' khola hoyeche':'Pushed');if(!pr)watchDeploy(c,R,sha,B);
   }catch(e){c.msgs.push({role:'error',content:(wantPR?'PR':'Push')+' fail: '+e.message});save()}
   pushing=false;render();
 }
@@ -1423,7 +1460,7 @@ function render(typing){
   });
   {const tu=c.msgs.reduce((a,m)=>{if(m.u){a.i+=m.u.i;a.o+=m.u.o;if(m.u.c!=null){a.c+=m.u.c;a.hc=1}if(m.u.e)a.e=1;a.n++}return a},{i:0,o:0,c:0,n:0});
   if(tu.n>1)h+='<div class="src" style="align-self:center;margin-top:0">Total: ↑'+fmtTok(tu.i)+' ↓'+fmtTok(tu.o)+(tu.e?'~':'')+(tu.hc?' · '+fmtCost(tu.c):'')+'</div>'}
-  if(!busy)h+=draftHTML(c);
+  if(!busy)h+=planHTML(c)+draftHTML(c);
   if(typing||busy)h+='<div class="m a" id="liveb">'+(live?md(live):'<div class="dots"><span></span><span></span><span></span></div>')+'</div>';
   el.innerHTML=h;el.scrollTop=el.scrollHeight;
 }
@@ -1542,6 +1579,9 @@ document.addEventListener('click',e=>{
     t.disabled=true;gh('/user/repos',{method:'POST',body:{name:n,description:$('nd').value.trim().slice(0,300),private:$('np').checked,auto_init:true}}).then(j=>{S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;const c=chat();if(c)c.draft=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo banano hoyeche: '+j.full_name)}).catch(e=>{t.disabled=false;toast(e.message)})}
   else if(d.act==='gpush'){const c=chat();if(c)pushDraft(c)}
   else if(d.act==='gundo'){const c=chat();if(c)undoPush(c)}
+  else if(d.act==='plok'){const c=chat();if(c&&c.plan&&!busy){c.plan.ok=true;save();$('box').value='Plan OK, kaj shuru koro.';send()}}
+  else if(d.act==='plno'){const c=chat();if(c){c.plan=null;save();render();$('box').focus();toast('Ki bodlate chao likho')}}
+  else if(d.plm){S.planMode=d.plm;save();drawSheet()}
   else if(d.act==='gdisc'){const c=chat();if(c&&confirm('Draft discard korbe?')){c.draft=null;save();render()}}
   else if(d.ipre!==undefined){const x=IMGP[+d.ipre];S.imgcfg=Object.assign({},S.imgcfg,{url:x[1],model:x[2],size:x[3]});save();drawSheet()}
   else if(d.save){const m=chat().msgs[+d.save];if(m&&m.pic){const a=document.createElement('a');a.href=m.pic;a.download='orin-image.jpg';a.target='_blank';a.rel='noopener';a.click()}}
