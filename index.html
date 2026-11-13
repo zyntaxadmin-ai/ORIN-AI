@@ -761,39 +761,48 @@ const qa=t=>esc(t||'').replace(/"/g,'&quot;');
 const srcOf=c=>{const u=c.msgs[c.msgs.length-1];return u&&u.web&&u.web.r?u.web.r.map(x=>({title:x.title,url:x.url})):undefined};
 const webCtx=m=>m.web&&m.web.r&&m.web.r.length?'\n\n[Web search results for "'+m.web.q+'" (today: '+new Date().toDateString()+'). Use them if helpful and cite as [n].]\n'+m.web.r.map((x,i)=>'['+(i+1)+'] '+x.title+' ('+x.url+')\n'+x.content).join('\n\n'):'';
 const srcHTML=s=>s&&s.length?'<div class="src">'+ico('globe',14)+' '+s.map((x,i)=>/^https?:\/\//.test(x.url)?'<a href="'+qa(x.url)+'" target="_blank" rel="noopener">['+(i+1)+'] '+esc((x.title||x.url).slice(0,50))+'</a>':'').join('')+'</div>':'';
-async function webSearch(qry){
-  const ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),20000);
+async function webSearch(qry,o){
+  o=o||{};
+  const ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),o.depth==='advanced'?35000:20000);
   try{
-    const r=await fetch('https://api.tavily.com/search',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+S.search.key},body:JSON.stringify({query:qry.slice(0,400),max_results:5,search_depth:'basic'}),signal:ctl.signal});
+    const bd={query:qry.slice(0,400),max_results:o.max||5,search_depth:o.depth||'basic'};
+    if(o.domains&&o.domains.length)bd.include_domains=o.domains;
+    const r=await fetch('https://api.tavily.com/search',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+S.search.key},body:JSON.stringify(bd),signal:ctl.signal});
     const j=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error((j.detail&&(j.detail.error||j.detail))||j.error||r.status);
-    return (j.results||[]).map(x=>({title:x.title||x.url,url:x.url,content:(x.content||'').slice(0,700)}));
+    return (j.results||[]).map(x=>({title:x.title||x.url,url:x.url,content:(x.content||'').slice(0,o.len||700)}));
   }catch(e){
     if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout');
     if(e instanceof TypeError)throw new Error('Network/CORS block');
     throw e;
   }finally{clearTimeout(to)}
 }
-function shrink(src){
+function shrink(src,max){
+  max=max||896;
   return new Promise((ok,no)=>{
     const im=new Image();if(!src.startsWith('data:'))im.crossOrigin='anonymous';
     im.onerror=()=>src.startsWith('data:')?no(new Error('Bad image')):ok(src);
-    im.onload=()=>{try{const k=Math.min(1,896/Math.max(im.width,im.height)),cn=document.createElement('canvas');cn.width=Math.round(im.width*k);cn.height=Math.round(im.height*k);const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cn.width,cn.height);x.drawImage(im,0,0,cn.width,cn.height);ok(cn.toDataURL('image/jpeg',.85))}catch(e){ok(src)}};
+    im.onload=()=>{try{const k=Math.min(1,max/Math.max(im.width,im.height)),cn=document.createElement('canvas');cn.width=Math.round(im.width*k);cn.height=Math.round(im.height*k);const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cn.width,cn.height);x.drawImage(im,0,0,cn.width,cn.height);ok(cn.toDataURL('image/jpeg',.85))}catch(e){ok(src)}};
     im.src=src;
   });
 }
 const imgReady=()=>{const g=S.imgcfg||{};return !!(g.url&&g.key&&g.model)};
-async function genImage(prompt){
+async function genImage(prompt,raw,size){
   const g=S.imgcfg,ctl=new AbortController();curCtl=ctl;const to=setTimeout(()=>ctl.abort(),120000);
   try{
     const body={model:g.model,prompt,n:1};
-    if(g.size)body.size=g.size;
+    if(size||g.size)body.size=size||g.size;
     if(/dall-e/i.test(g.model))body.response_format='b64_json';
     const r=await fetch(g.url.replace(/\/+$/,'')+'/images/generations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+g.key},body:JSON.stringify(body),signal:ctl.signal});
     const j=await r.json().catch(()=>({}));
     if(!r.ok){const x=j.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||j.message||r.status+' '+r.statusText)}
     const d=j.data&&j.data[0],src=d&&(d.b64_json?'data:image/png;base64,'+d.b64_json:d.url);
     if(!src)throw new Error('Empty reply');
+    if(raw){
+      if(src.startsWith('data:'))return src;
+      try{const fr=await fetch(src,{signal:ctl.signal});if(!fr.ok)throw 0;const bl=await fr.blob();return await new Promise((ok,no)=>{const rd=new FileReader();rd.onerror=no;rd.onload=()=>ok(rd.result);rd.readAsDataURL(bl)})}
+      catch(e){const s2=await shrink(src,1600);if(s2.startsWith('data:'))return s2;throw new Error('Provider chobir URL dilo kintu browser ta download korte parlo na (CORS). b64 dey emon provider/model e (jemon OpenAI gpt-image-1) try koro.')}
+    }
     return await shrink(src);
   }catch(e){
     if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout (120s)');
@@ -1019,8 +1028,19 @@ const TOOLS=[
  {name:'complete_task',description:'Mark a checklist task as done (1-based index).',parameters:{type:'object',properties:{index:{type:'integer'}},required:['index']}},
  {name:'enable_pages',description:'Turn on GitHub Pages for the current repo (asks the user to confirm). mode "branch" serves the branch root (plain static sites); mode "workflow" uses GitHub Actions (Vite/React etc). The branch must already be pushed.',parameters:{type:'object',properties:{mode:{type:'string',enum:['branch','workflow']}},required:['mode']}},
  {name:'set_repo_info',description:'Set the repo description, homepage URL and topics (asks the user to confirm).',parameters:{type:'object',properties:{description:{type:'string'},homepage:{type:'string'},topics:{type:'array',items:{type:'string'}}}}},
+ {name:'list_runs',description:'List recent GitHub Actions workflow runs of the current repo (default: current branch). Shows run id, status/conclusion, workflow name and commit. Use it to see whether a build/deploy failed.',parameters:{type:'object',properties:{branch:{type:'string',description:'optional branch, default current branch; "all" for every branch'},status:{type:'string',description:'optional: failure, success, in_progress, queued'}}}},
+ {name:'get_run_logs',description:'Read the logs of the FAILED steps of a GitHub Actions run (default: the latest failed run on the current branch). Returns the failing job/step names and the end of their log with the error. After reading, find the cause in the repo files and fix it with edit_file/write_file, then tell the user to push.',parameters:{type:'object',properties:{run_id:{type:'integer',description:'optional run id from list_runs'}}}},
+ {name:'generate_image',description:'Generate an image with the image API the user configured in Settings and stage it as a binary file in the repo (e.g. images/hero.png, logo, og-image). Asks the user to confirm because it uses their API credits. Then reference the final path in the code.',parameters:{type:'object',properties:{prompt:{type:'string',description:'detailed image description in English'},path:{type:'string',description:'repo path ending in .png, .jpg or .webp'},size:{type:'string',description:'optional, e.g. 1024x1024, 1536x1024'}},required:['prompt','path']}},
+ {name:'search_docs',description:'Search the web for official documentation / API references (uses the user\'s Tavily key). Optionally limit to one site, e.g. docs.github.com, developer.mozilla.org, react.dev, vitejs.dev, developers.cloudflare.com. Use it when unsure about an API, a config option or an error message instead of guessing.',parameters:{type:'object',properties:{query:{type:'string'},site:{type:'string',description:'optional domain to limit the search to'}},required:['query']}},
  {name:'commit_message',description:'Set a short commit message for the staged changes.',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}
 ];
+function trimLog(t){
+  const ls=String(t).replace(/\x1b\[[0-9;]*m/g,'').split(/\r?\n/).map(x=>x.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z\s?/,'').replace(/^##\[(end)?group\]/,''));
+  const re=/##\[error\]|\b(error|fatal|failed|traceback)\b|npm ERR/i,n=ls.length,tail=ls.slice(-120),i=ls.findIndex(x=>re.test(x));
+  const head=i>=0&&i<n-120?'... (first error near line '+(i+1)+')\n'+ls.slice(Math.max(0,i-8),i+12).join('\n')+'\n...\n':'';
+  const o=head+'(last '+tail.length+' of '+n+' log lines)\n'+tail.join('\n');
+  return o.length>12000?o.slice(0,3000)+'\n...\n'+o.slice(-8800):o;
+}
 async function tool(c,name,a){
   if(name==='list_repos'){const l=await fetchRepos(),q=String(a.query||'').toLowerCase();return l.filter(r=>!q||r.full_name.toLowerCase().includes(q)).slice(0,60).map(r=>r.full_name+(r.private?' (private)':'')).join('\n')||'No repos'}
   if(name==='create_repo'){
@@ -1062,7 +1082,44 @@ async function tool(c,name,a){
     const it=j.items||[];if(!it.length)return 'No matches (search only covers default branch & may lag; try list_files/read_file).';
     return it.map(x=>x.path+(x.text_matches?'\n'+x.text_matches.slice(0,2).map(m=>'  > '+String(m.fragment||'').replace(/\s+/g,' ').slice(0,200)).join('\n'):'')).join('\n');
   }
+  if(name==='search_docs'){
+    const q=String(a.query||'').trim();if(!q)throw new Error('query khali');
+    if(!S.search||!S.search.key)throw new Error('Tavily key nai. Settings → Web search e key dao (tavily.com e free plan ache).');
+    let site=String(a.site||'').trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'');
+    if(site&&!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(site))site='';
+    const r=await webSearch(site?q:q+' documentation',{domains:site?[site]:null,depth:'advanced',max:5,len:1500});
+    if(!r.length)return 'No docs found'+(site?' on '+site+' (try again without site)':'');
+    return r.map((x,i)=>'['+(i+1)+'] '+x.title+'\n'+x.url+'\n'+x.content).join('\n\n');
+  }
   const RF='/repos/'+S.repo.full;
+  if(name==='list_runs'){
+    const st=['failure','success','in_progress','queued','completed','cancelled'].includes(a.status)?a.status:'';
+    const br=a.branch==='all'?'':String(a.branch||S.repo.branch);
+    const j=await gh(RF+'/actions/runs?per_page=12'+(br?'&branch='+encodeURIComponent(br):'')+(st?'&status='+st:''));
+    const rs=j.workflow_runs||[];
+    if(!rs.length)return 'No workflow runs'+(br?' on branch '+br:'')+' (repo te workflow nai, ba ekhono kono run hoyni).';
+    return rs.map(x=>'#'+x.id+' '+(x.status==='completed'?x.conclusion:x.status)+' · '+(x.name||'workflow')+' · '+x.head_branch+' · '+String(x.head_sha).slice(0,7)+' · '+String(x.display_title||'').slice(0,60)+' · '+String(x.created_at).slice(0,16).replace('T',' ')).join('\n');
+  }
+  if(name==='get_run_logs'){
+    let id=parseInt(a.run_id,10);
+    if(!(id>0)){
+      const j=await gh(RF+'/actions/runs?status=failure&per_page=1&branch='+encodeURIComponent(S.repo.branch)),r0=(j.workflow_runs||[])[0];
+      if(!r0)throw new Error('Current branch e kono failed run nai (list_runs diye dekho)');id=r0.id;
+    }
+    const run=await gh(RF+'/actions/runs/'+id),jb=await gh(RF+'/actions/runs/'+id+'/jobs?per_page=30'),jobs=jb.jobs||[];
+    const bad=jobs.filter(x=>x.conclusion==='failure'||x.conclusion==='timed_out');
+    let out='Run #'+id+' "'+(run.name||'')+'" ['+(run.status==='completed'?run.conclusion:run.status)+'] branch '+run.head_branch+' commit '+String(run.head_sha).slice(0,7)+'\n';
+    if(!bad.length)return out+(run.status!=='completed'?'Run ekhono cholche, pore abar try koro.':'Kono failed job nai (conclusion: '+run.conclusion+'). Jobs: '+jobs.map(x=>x.name+'='+x.conclusion).join(', '));
+    for(const jo of bad.slice(0,2)){
+      const steps=(jo.steps||[]).filter(s=>s.conclusion==='failure').map(s=>s.name);
+      out+='\n=== Job "'+jo.name+'" failed at step: '+(steps.join(', ')||'?')+' ===\n';
+      let log=null;
+      try{log=await gh(RF+'/actions/jobs/'+jo.id+'/logs',{raw:true,accept:'application/vnd.github+json'})}catch(e){out+='(full log pawa jayni: '+e.message+')\n'}
+      if(log!==null)out+=trimLog(log)+'\n';
+      else{try{const an=await gh(RF+'/check-runs/'+jo.id+'/annotations');if(an.length)out+='Annotations:\n'+an.slice(0,10).map(x=>(x.path||'')+(x.start_line?':'+x.start_line:'')+' '+x.message).join('\n')+'\n'}catch(e){}}
+    }
+    return out;
+  }
   if(name==='set_tasks'){const t=(Array.isArray(a.tasks)?a.tasks:[]).map(x=>String(x).slice(0,200)).filter(Boolean).slice(0,30);if(!t.length)throw new Error('tasks khali');c.tasks=t.map(x=>({t:x,done:false}));rawSave();return 'Checklist saved ('+t.length+' tasks)'}
   if(name==='complete_task'){const i=parseInt(a.index,10)-1;if(!c.tasks||!c.tasks[i])throw new Error('Oi number er task nai');c.tasks[i].done=true;rawSave();return 'Task '+(i+1)+' done. Remaining: '+c.tasks.filter(x=>!x.done).length}
   if(name==='enable_pages'){
@@ -1125,7 +1182,7 @@ async function tool(c,name,a){
     c.plan={summary:String(a.summary||'').slice(0,600),files:(Array.isArray(a.files)?a.files:[]).map(x=>String(x).slice(0,200)).slice(0,30),steps:(Array.isArray(a.steps)?a.steps:[]).map(x=>String(x).slice(0,300)).slice(0,20),ok:false};
     planStop=true;rawSave();return 'Plan shown to the user. STOP now: reply with one short sentence asking for approval. Do not change anything until the user approves.';
   }
-  if(['write_file','edit_file','edit_many','delete_file','save_attachment'].includes(name)&&a.path&&needPlan(c,name,okPath(a.path)))
+  if(['write_file','edit_file','edit_many','delete_file','save_attachment','generate_image'].includes(name)&&a.path&&needPlan(c,name,okPath(a.path)))
     throw new Error('Plan approval dorkar (plan-first mode). Age propose_plan call koro, tarpor thamo ar user er approval er opekkha koro.');
   if(name==='save_attachment'){
     const p=okPath(a.path),all=[];
@@ -1136,6 +1193,19 @@ async function tool(c,name,a){
     if(im.data.length>2.5e6)throw new Error('Image onek boro (max ~1.8MB)');
     const t=await getTree();d.files[p]={bin:im.data,mime:im.mime,ex:t.paths.has(p)};rawSave();
     return 'Staged binary '+p+' ('+Math.round(im.data.length*0.75/1024)+' KB)';
+  }
+  if(name==='generate_image'){
+    if(!imgReady())throw new Error('Image API set kora nai. Settings → Image generation e Base URL, key ar model dao.');
+    const prompt=String(a.prompt||'').trim().slice(0,3000);if(!prompt)throw new Error('prompt khali');
+    let p=okPath(a.path);if(!/\.(png|jpe?g|webp)$/i.test(p))throw new Error('path .png, .jpg ba .webp diye shesh hote hobe');
+    if(!confirm('AI chobi banate chay ('+S.imgcfg.model+', tomar API credit lagbe):\n"'+prompt.slice(0,150)+'"\n→ '+p+'\nAllow?'))throw new Error('User allow kore ni');
+    let src=await genImage(prompt,true,/^\d{3,4}x\d{3,4}$/.test(String(a.size||''))?String(a.size):undefined),note='';
+    let m=/^data:([^;]+);base64,(.*)$/.exec(src);if(!m)throw new Error('Image data pawa jayni');
+    if(m[2].length>2.5e6){src=await shrink(src,1600);m=/^data:([^;]+);base64,(.*)$/.exec(src);if(!m||m[2].length>2.5e6)throw new Error('Chobi onek boro (max ~1.8MB), choto size dao');note=' (boro chilo, JPEG kore choto kora hoyeche)'}
+    const mime=m[1],data=m[2],ext={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[mime];
+    if(ext&&!new RegExp('\\.'+(ext==='jpg'?'jpe?g':ext)+'$','i').test(p)){p=p.replace(/\.[A-Za-z]+$/,'.'+ext);note+=' (file er asol format '+ext+', tai path '+p+' kora hoyeche)'}
+    const t=await getTree();d.files[p]={bin:data,mime,ex:t.paths.has(p)};rawSave();
+    return 'Staged generated image '+p+' ('+Math.round(data.length*0.75/1024)+' KB)'+note+'. Use exactly this path in the code.';
   }
   if(name==='pr_description'){d.prBody=String(a.body||'').slice(0,60000);rawSave();return 'PR description saved'}
   if(name==='commit_message'){d.msg=String(a.message||'').slice(0,200);rawSave();return 'ok'}
@@ -1304,9 +1374,9 @@ function planNote(c){
 }
 function agentSys0(c){
   const d=dr(c),fs=Object.entries(d.files).map(([p,f])=>p+(f.del?' (delete)':'')).join(', ');
-  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. For a NEW project call scaffold first (static, map, pwa, react or worker) and then customise; for jobs with more than ~3 steps call set_tasks and tick them with complete_task. After the first push, offer enable_pages (static/map/pwa: mode branch; react: mode workflow) and set_repo_info. Tool results may end with WARNING lines (syntax errors or possible secrets): fix them before finishing. NEVER write real API keys, tokens or passwords into files: use placeholders and a .env.example, and mention it to the user. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
+  return (S.system.trim()?S.system.trim()+'\n\n':'')+'[GitHub agent mode]\nYou are a coding agent working in the GitHub repository "'+S.repo.full+'" (branch '+S.repo.branch+') through tools. The user is not technical: explain simply, in the same language the user writes in. Rules: first call list_files and read_file to understand the project before changing anything; never guess the content of an existing file; use write_file with COMPLETE file content for new files or full rewrites, and edit_file for small precise changes; keep changes minimal and working. Your changes are only STAGED as a draft; the user pushes them with a button, so never say they were pushed. Call commit_message once with a short commit message. For issues and pull requests use list_issues/get_issue/list_prs/get_pr; to fix review comments on a PR, get_pr then switch_branch to its branch, make the fixes, and tell the user to push (direct push updates the PR). When the pull-request mode is on'+(S.pushMode==='pr'?' (it IS on now)':'')+', ALWAYS call pr_description with a clear summary (add "Fixes #N" when relevant). Big files are returned in pages of up to ~60000 chars with a header telling you the line range: keep calling read_file with start_line to read ALL of a file you need to understand, or use search_code to locate the part and then read just that line range. Never tell the user you cannot read a large file. For a NEW project call scaffold first (static, map, pwa, react or worker) and then customise; for jobs with more than ~3 steps call set_tasks and tick them with complete_task. After the first push, offer enable_pages (static/map/pwa: mode branch; react: mode workflow) and set_repo_info. Tool results may end with WARNING lines (syntax errors or possible secrets): fix them before finishing. NEVER write real API keys, tokens or passwords into files: use placeholders and a .env.example, and mention it to the user. Images the user attached can be committed with save_attachment. read_file/list_files/search_code accept a repo parameter (owner/name) to read OTHER repos (read-only). Use search_code to find where something is used across the repo, and edit_many for several changes in one file. Repo notes starting with [auto] are a rough machine summary: after you have read the key files, call save_repo_notes with a better short overview (purpose, structure, conventions) — do this BEFORE your final answer whenever the notes are [auto] or missing, and also when the user asks you to remember/save the repo. When a build or deploy fails (or the user says the site/Action is broken), call list_runs then get_run_logs, find the real cause in the logs, read the files involved, fix them with edit_file/write_file and tell the user to push; if the log is cut or unclear, say what you could not see instead of guessing. generate_image creates a picture with the user\'s own image API and stages it as a file (the user confirms each time): use it for logos, hero images and illustrations the project needs, give it a detailed English prompt, then use the returned path in the HTML/CSS. If you are not sure about an API, config option or error message, call search_docs (optionally with site, e.g. docs.github.com) before guessing. Finish with a short plain summary of what you changed.'+((S.repoNotes&&S.repoNotes[S.repo.full])?'\nSaved repo notes (may be outdated, verify if unsure):\n'+S.repoNotes[S.repo.full]:'')+(fs?'\nCurrently staged draft files: '+fs:'')+'\nToday: '+new Date().toDateString();
 }
-const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',scaffold:'box:scaffold '+(a.template||''),set_tasks:'note:task list',complete_task:'okc:task '+(a.index||'')+' done',enable_pages:'globe:enable Pages',set_repo_info:'note:repo info',propose_plan:'note:plan',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save'})[k.name]||k.name};
+const dlabel=k=>{const a=k.args||{},p=a.path||a.name||'';return ({list_repos:'box:repo list',list_files:'folder:list '+p,read_file:'file:read '+p,write_file:'edit:write '+p,edit_file:'scissors:edit '+p,delete_file:'trash:delete '+p,create_repo:'plusc:create repo '+p,commit_message:'chat:commit message',edit_many:'scissors:edit '+p+' ('+((k.args&&k.args.edits)||[]).length+')',search_code:'search:search '+(a.query||''),list_issues:'issue:issues',get_issue:'issue:issue #'+(a.number||''),create_issue:'plusc:issue '+(a.title||''),list_prs:'pr:PR list',get_pr:'pr:PR #'+(a.number||''),switch_branch:'branch:branch '+(a.branch||''),pr_description:'note:PR description',scaffold:'box:scaffold '+(a.template||''),set_tasks:'note:task list',complete_task:'okc:task '+(a.index||'')+' done',enable_pages:'globe:enable Pages',set_repo_info:'note:repo info',propose_plan:'note:plan',search_attachment:'search:file e khujchi: '+(a.query||''),read_attachment:'file:file lines '+(a.start_line||'')+'-'+(a.end_line||''),save_attachment:'image:save image '+p,save_repo_notes:'spark:repo notes save',list_runs:'clock:Actions runs',get_run_logs:'file:Actions log'+(a.run_id?' #'+a.run_id:''),generate_image:'image:chobi banachhi '+p,search_docs:'search:docs: '+(a.query||'')})[k.name]||k.name};
 async function ensureNotes(c){
   const R=S.repo.full;if(S.repoNotes&&S.repoNotes[R])return;
   const t=await getTree();if(t.empty||!t.paths.size)return;
@@ -1463,7 +1533,7 @@ function depHTML(u){
   const act='https://github.com/'+qa(u.repo)+'/actions';
   if(d.st==='completed'){
     if(d.c==='success')return '<div class="dep">'+ico('okc')+'Deploy hoyeche'+(d.url&&/^https:\/\//.test(d.url)?' · <a href="'+qa(d.url)+'" target="_blank" rel="noopener">Site dekho</a>':'')+'</div>';
-    return '<div class="dep bad">'+ico('xc')+'Deploy fail ('+esc(d.c||'?')+') · <a href="'+act+'" target="_blank" rel="noopener">Log dekho</a></div>';
+    return '<div class="dep bad">'+ico('xc')+'Deploy fail ('+esc(d.c||'?')+') · <a href="'+act+'" target="_blank" rel="noopener">Log dekho</a> <button class="chip" data-act="gdepfix">'+ico('chat',14)+'AI ke fix korte bolo</button></div>';
   }
   return '<div class="dep">'+ico('clock')+'Deploy '+(d.st==='in_progress'?'cholche':'shuru hobe')+'…'+(d.stuck?'<br><small>Onek somoy lagche. GitHub e atke thakte pare: <a href="'+act+'" target="_blank" rel="noopener">Actions</a> e giye Cancel kore Re-run koro.</small>':'')+' <button class="chip" data-act="gdep">'+ico('refresh',14)+'Check</button></div>';
 }
@@ -1477,7 +1547,7 @@ async function watchDeploy(c,R,sha,B,force){
     try{
       const j=await gh('/repos/'+R+'/actions/runs?head_sha='+encodeURIComponent(sha)+'&per_page=10'),rs=j.workflow_runs||[];
       const run=rs.find(x=>/pages/i.test(x.name||''))||rs[0];
-      if(run){u.dep.st=run.status;u.dep.c=run.conclusion;if(run.status!=='completed'&&Date.now()-new Date(run.created_at)>5*60e3)u.dep.stuck=1;else delete u.dep.stuck}
+      if(run){u.dep.st=run.status;u.dep.c=run.conclusion;u.dep.run=run.id;if(run.status!=='completed'&&Date.now()-new Date(run.created_at)>5*60e3)u.dep.stuck=1;else delete u.dep.stuck}
       save();render();
       if(run&&run.status==='completed')return;
     }catch(e){}
@@ -1671,6 +1741,7 @@ document.addEventListener('click',e=>{
   else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();if(dview[d.dv]){const c=chat(),f=c&&c.draft&&c.draft.files[d.dv];if(f&&f.ex&&!(okey(c.draft,d.dv) in origC))loadOrig(c.draft,d.dv).then(render)}}
   else if(d.fx!==undefined){const c=chat();if(c&&c.draft){delete c.draft.files[d.fx];if(!Object.keys(c.draft.files).length)c.draft=null;save();render()}}
   else if(d.act==='gdep'){const c=chat();if(c&&c.pushed&&c.pushed.dep)watchDeploy(c,c.pushed.repo,c.pushed.dep.sha,c.pushed.branch,true)}
+  else if(d.act==='gdepfix'){const c=chat();if(c&&c.pushed&&c.pushed.dep&&!busy){const u=c.pushed;$('box').value='GitHub Actions e deploy fail hoyeche'+(u.dep.run?' (run #'+u.dep.run+')':'')+'. get_run_logs diye log poro, asol karon khuje fix koro.';send()}}
   else if(d.pm){S.pushMode=d.pm==='pr'?'pr':'direct';rawSave();render()}
   else if(d.act==='gmerge'){const c=chat();if(c)prAct(c,'merge')}
   else if(d.act==='gclose'){const c=chat();if(c)prAct(c,'close')}
