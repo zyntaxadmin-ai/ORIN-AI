@@ -1186,6 +1186,7 @@ async function tool(c,name,a){
     const p=okPath(a.path),pr=String(a.prompt||'').trim();if(!pr)throw new Error('prompt dorkar');
     if(!imgReady())throw new Error('Image provider set kora nai. Settings > Image generation e URL, key, model dao.');
     if(!/\.(jpe?g)$/i.test(p))throw new Error('Path .jpg hote hobe (image JPEG hishebe save hoy)');
+    if(!confirm('AI chobi banate chay ('+S.imgcfg.model+', tomar API credit lagbe):\n"'+pr.slice(0,150)+'"\n→ '+p+'\nAllow?'))throw new Error('User allow kore ni');
     const pic=await genImage(pr),b=String(pic).split(',')[1];
     if(!b||!/^data:image\//.test(pic))throw new Error('Image pawa gelo na (CORS ba format)');
     if(b.length>2.5e6)throw new Error('Image onek boro');
@@ -1518,7 +1519,7 @@ function depHTML(u){
   const act='https://github.com/'+qa(u.repo)+'/actions';
   if(d.st==='completed'){
     if(d.c==='success')return '<div class="dep">'+ico('okc')+'Deploy hoyeche'+(d.url&&/^https:\/\//.test(d.url)?' · <a href="'+qa(d.url)+'" target="_blank" rel="noopener">Site dekho</a>':'')+'</div>';
-    return '<div class="dep bad">'+ico('xc')+'Deploy fail ('+esc(d.c||'?')+') · <a href="'+act+'" target="_blank" rel="noopener">Log dekho</a></div>';
+    return '<div class="dep bad">'+ico('xc')+'Deploy fail ('+esc(d.c||'?')+') · <a href="'+act+'" target="_blank" rel="noopener">Log dekho</a> <button class="chip" data-act="gdepfix">'+ico('chat',14)+'AI ke fix korte bolo</button></div>';
   }
   return '<div class="dep">'+ico('clock')+'Deploy '+(d.st==='in_progress'?'cholche':'shuru hobe')+'…'+(d.stuck?'<br><small>Onek somoy lagche. GitHub e atke thakte pare: <a href="'+act+'" target="_blank" rel="noopener">Actions</a> e giye Cancel kore Re-run koro.</small>':'')+' <button class="chip" data-act="gdep">'+ico('refresh',14)+'Check</button></div>';
 }
@@ -1532,7 +1533,7 @@ async function watchDeploy(c,R,sha,B,force){
     try{
       const j=await gh('/repos/'+R+'/actions/runs?head_sha='+encodeURIComponent(sha)+'&per_page=10'),rs=j.workflow_runs||[];
       const run=rs.find(x=>/pages/i.test(x.name||''))||rs[0];
-      if(run){u.dep.st=run.status;u.dep.c=run.conclusion;if(run.status!=='completed'&&Date.now()-new Date(run.created_at)>5*60e3)u.dep.stuck=1;else delete u.dep.stuck}
+      if(run){u.dep.st=run.status;u.dep.c=run.conclusion;u.dep.run=run.id;if(run.status!=='completed'&&Date.now()-new Date(run.created_at)>5*60e3)u.dep.stuck=1;else delete u.dep.stuck}
       save();render();
       if(run&&run.status==='completed')return;
     }catch(e){}
@@ -1726,6 +1727,7 @@ document.addEventListener('click',e=>{
   else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();if(dview[d.dv]){const c=chat(),f=c&&c.draft&&c.draft.files[d.dv];if(f&&f.ex&&!(okey(c.draft,d.dv) in origC))loadOrig(c.draft,d.dv).then(render)}}
   else if(d.fx!==undefined){const c=chat();if(c&&c.draft){delete c.draft.files[d.fx];if(!Object.keys(c.draft.files).length)c.draft=null;save();render()}}
   else if(d.act==='gdep'){const c=chat();if(c&&c.pushed&&c.pushed.dep)watchDeploy(c,c.pushed.repo,c.pushed.dep.sha,c.pushed.branch,true)}
+  else if(d.act==='gdepfix'){const c=chat();if(c&&c.pushed&&c.pushed.dep&&!busy){const u=c.pushed;$('box').value='GitHub Actions e deploy fail hoyeche'+(u.dep.run?' (run #'+u.dep.run+')':'')+'. get_actions_log diye log poro, asol karon khuje fix koro.';send()}}
   else if(d.pm){S.pushMode=d.pm==='pr'?'pr':'direct';rawSave();render()}
   else if(d.act==='gmerge'){const c=chat();if(c)prAct(c,'merge')}
   else if(d.act==='gclose'){const c=chat();if(c)prAct(c,'close')}
