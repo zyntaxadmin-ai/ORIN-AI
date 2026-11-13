@@ -435,13 +435,13 @@ async function refreshTok(){
   setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:c.session.rt})},false));
 }
 async function push(){
-  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,search:S.search,imgcfg:S.imgcfg,gh:S.gh,repo:S.repo,repoNotes:S.repoNotes,ts:S.ts||Date.now()};
+  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,search:S.search,imgcfg:S.imgcfg,repo:S.repo,repoNotes:S.repoNotes,ts:S.ts||Date.now()};
   await sb('/rest/v1/orin_data?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:C().session.uid,data:d,updated_at:new Date().toISOString()},strip)});
   cst='synced '+new Date().toLocaleTimeString();
 }
 function schedPush(){if(!C().session)return;clearTimeout(pt);pt=setTimeout(()=>push().catch(e=>{cst='error: '+e.message}),1500)}
 function applyRemote(rd){
-  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.search=rd.search||S.search;S.imgcfg=rd.imgcfg||S.imgcfg;S.gh=rd.gh||S.gh;S.repo=rd.repo||S.repo;S.repoNotes=rd.repoNotes||S.repoNotes;S.ts=rd.ts||0;
+  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.search=rd.search||S.search;S.imgcfg=rd.imgcfg||S.imgcfg;S.repo=rd.repo||S.repo;S.repoNotes=rd.repoNotes||S.repoNotes;S.ts=rd.ts||0;
   if(!chat())S.cur=S.chats[0]?S.chats[0].id:null;
   rawSave();applyTheme();render();
 }
@@ -925,9 +925,9 @@ const dcount=c=>c.draft?Object.keys(c.draft.files).length:0;
 const defMsg=c=>{const u=[...c.msgs].reverse().find(m=>m.role==='user');return 'Update via Orin'+(u&&u.content?': '+u.content.replace(/\s+/g,' ').slice(0,60):'')};
 async function getTree(){
   const key=S.repo.full+'@'+S.repo.branch;
-  if(ghTree&&ghTree.key===key)return ghTree;
-  const t={key,paths:new Set(),modes:{},trunc:false,empty:false};
-  try{const j=await gh('/repos/'+S.repo.full+'/git/trees/'+encodeURIComponent(S.repo.branch)+'?recursive=1');(j.tree||[]).forEach(x=>{if(x.type==='blob'){t.paths.add(x.path);t.modes[x.path]=x.mode}});t.trunc=!!j.truncated}
+  if(ghTree&&ghTree.key===key&&Date.now()-ghTree.at<60000)return ghTree;
+  const t={key,at:Date.now(),paths:new Set(),modes:{},shas:{},trunc:false,empty:false};
+  try{const j=await gh('/repos/'+S.repo.full+'/git/trees/'+encodeURIComponent(S.repo.branch)+'?recursive=1');(j.tree||[]).forEach(x=>{if(x.type==='blob'){t.paths.add(x.path);t.modes[x.path]=x.mode;t.shas[x.path]=x.sha}});t.trunc=!!j.truncated}
   catch(e){if(/ 409/.test(e.message))t.empty=true;else throw e}
   ghTree=t;return t;
 }
@@ -1252,7 +1252,7 @@ async function tool(c,name,a){
         '\n\nNext: apply_attachment stages NEW+CHANGED without you rewriting them. Read a CHANGED file only if you must review it.').slice(0,14000);
     }
     const warn=[];
-    for(const r of [...nw,...ch]){d.files[r.e.path]={content:r.e.text,ex:t.paths.has(r.e.path)};const w=lintFile(r.e.path,r.e.text);if(w.length&&warn.length<12)warn.push(r.e.path+': '+w.join('; '))}
+    for(const r of [...nw,...ch]){d.files[r.e.path]={content:r.e.text,ex:t.paths.has(r.e.path),bs:t.shas[r.e.path]};const w=lintFile(r.e.path,r.e.text);if(w.length&&warn.length<12)warn.push(r.e.path+': '+w.join('; '))}
     rawSave();
     return (note+'Staged '+(nw.length+ch.length)+' files from "'+f.name+'" ('+nw.length+' new, '+ch.length+' changed); skipped '+sm.length+' identical'+(bad.length?', '+bad.length+' invalid/too big ('+bad.map(r=>r.e.path).join(', ')+')':'')+(over>0?', '+over+' more files were over the limit of '+lim:'')+'.\n'+[...nw,...ch].map(r=>(r.st==='NEW'?'+ ':'~ ')+r.e.path).join('\n').slice(0,3000)+(warn.length?'\nWARNING (fix before finishing):\n'+warn.join('\n'):'')+'\nZip does not delete files: tell the user if some old files may need deleting.').slice(0,9000);
   }
@@ -1269,7 +1269,7 @@ async function tool(c,name,a){
     const w=String(a.which||'1'),im=/^\d+$/.test(w)?all[+w-1]:all.find(i=>i.name===w);
     if(!im)throw new Error('Oi attachment pai ni');
     if(im.data.length>2.5e6)throw new Error('Image onek boro (max ~1.8MB)');
-    const t=await getTree();d.files[p]={bin:im.data,mime:im.mime,ex:t.paths.has(p)};rawSave();
+    const t=await getTree();d.files[p]={bin:im.data,mime:im.mime,ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Staged binary '+p+' ('+Math.round(im.data.length*0.75/1024)+' KB)';
   }
   if(name==='generate_image'){
@@ -1280,7 +1280,7 @@ async function tool(c,name,a){
     const pic=await genImage(pr),b=String(pic).split(',')[1];
     if(!b||!/^data:image\//.test(pic))throw new Error('Image pawa gelo na (CORS ba format)');
     if(b.length>2.5e6)throw new Error('Image onek boro');
-    const t=await getTree();d.files[p]={bin:b,mime:'image/jpeg',ex:t.paths.has(p)};rawSave();
+    const t=await getTree();d.files[p]={bin:b,mime:'image/jpeg',ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Generated and staged '+p+' ('+Math.round(b.length*0.75/1024)+' KB). Use it in the project (e.g. <img src="'+p+'">).';
   }
   if(name==='pr_description'){d.prBody=String(a.body||'').slice(0,60000);rawSave();return 'PR description saved'}
@@ -1329,7 +1329,7 @@ async function tool(c,name,a){
     const t=await getTree();
     if(t.paths.has(p)){let o=null;try{o=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true})}catch(e){}
       if(o!==null&&o.trimEnd()===a.content.trimEnd()){delete d.files[p];rawSave();return 'NO CHANGE: new content is identical to the current file, nothing staged. Tell the user the file already looks like this.'}}
-    d.files[p]={content:a.content,ex:t.paths.has(p)};rawSave();
+    d.files[p]={content:a.content,ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Staged '+p+' ('+a.content.split('\n').length+' lines)'+lintNote(p,a.content);
   }
   if(name==='edit_file'){
@@ -1337,21 +1337,21 @@ async function tool(c,name,a){
     const cur=await readFull(c,p),n=cur.split(o).length-1;
     if(n!==1)throw new Error(n?'old_text '+n+' jaygay ache, aro boro kore dao':'old_text file e nai');
     if(o===String(a.new_text||''))throw new Error('old_text ar new_text same, kono change nai');
-    const t=await getTree(),nc=cur.replace(o,()=>String(a.new_text||''));d.files[p]={content:nc,ex:t.paths.has(p)};rawSave();
+    const t=await getTree(),nc=cur.replace(o,()=>String(a.new_text||''));d.files[p]={content:nc,ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Edited '+p+lintNote(p,nc);
   }
   if(name==='edit_many'){
     const es=Array.isArray(a.edits)?a.edits:[];if(!es.length)throw new Error('edits khali');
     let cur=await readFull(c,p);
     es.forEach((e,i)=>{const o=String(e&&e.old_text||'');if(!o)throw new Error('edit #'+(i+1)+': old_text khali');const n=cur.split(o).length-1;if(n!==1)throw new Error('edit #'+(i+1)+': '+(n?'old_text '+n+' jaygay ache':'old_text file e nai')+' (kono change apply hoyni)');cur=cur.replace(o,()=>String(e.new_text||''))});
-    const t=await getTree();d.files[p]={content:cur,ex:t.paths.has(p)};rawSave();
+    const t=await getTree();d.files[p]={content:cur,ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Edited '+p+' ('+es.length+' changes)'+lintNote(p,cur);
   }
   if(name==='delete_file'){
     const t=await getTree(),f=d.files[p];
     if(f&&!f.ex){delete d.files[p];rawSave();return 'Removed draft file '+p}
     if(!t.paths.has(p)&&!t.trunc)throw new Error('File nai: '+p);
-    d.files[p]={del:1,ex:true};rawSave();return 'Staged delete of '+p;
+    d.files[p]={del:1,ex:true,bs:t.shas[p]};rawSave();return 'Staged delete of '+p;
   }
   throw new Error('Unknown tool '+name);
 }
@@ -1637,12 +1637,25 @@ async function pushDraft(c){
       }
       const t=await gh('/repos/'+R+'/git/trees',{method:'POST',body:{base_tree:cm.tree.sha,tree}});
       if(t.sha===cm.tree.sha)throw new Error('Kono change nai: file gulo ager motoi. Push lagbe na.');
+      {/* did someone else change the same files since they were staged? */
+        const mine=fs.filter(([x,f])=>f.ex&&f.bs);
+        if(mine.length){
+          let rt=null;try{rt=await gh('/repos/'+R+'/git/trees/'+cm.tree.sha+'?recursive=1')}catch(e){}
+          if(rt&&!rt.truncated){
+            const now={};(rt.tree||[]).forEach(x=>{if(x.type==='blob')now[x.path]=x.sha});
+            const bad=mine.filter(([x,f])=>now[x]!==f.bs).map(([x])=>x+(now[x]?'':' (GitHub e delete hoye gese)'));
+            if(bad.length&&!confirm('Ei file gulo tumi staged korar por GitHub e (onno jaygay) bodle geche:\n'+bad.slice(0,8).join('\n')+(bad.length>8?'\n… +'+(bad.length-8)+' ta':'')+'\n\nPush korle oder change gulo overwrite hoye jabe. Tobu push korbe?\n(Cancel dile draft thakbe; AI ke file ta abar pore merge korte bolo.)'))throw new Error('GitHub e file bodle geche, tai cancel kora hoyeche. Draft rakha hoyeche; AI ke bolo notun version pore tomar change merge korte.');
+          }
+        }
+      }
       if(wantPR){
         target='orin/'+(msg.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30)||'update')+'-'+Math.random().toString(36).slice(2,6);
         await gh('/repos/'+R+'/git/refs',{method:'POST',body:{ref:'refs/heads/'+target,sha:prev}});
       }
       const nc=await gh('/repos/'+R+'/git/commits',{method:'POST',body:{message:msg,tree:t.sha,parents:[prev]}});
-      await gh('/repos/'+R+'/git/refs/heads/'+enc(target),{method:'PATCH',body:{sha:nc.sha}});sha=nc.sha;
+      try{await gh('/repos/'+R+'/git/refs/heads/'+enc(target),{method:'PATCH',body:{sha:nc.sha}})}
+      catch(e){if(/ 422/.test(e.message))throw new Error('push korar majhe '+B+' branch e notun commit ashe geche. Draft thik ache, abar Push dao.');throw e}
+      sha=nc.sha;
       if(wantPR){
         const pl=await gh('/repos/'+R+'/pulls',{method:'POST',body:{title:msg,head:target,base:B,body:(f0=>f0.trim()?f0:'Created with Orin.')(String(c.draft.prBody||'')).slice(0,60000)}});
         pr={n:pl.number,head:target};prev=null;
@@ -1808,7 +1821,7 @@ function drawSheet(){
   const b=$('sbody');$('sheet').querySelector('h1').textContent=view==='repo'?'GitHub':'Settings';
   if(view==='repo'){
     const has=!!(S.gh&&S.gh.token);
-    b.innerHTML='<div class="sec"><h3>GitHub token</h3>'+(has?'<p class="h">Token save ache. Bodlate chaile notun ta paste koro.</p>':GH_HELP)+'<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn sm" data-act="gsave">'+(has?'Reload repos':'Connect')+'</button></div></div>'+
+    b.innerHTML='<div class="sec"><h3>GitHub token</h3>'+(has?'<p class="h">Token save ache. Bodlate chaile notun ta paste koro. Nirapottar jonno eta cloud sync hoy na: prottek device e alada dite hobe.</p>':GH_HELP)+'<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn sm" data-act="gsave">'+(has?'Reload repos':'Connect')+'</button></div></div>'+
     (has&&S.repo?'<div class="sec"><h3>'+esc(S.repo.full)+'</h3><div class="row"><button class="btn sm ghost" data-act="rsub" data-sub="hist">'+ico('hist',15)+'History</button><button class="btn sm ghost" data-act="rsub" data-sub="files">'+ico('clip',15)+'File attach</button></div><div id="rsub">'+subHTML()+'</div></div>':'')+
     (has?'<div class="sec"><h3>Repo bechhe nao</h3>'+(S.repo?'<p class="h">Ekhon: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Bondho koro</button></p>':'')+(S.repo?'<label>Branch</label><div id="rbw">'+branchHTML()+'</div><label>Repo</label>':'')+'<input class="f" id="rq" placeholder="Search repo…" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
     '<div class="sec"><h3>Notun repo banao</h3><label>Name</label><input class="f" id="nn" placeholder="my-project"><label>Description (optional)</label><input class="f" id="nd"><label><input type="checkbox" id="np" checked> Private</label><div class="row"><button class="btn sm" data-act="rnew">Create repo</button></div></div>':'');

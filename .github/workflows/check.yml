@@ -1,0 +1,38 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Inline scripts in index.html parse
+        run: |
+          node -e "
+          const fs=require('fs');
+          const h=fs.readFileSync('index.html','utf8');
+          const re=/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/g;
+          let m,i=0;
+          fs.mkdirSync('/tmp/scripts',{recursive:true});
+          while((m=re.exec(h)))fs.writeFileSync('/tmp/scripts/s'+(i++)+'.js',m[1]);
+          if(!i){console.error('No inline script found in index.html');process.exit(1)}
+          console.log(i+' inline script(s) extracted');
+          "
+          for f in /tmp/scripts/*.js; do node --check "$f" && echo "$f OK"; done
+      - name: Service worker parses
+        run: node --check sw.js
+      - name: manifest.json is valid JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'));console.log('manifest OK')"
+      - name: No GitHub token or API key committed
+        run: |
+          if grep -nE 'gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|sk-(ant-|proj-)?[A-Za-z0-9_-]{30,}' index.html sw.js manifest.json README.md; then
+            echo 'Possible secret found above'; exit 1
+          fi
+          echo 'No secrets found'
