@@ -256,7 +256,22 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:12px 0 4px}
 .dif .dk{color:var(--mute);text-align:center}
 .dif .ds{padding:4px 8px;font-family:system-ui,sans-serif;color:var(--mute);border-bottom:1px solid var(--line)}
 .dep{margin-top:6px;font-size:13px}.dep.bad{color:var(--err)}
-.lg{margin-bottom:6px;font-size:12.5px;color:var(--mute)}.lg summary{cursor:pointer}
+.act{margin:0 0 10px;background:var(--sf);border:1px solid var(--line);border-radius:var(--r2);overflow:hidden;font-size:13.5px}
+.acth{display:flex;align-items:center;gap:8px;padding:9px 12px;min-height:38px;color:var(--ink);font-weight:600;list-style:none}
+.acth::-webkit-details-marker{display:none}
+.acth svg.ic{margin:0;color:var(--mute)}
+.actt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.actn{flex:none;font-weight:500;font-size:12.5px;color:var(--mute)}
+.spin{flex:none;width:14px;height:14px;border:2.5px solid var(--line);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite}
+.actl{max-height:140px;overflow-y:auto;margin:0;padding:4px 12px 8px;list-style:none;border-top:1px solid var(--line);scroll-behavior:smooth;overscroll-behavior:contain}
+.actl li{display:flex;align-items:center;gap:8px;padding:3px 0;color:var(--mute);line-height:1.4}
+.actl li svg.ic{margin:0;flex:none}
+.actl li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.actl li:last-child{color:var(--ink)}
+.actl li.in{animation:step .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes step{from{opacity:0;transform:translateY(8px)}}
+details.act>summary{cursor:pointer}details.act[open]>summary .actt{color:var(--mute);font-weight:500}
+.actx:empty{display:none}
 .lw{margin:6px 0;font-size:13px;line-height:1.45;color:var(--warn)}
 .pf{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
 .pst{margin:6px 0 4px;padding-left:20px;font-size:14px;line-height:1.5}
@@ -288,4 +303,5 @@ label{display:block;font-size:13.5px;color:var(--mute);margin:12px 0 4px}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
   .dots::before{animation:none;border-top-color:var(--warn)}
+  .spin{animation:none}
 }

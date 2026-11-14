@@ -57,6 +57,22 @@ async function callProvider(p,history,onDelta){
   }finally{clearTimeout(to)}
 }
 let live='',raf=0,lastUsage=null;
+/* Agent progress: steps are kept as a list and appended one by one, so earlier rows are never redrawn. */
+let liveLog=null,liveT='',livePn='';
+const stepInner=l=>{const [k,t]=logParse(l);return (k?ico(k,14):'')+'<span>'+esc(t)+'</span>'};
+const actNow=()=>livePn?'Preparing '+livePn.replace(/_/g,' ')+'…':liveLog.length?logTxt(liveLog[liveLog.length-1]):'Thinking…';
+const actCount=()=>liveLog.length?liveLog.length+(liveLog.length===1?' step':' steps'):'';
+function liveInner(){
+  if(!liveLog)return live?md(live):'<div class="dots" role="status" aria-label="Thinking"><span></span><span></span><span></span></div>';
+  return '<div class="act"><div class="acth" role="status"><span class="spin" aria-hidden="true"></span><span class="actt">'+esc(actNow())+'</span><span class="actn">'+actCount()+'</span></div>'+(liveLog.length?'<ul class="actl">'+liveLog.map(l=>'<li>'+stepInner(l)+'</li>').join('')+'</ul>':'')+'</div><div class="actx">'+(liveT?md(liveT):'')+'</div>';
+}
+function patchLive(el){
+  let ul=el.querySelector('.actl');
+  if(!el.querySelector('.act')||(liveLog.length&&!ul)){el.innerHTML=liveInner();return}
+  if(ul){for(let n=ul.children.length;n<liveLog.length;n++){const li=document.createElement('li');li.className='in';li.innerHTML=stepInner(liveLog[n]);ul.append(li)}ul.scrollTop=ul.scrollHeight}
+  el.querySelector('.actt').textContent=actNow();el.querySelector('.actn').textContent=actCount();
+  const x=el.querySelector('.actx');if(x._t!==liveT){x._t=liveT;x.innerHTML=liveT?md(liveT):''}
+}
 const fmtTok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(n||0);
 const fmtCost=c=>'$'+(c<0.01?c.toFixed(4):c.toFixed(2));
 const usageStr=u=>u?' · ↑'+fmtTok(u.i)+(u.k?' ('+fmtTok(u.k)+' cached)':'')+' ↓'+fmtTok(u.o)+(u.e?'~':'')+(u.c!=null?' · '+fmtCost(u.c):''):'';
@@ -68,7 +84,7 @@ const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)retu
   const el=$('liveb'),m=$('msgs');
   if(!el){render(true);return}
   const near=m.scrollHeight-m.scrollTop-m.clientHeight<140;
-  el.innerHTML=md(live);
+  if(liveLog)patchLive(el);else el.innerHTML=md(live);
   if(near)m.scrollTop=m.scrollHeight;
   updateFab();
 })};
