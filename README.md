@@ -4,7 +4,7 @@ A personal AI chat app that runs entirely in the browser. Bring your own API pro
 
 **Live app:** https://zyntaxadmin-ai.github.io/ORIN-AI/
 
-No build step, no framework, no server. The whole app is a single `index.html` file.
+No build step, no framework, no server. Plain HTML, CSS and JavaScript files that GitHub Pages serves as they are.
 
 ## Features
 
@@ -48,7 +48,19 @@ No build step, no framework, no server. The whole app is a single `index.html` f
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | The entire app (HTML, CSS, JavaScript) |
+| `index.html` | The page: HTML and the list of scripts to load (order matters) |
+| `css/app.css` | All styles |
+| `js/core.js` | State, storage, helpers, markdown, chat list |
+| `js/cloud.js` | Cloud sync and login (Supabase URL and publishable key are here) |
+| `js/providers.js` | AI provider calls and streaming |
+| `js/readers.js` | zip / folder / office file readers |
+| `js/github.js` | GitHub API helper (`gh()`), repos, branches, history, tree cache |
+| `js/checks.js`, `js/preview.js` | Pre-push checks, live preview |
+| `js/templates.js` | Project templates (data) |
+| `js/agent-tools.js` | Agent tool definitions (`TOOLS`) and the `tool()` executor |
+| `js/agent.js` | Agent loop, history trimming, system prompt |
+| `js/push.js` | Drafts, diffs, push, deploy status, PR actions, undo |
+| `js/chat.js`, `js/settings.js` | `send()`, `render()`, settings screens, start-up |
 | `manifest.json` | PWA manifest (name, colors, icons) |
 | `sw.js` | Service worker for installability and offline shell |
 | `icon-192.png`, `icon-512.png` | App icons |
@@ -74,7 +86,7 @@ No build step, no framework, no server. The whole app is a single `index.html` f
    ```
 
 3. Copy your **Project URL** and **Publishable key** from **Project Settings → API Keys**.
-4. Open `index.html`, find this line, and paste your values:
+4. Open `js/cloud.js`, find this line, and paste your values:
 
    ```js
    const SB_URL='https://YOUR-PROJECT.supabase.co',SB_KEY='YOUR_PUBLISHABLE_KEY';
@@ -97,7 +109,7 @@ Open the live link in Chrome and choose **Install app** (or **Add to Home screen
 
 ## Security notes
 
-- Only use the **Publishable (anon) key** in the app. **Never** put the Secret / service_role key in `index.html`.
+- Only use the **Publishable (anon) key** in the app. **Never** put the Secret / service_role key in any file of this repo.
 - Your API keys are stored in your Supabase database as plain JSON, protected by Row Level Security so only the signed-in owner can read them. The Supabase project owner can also see them in the dashboard, so keep your Supabase account secure.
 - If this is only for you or a few people, turn off **Allow new users to sign up** in Supabase (**Authentication → Sign In / Providers**) and add users manually.
 - Images and PDFs are kept in memory for the current session only. They are not saved to the device or the cloud.
@@ -112,6 +124,8 @@ Open the live link in Chrome and choose **Install app** (or **Add to Home screen
 ## Tech
 
 Plain HTML, CSS, and JavaScript. Supabase Auth and PostgREST over `fetch`. No dependencies.
+
+The `js/*.js` files are plain scripts, not modules: they share one global scope and `index.html` loads them in a fixed order, so a new file must be added to the `<script>` list (and to `sw.js`). Top-level code in a file may only call functions from files loaded earlier or from functions that run later (event handlers, timers). The `Check` workflow parses every file and the files joined in load order, which catches duplicate `const` names across files.
 
 ## License
 
