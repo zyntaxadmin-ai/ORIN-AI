@@ -206,3 +206,4 @@ svg.ic{vertical-align:-3px;margin-right:6px;flex:none}.mi svg.ic,.pc svg.ic,.pc 
 .pvh{display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--sf)}.pvh b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .pvw{flex:1;display:flex;justify-content:center;background:#cbd5e1;overflow:auto;min-height:0}.pvw iframe{border:0;background:#fff;height:100%;width:100%}
 .pve{background:var(--sf);border-top:1px solid var(--line);padding:8px 12px;max-height:32%;overflow:auto;font-size:13px;display:none}.pve.on{display:block}.pve div{color:var(--err);margin:3px 0;word-break:break-word}
+.nk{color:#b45309;font-weight:600}

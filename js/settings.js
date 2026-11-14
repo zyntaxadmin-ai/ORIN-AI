@@ -48,7 +48,7 @@ function drawSheet(){
   if(!spage||!SP[spage]){$('sheet').querySelector('h1').textContent='Settings';b.innerHTML=settingsMenu();return}
   $('sheet').querySelector('h1').textContent=SP[spage][0];
   if(spage==='prov')b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Upor theke nichey order e try hobe. Fail korle porer ta.</p>'+
-   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></div>'+
+   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+(needKey(p)?' · <span class="nk">key nai</span>':'')+'</small></div>'+
    '<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
    '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">Kono provider nai.</p>')+
    '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>';
