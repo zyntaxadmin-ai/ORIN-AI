@@ -17,16 +17,28 @@ async function refreshTok(){
   if(c.session.exp-60>Date.now()/1000)return;
   setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:c.session.rt})},false));
 }
+/* API keys (providers, Tavily, image API) and the GitHub token are NOT uploaded: they stay on each device */
+const noKey=o=>o?Object.assign({},o,{key:''}):o;
+const cloudData=()=>({providers:(S.providers||[]).map(noKey),chats:S.chats,system:S.system,theme:S.theme,search:noKey(S.search),imgcfg:noKey(S.imgcfg),repo:S.repo,repoNotes:S.repoNotes,ts:S.ts||Date.now()});
+const needKey=p=>!p.key&&!/^https?:\/\/(localhost|127\.|10\.|192\.168\.|\[::1\])/i.test(p.url||'');
 async function push(){
-  const d={providers:S.providers,chats:S.chats,system:S.system,theme:S.theme,search:S.search,imgcfg:S.imgcfg,repo:S.repo,repoNotes:S.repoNotes,ts:S.ts||Date.now()};
+  const d=cloudData();
   await sb('/rest/v1/orin_data?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:C().session.uid,data:d,updated_at:new Date().toISOString()},strip)});
   cst='synced '+new Date().toLocaleTimeString();
 }
 function schedPush(){if(!C().session)return;clearTimeout(pt);pt=setTimeout(()=>push().catch(e=>{cst='error: '+e.message}),1500)}
 function applyRemote(rd){
-  S.providers=rd.providers||[];S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.search=rd.search||S.search;S.imgcfg=rd.imgcfg||S.imgcfg;S.repo=rd.repo||S.repo;S.repoNotes=rd.repoNotes||S.repoNotes;S.ts=rd.ts||0;
+  /* keys: keep the ones on this device; only a key that an older version left in the cloud is taken over, and only when this device has none */
+  const lk=new Map((S.providers||[]).map(p=>[p.id,p.key||'']));
+  const withKey=(o,k)=>Object.assign({},o||{},{key:k||''});
+  S.providers=(rd.providers||[]).map(p=>Object.assign({},p,{key:lk.get(p.id)||p.key||''}));
+  S.search=withKey(rd.search||S.search,(S.search&&S.search.key)||(rd.search&&rd.search.key));
+  S.imgcfg=withKey(rd.imgcfg||S.imgcfg,(S.imgcfg&&S.imgcfg.key)||(rd.imgcfg&&rd.imgcfg.key));
+  S.chats=rd.chats||[];S.system=rd.system||'';S.theme=rd.theme||'auto';S.repo=rd.repo||S.repo;S.repoNotes=rd.repoNotes||S.repoNotes;S.ts=rd.ts||0;
   if(!chat())S.cur=S.chats[0]?S.chats[0].id:null;
   rawSave();applyTheme();render();
+  const miss=S.providers.filter(p=>p.on&&needKey(p)).length;
+  if(miss)toast(miss+' ta provider er API key ei device e dao (Settings → Providers)');
 }
 async function syncNow(first){
   if(!C().session||syncing||busy)return;syncing=true;
@@ -61,7 +73,7 @@ async function authGo(){
   finally{$('abtn').disabled=false}
 }
 async function logout(){
-  if(!confirm('Log out korbe? Ei device theke local data muche jabe, cloud e save thakbe.'))return;
+  if(!confirm('Log out korbe? Ei device theke local data muche jabe. Chat ar provider list cloud e save thakbe, kintu API key ar GitHub token cloud e thake na: seguloo muche jabe, abar dite hobe.'))return;
   clearTimeout(pt);
   try{await push()}catch(e){if(!confirm('Cloud e save hoy nai. Tobu logout korbe? Data hariye jete pare.'))return}
   const c=C();S={providers:[],chats:[],cur:null,system:'',theme:S.theme,ts:0,cloud:{url:c.url,anon:c.anon,email:c.email}};
@@ -69,7 +81,7 @@ async function logout(){
 }
 function cloudHTML(){
   const c=C();
-  return '<div class="sec"><h3>Account</h3><p class="h">'+esc(c.email||'')+'<br>'+esc(cst||'ready')+'</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
+  return '<div class="sec"><h3>Account</h3><p class="h">'+esc(c.email||'')+'<br>'+esc(cst||'ready')+'</p><p class="h">Chat, provider list ar settings sync hoy. API key ar GitHub token sync hoy na (nirapottar jonno): notun device e ekbar dite hobe.</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
 }
 function homeHTML(){
   const c=C(),on=S.providers.filter(p=>p.on&&p.model&&p.url),nm=(c.email||'').split('@')[0];
