@@ -184,14 +184,14 @@ async function runAgent(c,list){
         let out;TOOLNO++;try{out=await tool(c,k.name,k.args||{})}catch(e){out='Error: '+e.message}
         work.push({role:'tool',id:k.id,name:k.name,result:String(out).slice(0,66000)});
       }
-      if(planStop){planStop=false;final=(res.text||'').trim()||'Plan ready. Niche dekho, thik hole Approve koro.';done=true;break}
+      if(planStop){planStop=false;final=(res.text||'').trim()||'Plan ready. Review it below and approve to continue.';done=true;break}
     }
   }catch(e){fails.push('agent: '+e.message);failedAll=!done&&!stopped}
   const src=srcOf(c),u=tot.i||tot.o?{i:tot.i,o:tot.o,k:tot.k||undefined,e:tot.e||undefined,c:tot.hc?tot.c:undefined}:undefined;
-  if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Kaj sesh. Niche draft dekho.':'Done.'),by,skipped:fails.slice(),log,src,u});
+  if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Done. Review the draft below.':'Done.'),by,skipped:fails.slice(),log,src,u});
   else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,skipped:[],log,u})}
-  else if(failedAll)c.msgs.push({role:'error',content:'Sob provider fail korse. Agent mode e model ke tool calling support korte hobe.\n'+fails.join('\n')});
-  else c.msgs.push({role:'assistant',content:'Step limit e pouchhe gechhi. "continue" likho.',by,skipped:[],log,u});
+  else if(failedAll)c.msgs.push({role:'error',content:'All providers failed. In agent mode the model must support tool calling.\n'+fails.join('\n')});
+  else c.msgs.push({role:'assistant',content:'Reached the step limit. Type "continue" to keep going.',by,skipped:[],log,u});
   busy=false;live='';setBusyUI(false);save();render();
 }
 const logParse=l=>{const m=/^([a-z]+):(.*)$/s.exec(l);return m&&IX[m[1]]?[m[1],m[2]]:[null,String(l).replace(/^[^\w#\s]+\uFE0F?\s*/u,'')]};

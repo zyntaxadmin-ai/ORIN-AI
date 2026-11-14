@@ -38,7 +38,7 @@ function applyRemote(rd){
   if(!chat())S.cur=S.chats[0]?S.chats[0].id:null;
   rawSave();applyTheme();render();
   const miss=S.providers.filter(p=>p.on&&needKey(p)).length;
-  if(miss)toast(miss+' ta provider er API key ei device e dao (Settings → Providers)');
+  if(miss)toast(miss+(miss>1?' providers need':' provider needs')+' an API key on this device (Settings → Providers)');
 }
 async function syncNow(first){
   if(!C().session||syncing||busy)return;syncing=true;
@@ -48,7 +48,7 @@ async function syncNow(first){
     const rd=rows&&rows[0]&&rows[0].data;
     if(!rd)await push();
     else if(first){
-      if(!S.providers.length||confirm('Cloud e data ache. OK = ei device er data replace hobe. Cancel = ei device er data cloud e jabe.'))applyRemote(rd);else await push();
+      if(!S.providers.length||await dlg({title:'Use your cloud data?',body:'Your account already has data in the cloud.\n\nUse cloud data replaces what is on this device. Keep this device uploads this device’s data to the cloud instead.',ok:'Use cloud data',cancel:'Keep this device'}))applyRemote(rd);else await push();
       cst='synced '+new Date().toLocaleTimeString();
     }else if((rd.ts||0)>(S.ts||0)){applyRemote(rd);cst='synced '+new Date().toLocaleTimeString()}
     else if((rd.ts||0)<(S.ts||0))await push();
@@ -59,35 +59,35 @@ async function syncNow(first){
 const SB_URL='https://qrfetnudthvmcqslxlnp.supabase.co',SB_KEY='sb_publishable_RBh5MV6JmwMtkH9-H8fbEg_V9-Fa9Js';
 let home=true,amode='in';
 function showAuth(on){const a=$('auth');a.classList.toggle('on',on);if(on){$('adv').style.display=SB_KEY?'none':'block';$('au').value=SB_URL||C().url||'';$('ak').value=SB_KEY||C().anon||'';$('ae').value=C().email||''}}
-function setMode(m){amode=m;$('abtn').textContent=m==='in'?'Log in':'Create account';$('aq').textContent=m==='in'?'Account nai?':'Account ache?';$('aswitch').textContent=m==='in'?'Create account':'Log in';$('ap').autocomplete=m==='in'?'current-password':'new-password';$('aerr').textContent=''}
+function setMode(m){amode=m;$('abtn').textContent=m==='in'?'Log in':'Create account';$('aq').textContent=m==='in'?'New to Orin?':'Already have an account?';$('aswitch').textContent=m==='in'?'Create account':'Log in';$('ap').autocomplete=m==='in'?'current-password':'new-password';$('aerr').textContent=''}
 async function authGo(){
   const url=(SB_URL||$('au').value).trim(),anon=(SB_KEY||$('ak').value).trim(),email=$('ae').value.trim(),pw=$('ap').value,er=$('aerr');
-  if(!url||!anon||!email||!pw){er.textContent='Sob ghor puron koro';return}
-  if(amode==='up'&&pw.length<6){er.textContent='Password kompokkhe 6 okkhor';return}
+  if(!url||!anon||!email||!pw){er.textContent='Fill in all fields';return}
+  if(amode==='up'&&pw.length<6){er.textContent='Password must be at least 6 characters';return}
   S.cloud={url,anon,email};rawSave();$('abtn').disabled=true;er.textContent='';
   try{
     const j=await sb(amode==='up'?'/auth/v1/signup':'/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password:pw})},false);
-    if(!j.access_token){er.textContent=(j.identities&&!j.identities.length)||(j.user&&j.user.identities&&!j.user.identities.length)?'Ei email e account ache. Log in koro.':'Email e confirm link pathano hoyeche. Confirm kore Log in koro.';setMode('in');return}
+    if(!j.access_token){er.textContent=(j.identities&&!j.identities.length)||(j.user&&j.user.identities&&!j.user.identities.length)?'An account with this email already exists. Log in instead.':'We sent a confirmation link to your email. Confirm it, then log in.';setMode('in');return}
     setSession(j);showAuth(false);$('ap').value='';home=true;await syncNow(true);render();
   }catch(e){er.textContent=e.message}
   finally{$('abtn').disabled=false}
 }
 async function logout(){
-  if(!confirm('Log out korbe? Ei device theke local data muche jabe. Chat ar provider list cloud e save thakbe, kintu API key ar GitHub token cloud e thake na: seguloo muche jabe, abar dite hobe.'))return;
+  if(!await ask('Log out?','Local data on this device will be removed. Your chats and provider list stay in the cloud, but API keys and the GitHub token are never synced, so you will need to enter them again.','Log out',true))return;
   clearTimeout(pt);
-  try{await push()}catch(e){if(!confirm('Cloud e save hoy nai. Tobu logout korbe? Data hariye jete pare.'))return}
+  try{await push()}catch(e){if(!await ask('Cloud save failed','Your latest changes could not be saved to the cloud. Logging out now may lose them.','Log out anyway',true))return}
   const c=C();S={providers:[],chats:[],cur:null,system:'',theme:S.theme,ts:0,cloud:{url:c.url,anon:c.anon,email:c.email}};
   rawSave();applyTheme();$('sheet').classList.remove('on');closeDrawer();home=true;showAuth(true);setMode('in');render();
 }
 function cloudHTML(){
   const c=C();
-  return '<div class="sec"><h3>Account</h3><p class="h">'+esc(c.email||'')+'<br>'+esc(cst||'ready')+'</p><p class="h">Chat, provider list ar settings sync hoy. API key ar GitHub token sync hoy na (nirapottar jonno): notun device e ekbar dite hobe.</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
+  return '<div class="sec"><h3>Account</h3><p class="h">'+esc(c.email||'')+'<br>'+esc(cst||'ready')+'</p><p class="h">Chats, the provider list and settings sync across devices. API keys and the GitHub token never sync, for security: enter them once on each new device.</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
 }
 function homeHTML(){
   const c=C(),on=S.providers.filter(p=>p.on&&p.model&&p.url),nm=(c.email||'').split('@')[0];
   const rec=S.chats.slice().sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,6);
-  return '<div class="home"><div class="hero"><div class="logo"><i></i></div><h2>Hello, '+esc(nm)+'</h2><p>Ki niye kaj korbo ajke?</p></div><button class="btn" data-act="hnew">+ New chat</button>'+sugHTML()+
-  (on.length?'<div class="prv"><i></i><span><b>'+esc(on[0].name)+'</b> · '+esc(on[0].model)+(on.length>1?' · +'+(on.length-1)+' fallback':'')+'</span></div>':'<button class="prv" data-act="hset">Provider add koro →</button>')+
+  return '<div class="home"><div class="hero"><div class="logo"><i></i></div><h2>Hello, '+esc(nm)+'</h2><p>What are we working on today?</p></div><button class="btn" data-act="hnew">New chat</button>'+sugHTML()+
+  (on.length?'<div class="prv"><i></i><span><b>'+esc(on[0].name)+'</b> · '+esc(on[0].model)+(on.length>1?' · +'+(on.length-1)+' fallback':'')+'</span></div>':'<button class="prv" data-act="hset">Add a provider</button>')+
   (rec.length?'<h3 class="gl2">Recent chats</h3>'+rec.map(x=>'<button class="rc" data-open="'+x.id+'">'+esc(x.title)+'</button>').join(''):'')+
   '<div class="row" style="justify-content:center;margin-top:20px"><button class="btn ghost sm" data-act="hset">Settings</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
 }
