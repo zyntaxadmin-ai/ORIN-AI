@@ -168,7 +168,7 @@ async function runImg(c){
   busy=false;setBusyUI(false);save();render();
 }
 let imgMode=false;
-function updateModes(){$('webb').classList.toggle('on',!!S.web);$('imgb').classList.toggle('on',imgMode);$('box').placeholder=imgMode?'Describe the image…':'Message Orin…'}
+function updateModes(){$('mchips').innerHTML=(S.web?'<button type="button" class="chip on" data-tog="web" aria-label="Turn off web search">'+ico('globe',14)+'Web search'+ico('x',12)+'</button>':'')+(imgMode?'<button type="button" class="chip on" data-tog="img" aria-label="Turn off image mode">'+ico('image',14)+'Create image'+ico('x',12)+'</button>':'');$('box').placeholder=imgMode?'Describe the image…':'Message Orin…'}
 async function run(c,list){
   const history=buildHistory(c);
   const fails=[];let done=false;

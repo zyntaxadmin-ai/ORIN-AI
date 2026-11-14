@@ -74,6 +74,7 @@ document.addEventListener('click',async e=>{
   else if(d.del){closePop();if(!await confirmDelChat(d.del))return;S.chats=S.chats.filter(c=>c.id!==d.del);if(S.cur===d.del)S.cur=S.chats[0]?.id||null;save();renderList();render()}
   else if(d.rmp!==undefined){pend.splice(+d.rmp,1);renderTray()}
   else if(d.add){closePop();$(d.add).click()}
+  else if(d.tog){closePop();d.tog==='web'?toggleWeb():toggleImg()}
   else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
   else if(d.lang){S.lang=d.lang;rawSave();drawSheet()}
   else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();if(dview[d.dv]){const c=chat(),f=c&&c.draft&&c.draft.files[d.dv];if(f&&f.ex&&!(okey(c.draft,d.dv) in origC))loadOrig(c.draft,d.dv).then(render)}}
@@ -141,7 +142,7 @@ $('pvd').onclick=()=>{pvMode=(pvMode+1)%3;const w=[['Phone','390px'],['Tablet','
 $('pve').addEventListener('click',e=>{if(e.target.closest('#pvs')){const t='The preview shows these errors. Please fix them:\n- '+pvErrs.slice(0,8).join('\n- ');$('pvx').click();$('box').value=t;if(!busy)send()}});
 $('fdir').onchange=e=>{addDir([...e.target.files]);e.target.value=''};
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
-$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>'+ico('image',16)+'Photos</span></button><button class="pi" data-add="fcam"><span>'+ico('camera',16)+'Camera</span></button><button class="pi" data-add="fi"><span>'+ico('file',16)+'Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>'+ico('folder',16)+'Folder</span></button><button class="pi" data-act="ropen"><span>'+ico('box',16)+'GitHub repo</span></button>');
+$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-tog="web"><span>'+ico('globe',16)+'Web search</span>'+(S.web?'<i>On</i>':'')+'</button><button class="pi" data-tog="img"><span>'+ico('image',16)+'Create image</span>'+(imgMode?'<i>On</i>':'')+'</button><hr><button class="pi" data-add="fimg"><span>'+ico('image',16)+'Photos</span></button><button class="pi" data-add="fcam"><span>'+ico('camera',16)+'Camera</span></button><button class="pi" data-add="fi"><span>'+ico('file',16)+'Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>'+ico('folder',16)+'Folder</span></button><button class="pi" data-act="ropen"><span>'+ico('box',16)+'GitHub repo</span></button>');
 $('modelb').onclick=e=>pop(e.currentTarget,modelMenu());
 $('mic').onclick=toggleMic;
 $('tobot').onclick=()=>{const m=$('msgs');m.scrollTo({top:m.scrollHeight,behavior:'smooth'})};
@@ -159,8 +160,8 @@ $('msgs').addEventListener('scroll',updateFab,{passive:true});addEventListener('
   L.addEventListener('click',e=>{const r=e.target.closest('.ci');if(!r)return;const fresh=r===sr&&Date.now()-swiped<350;if(fresh||r.dataset.o){e.stopPropagation();e.preventDefault();if(!fresh){close(r);open=null}}},true);
 })();
 $('dclose').onclick=closeDrawer;$('dset').onclick=()=>{closeDrawer();editing=null;view='';spage='';openSheet()};
-$('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search on':'Web search on. Add a Tavily key in Settings'):'Web search off')};
-$('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode on':'Image mode on. Add an image provider in Settings'):'Image mode off')};
+const toggleWeb=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search on':'Web search on. Add a Tavily key in Settings'):'Web search off')};
+const toggleImg=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode on':'Image mode on. Add an image provider in Settings'):'Image mode off')};
 document.addEventListener('input',e=>{const t=e.target;if(t.id==='fq'){fq=t.value;if($('fl'))$('fl').innerHTML=fileListHTML();return}
   if(t.classList&&t.classList.contains('pb')){const c=chat();if(c&&c.draft){c.draft.prBody=t.value;rawSave()}}
   if(t.classList&&t.classList.contains('cm')){const c=chat();if(c&&c.draft){c.draft.msg=t.value;rawSave()}}

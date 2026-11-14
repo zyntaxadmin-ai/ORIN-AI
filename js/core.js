@@ -77,7 +77,7 @@ const IX={
 };
 const ico=(k,w)=>_s(IX[k]||'',w||16).replace('<svg','<svg class="ic"');
 const ibtn=(a,l,k)=>'<button '+a+' aria-label="'+l+'" title="'+l+'">'+IC[k]+'</button>';
-function initIcons(){const m={menu:'menu',newc:'edit',gear:'gear',plus:'plus',webb:'globe',imgb:'image',mic:'mic',dclose:'x',tobot:'dn'};for(const k in m){const e=$(k);if(e)e.innerHTML=IC[m[k]]}$('dset').innerHTML=IC.gear+'<span>Settings</span>';setBusyUI(false)}
+function initIcons(){const m={menu:'menu',newc:'edit',gear:'gear',plus:'plus',mic:'mic',dclose:'x',tobot:'dn'};for(const k in m){const e=$(k);if(e)e.innerHTML=IC[m[k]]}$('dset').innerHTML=IC.gear+'<span>Settings</span>';setBusyUI(false)}
 const SUG=[['Write an email','Draft a professional email','Help me write a professional email: '],['Explain code','Step-by-step walkthrough','Explain this code step by step:\n'],['Brainstorm','Ideas for a new project','Give me 5 ideas for a new project.'],['Write in Bangla','Stories, poems, essays','Write a short story in Bangla.']];
 const sugHTML=()=>'<div class="sug">'+SUG.map((x,i)=>'<button data-sug="'+i+'"><b>'+x[0]+'</b><span>'+x[1]+'</span></button>').join('')+'</div>';
 const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
