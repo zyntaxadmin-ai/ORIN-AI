@@ -7,23 +7,23 @@ function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'
 function settingsMenu(){
   const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session;
   const row=(k,ic,t,sub)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+esc(sub)+'</small></span><span class="ar">›</span></button>';
-  return gl('AI')+row('prov',ico('bot',20),'Providers & Models',S.providers.length?S.providers.length+' provider · '+(on[0]?on[0].model:'sob off'):'Kono provider nai — add koro')+
-   row('sys',ico('chat',20),'System prompt',S.system.trim()?S.system.trim().slice(0,50):'Set kora nai')+
-   gl('Tools')+row('search',ico('globe',20),'Web search',S.search&&S.search.key?'Chalu (Tavily)':'Key dewa nai')+
-   row('img',ico('image',20),'Image generation',im.model?im.model:'Set kora nai')+
-   row('gh',ico('github',20),'GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token ache, repo bechhe nai'):'Connect kora nai')+
-   gl('App')+row('app',ico('palette',20),'Appearance & Voice','Theme: '+(S.theme||'auto')+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||''))+
-   gl('Account & data')+row('acct',ico('cloud',20),'Account & Sync',cl?(S.cloud.email||'Logged in'):'Log in kora nai')+
+  return gl('AI')+row('prov',ico('bot',20),'Providers & Models',S.providers.length?S.providers.length+(S.providers.length===1?' provider · ':' providers · ')+(on[0]?on[0].model:'all off'):'No providers yet. Add one')+
+   row('sys',ico('chat',20),'System prompt',S.system.trim()?S.system.trim().slice(0,50):'Not set')+
+   gl('Tools')+row('search',ico('globe',20),'Web search',S.search&&S.search.key?'On (Tavily)':'No key yet')+
+   row('img',ico('image',20),'Image generation',im.model?im.model:'Not set up')+
+   row('gh',ico('github',20),'GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token saved, no repository chosen'):'Not connected')+
+   gl('App')+row('app',ico('palette',20),'Appearance & Voice','Theme: '+THEME_LABEL[S.theme||'auto']+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||''))+
+   gl('Account & data')+row('acct',ico('cloud',20),'Account & Sync',cl?(S.cloud.email||'Logged in'):'Not logged in')+
    row('bk',ico('save',20),'Backup','Export / Import');
 }
 function drawSheet(){
   const b=$('sbody');$('sheet').querySelector('h1').textContent=view==='repo'?'GitHub':'Settings';
   if(view==='repo'){
     const has=!!(S.gh&&S.gh.token);
-    b.innerHTML='<div class="sec"><h3>GitHub token</h3>'+(has?'<p class="h">Token save ache. Bodlate chaile notun ta paste koro. Nirapottar jonno eta cloud sync hoy na: prottek device e alada dite hobe.</p>':GH_HELP)+'<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn sm" data-act="gsave">'+(has?'Reload repos':'Connect')+'</button></div></div>'+
+    b.innerHTML='<div class="sec"><h3>GitHub token</h3>'+(has?'<p class="h">Token saved. Paste a new one to replace it. For security it is never synced, so enter it on each device.</p>':GH_HELP)+'<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn sm" data-act="gsave">'+(has?'Reload repos':'Connect')+'</button></div></div>'+
     (has&&S.repo?'<div class="sec"><h3>'+esc(S.repo.full)+'</h3><div class="row"><button class="btn sm ghost" data-act="rsub" data-sub="hist">'+ico('hist',15)+'History</button><button class="btn sm ghost" data-act="rsub" data-sub="files">'+ico('clip',15)+'File attach</button></div><div id="rsub">'+subHTML()+'</div></div>':'')+
-    (has?'<div class="sec"><h3>Repo bechhe nao</h3>'+(S.repo?'<p class="h">Ekhon: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Bondho koro</button></p>':'')+(S.repo?'<label>Branch</label><div id="rbw">'+branchHTML()+'</div><label>Repo</label>':'')+'<input class="f" id="rq" placeholder="Search repo…" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
-    '<div class="sec"><h3>Notun repo banao</h3><label>Name</label><input class="f" id="nn" placeholder="my-project"><label>Description (optional)</label><input class="f" id="nd"><label><input type="checkbox" id="np" checked> Private</label><div class="row"><button class="btn sm" data-act="rnew">Create repo</button></div></div>':'');
+    (has?'<div class="sec"><h3>Choose a repository</h3>'+(S.repo?'<p class="h">Current: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Clear</button></p>':'')+(S.repo?'<label>Branch</label><div id="rbw">'+branchHTML()+'</div><label>Repo</label>':'')+'<input class="f" id="rq" placeholder="Search repositories" aria-label="Search repositories" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
+    '<div class="sec"><h3>Create a repository</h3><label>Name</label><input class="f" id="nn" placeholder="my-project"><label>Description (optional)</label><input class="f" id="nd"><label><input type="checkbox" id="np" checked> Private</label><div class="row"><button class="btn sm" data-act="rnew">Create repo</button></div></div>':'');
     const gt=$('gt');if(gt)gt.oninput=()=>{S.gh={token:gt.value.trim()};save()};
     if(has&&ghRepos===undefined)loadRepos();
     if(has&&S.repo&&(!ghBr||ghBr.repo!==S.repo.full))loadBranches();
@@ -47,18 +47,18 @@ function drawSheet(){
   const SP=settingsPages();
   if(!spage||!SP[spage]){$('sheet').querySelector('h1').textContent='Settings';b.innerHTML=settingsMenu();return}
   $('sheet').querySelector('h1').textContent=SP[spage][0];
-  if(spage==='prov')b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Upor theke nichey order e try hobe. Fail korle porer ta.</p>'+
-   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+(needKey(p)?' · <span class="nk">key nai</span>':'')+'</small></div>'+
+  if(spage==='prov')b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Providers are tried from top to bottom. If one fails, the next one takes over.</p>'+
+   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+(needKey(p)?' · <span class="nk">no key</span>':'')+'</small></div>'+
    '<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
-   '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">Kono provider nai.</p>')+
-   '<div class="row"><button class="btn" data-act="padd">+ Add provider</button></div></div>';
-  else if(spage==='sys')b.innerHTML='<div class="sec"><h3>System prompt</h3><p class="h">Prothom e AI ke ki bole dibe (optional). Shob chat e lagbe.</p><textarea class="f" id="sp" rows="8">'+esc(S.system)+'</textarea></div>';
+   '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">No providers yet.</p>')+
+   '<div class="row"><button class="btn" data-act="padd">Add provider</button></div></div>';
+  else if(spage==='sys')b.innerHTML='<div class="sec"><h3>System prompt</h3><p class="h">Instructions the AI receives at the start of every chat (optional).</p><textarea class="f" id="sp" rows="8">'+esc(S.system)+'</textarea></div>';
   else if(spage==='search')b.innerHTML=webHTML();
   else if(spage==='img')b.innerHTML=imgHTML();
   else if(spage==='gh')b.innerHTML=ghHTML();
   else if(spage==='app')b.innerHTML=themeHTML()+voiceHTML();
   else if(spage==='acct')b.innerHTML=cloudHTML();
-  else if(spage==='bk')b.innerHTML='<div class="sec"><h3>Backup</h3><p class="h">Provider, key ar chat ekta file e save kore onno device e import korte paro.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div><p class="h" style="margin-top:10px">API key shudhu ei browser e save thake. Backup file onno kauke dio na.</p></div>';
+  else if(spage==='bk')b.innerHTML='<div class="sec"><h3>Backup</h3><p class="h">Save your providers, keys and chats to one file, then import it on another device.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div><p class="h" style="margin-top:10px">API keys are stored only in this browser, and they are included in the backup file. Don’t share it with anyone.</p></div>';
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
   const gt2=$('gt');if(gt2)gt2.oninput=()=>{S.gh={token:gt2.value.trim()};save()};
   const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
@@ -66,11 +66,12 @@ function drawSheet(){
 }
 function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim(),ctx:parseInt($('pcx').value,10)||0,pin:parseFloat($('pci').value)||0,pout:parseFloat($('pco').value)||0}}
 
-document.addEventListener('click',e=>{
+const confirmDelChat=id=>{const c=S.chats.find(x=>x.id===id);return ask('Delete this chat?','“'+(c&&c.title||'This chat')+'” and all of its messages will be permanently deleted.','Delete',true)};
+document.addEventListener('click',async e=>{
   const t=e.target.closest('button');if(!t)return;const d=t.dataset;
   if(d.open){S.cur=d.open;home=false;save();closeDrawer();render()}
-  else if(d.sdel){if(!confirm('Ei chat ta delete korbe?'))return;S.chats=S.chats.filter(c=>c.id!==d.sdel);if(S.cur===d.sdel)S.cur=S.chats[0]?.id||null;save();renderList();render()}
-  else if(d.del){closePop();if(!confirm('Ei chat ta delete korbe?'))return;S.chats=S.chats.filter(c=>c.id!==d.del);if(S.cur===d.del)S.cur=S.chats[0]?.id||null;save();renderList();render()}
+  else if(d.sdel){if(!await confirmDelChat(d.sdel))return;S.chats=S.chats.filter(c=>c.id!==d.sdel);if(S.cur===d.sdel)S.cur=S.chats[0]?.id||null;save();renderList();render()}
+  else if(d.del){closePop();if(!await confirmDelChat(d.del))return;S.chats=S.chats.filter(c=>c.id!==d.del);if(S.cur===d.del)S.cur=S.chats[0]?.id||null;save();renderList();render()}
   else if(d.rmp!==undefined){pend.splice(+d.rmp,1);renderTray()}
   else if(d.add){closePop();$(d.add).click()}
   else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
@@ -78,38 +79,38 @@ document.addEventListener('click',e=>{
   else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();if(dview[d.dv]){const c=chat(),f=c&&c.draft&&c.draft.files[d.dv];if(f&&f.ex&&!(okey(c.draft,d.dv) in origC))loadOrig(c.draft,d.dv).then(render)}}
   else if(d.fx!==undefined){const c=chat();if(c&&c.draft){delete c.draft.files[d.fx];if(!Object.keys(c.draft.files).length)c.draft=null;save();render()}}
   else if(d.act==='gdep'){const c=chat();if(c&&c.pushed&&c.pushed.dep)watchDeploy(c,c.pushed.repo,c.pushed.dep.sha,c.pushed.branch,true)}
-  else if(d.act==='gdepfix'){const c=chat();if(c&&c.pushed&&c.pushed.dep&&!busy){const u=c.pushed;$('box').value='GitHub Actions e deploy fail hoyeche'+(u.dep.run?' (run #'+u.dep.run+')':'')+'. get_actions_log diye log poro, asol karon khuje fix koro.';send()}}
+  else if(d.act==='gdepfix'){const c=chat();if(c&&c.pushed&&c.pushed.dep&&!busy){const u=c.pushed;$('box').value='The GitHub Actions deploy failed'+(u.dep.run?' (run #'+u.dep.run+')':'')+'. Use get_actions_log to read the log, find the cause and fix it.';send()}}
   else if(d.pm){S.pushMode=d.pm==='pr'?'pr':'direct';rawSave();render()}
   else if(d.act==='gmerge'){const c=chat();if(c)prAct(c,'merge')}
   else if(d.act==='gclose'){const c=chat();if(c)prAct(c,'close')}
   else if(d.cc){const code=t.parentElement.querySelector('code');if(code)copyText(code.textContent).then(()=>{t.textContent='Copied';setTimeout(()=>{t.textContent='Copy'},1200)})}
   else if(d.rp){const r=(Array.isArray(ghRepos)?ghRepos:[]).find(x=>x.full_name===d.rp);if(!r)return;
-    const c=chat();if(c&&dcount(c)&&c.draft.repo!==r.full_name){if(!confirm('Ei chat er draft muche jabe. Repo bodlabe?'))return;c.draft=null}
+    const c=chat();if(c&&dcount(c)&&c.draft.repo!==r.full_name){if(!await ask('Switch repository?','Switching repository discards the staged draft in this chat.','Discard and switch',true))return;c.draft=null}
     S.repo={full:r.full_name,branch:r.default_branch||'main'};ghTree=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo: '+r.full_name)}
   else if(d.act==='ropen'){closePop();editing=null;view='repo';openSheet()}
   else if(d.act==='gsave'){const g=$('gt');if(g)S.gh={token:g.value.trim()};ghRepos=undefined;ghTree=null;save();drawSheet()}
   else if(d.act==='rsub'){rsub=rsub===d.sub?'':d.sub;if(rsub==='hist')loadHist();if(rsub==='files')loadFiles();drawSheet()}
   else if(d.hrest){restoreTo(d.hrest)}
   else if(d.fatt!==undefined){
-    if(pend.length>=10){toast('Max 10 ta file');return}
-    readFull(chat()||{draft:null},d.fatt).then(tx=>{pend.push({kind:'text',name:d.fatt.split('/').pop(),text:tx.slice(0,MAXF),size:tx.length,tok:etok(tx)});renderTray();view='';$('sheet').classList.remove('on');render();toast('Attach hoyeche: '+d.fatt)}).catch(e=>toast(e.message));
+    if(pend.length>=10){toast('You can attach up to 10 files');return}
+    readFull(chat()||{draft:null},d.fatt).then(tx=>{pend.push({kind:'text',name:d.fatt.split('/').pop(),text:tx.slice(0,MAXF),size:tx.length,tok:etok(tx)});renderTray();view='';$('sheet').classList.remove('on');render();toast('Attached: '+d.fatt)}).catch(e=>toast(e.message));
   }
   else if(d.act==='rclear'){S.repo=null;ghTree=null;save();if(view==='repo')drawSheet();render()}
-  else if(d.act==='rnew'){const n=$('nn').value.trim();if(!/^[A-Za-z0-9._-]{1,100}$/.test(n)){toast('Repo name e shudhu english okkhor, number, - _ . cholbe');return}
-    t.disabled=true;gh('/user/repos',{method:'POST',body:{name:n,description:$('nd').value.trim().slice(0,300),private:$('np').checked,auto_init:true}}).then(j=>{S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;const c=chat();if(c)c.draft=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo banano hoyeche: '+j.full_name)}).catch(e=>{t.disabled=false;toast(e.message)})}
-  else if(d.act==='gpush'){const c=chat();if(c){const iss=checkDraft(c);if(iss.length&&!confirm('Push er age somossha pawa geche:\n\n'+iss.slice(0,6).join('\n')+'\n\nTobu push korbe?'))return;pushDraft(c)}}
+  else if(d.act==='rnew'){const n=$('nn').value.trim();if(!/^[A-Za-z0-9._-]{1,100}$/.test(n)){toast('Repository names can only use letters, numbers, - _ and .');return}
+    t.disabled=true;gh('/user/repos',{method:'POST',body:{name:n,description:$('nd').value.trim().slice(0,300),private:$('np').checked,auto_init:true}}).then(j=>{S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;const c=chat();if(c)c.draft=null;save();view='';$('sheet').classList.remove('on');render();toast('Repository created: '+j.full_name)}).catch(e=>{t.disabled=false;toast(e.message)})}
+  else if(d.act==='gpush'){const c=chat();if(c){const iss=checkDraft(c);if(iss.length&&!await ask('Push with warnings?','Checks found these problems:\n\n'+iss.slice(0,6).join('\n')+'\n\nPush anyway?','Push anyway'))return;pushDraft(c)}}
   else if(d.act==='pview'){const c=chat();if(c&&c.draft)openPreview(c)}
   else if(d.act==='gundo'){const c=chat();if(c)undoPush(c)}
-  else if(d.act==='plok'){const c=chat();if(c&&c.plan&&!busy){c.plan.ok=true;if(c.plan.steps.length)c.tasks=c.plan.steps.map(x=>({t:x,done:false}));save();$('box').value='Plan OK, kaj shuru koro.';send()}}
+  else if(d.act==='plok'){const c=chat();if(c&&c.plan&&!busy){c.plan.ok=true;if(c.plan.steps.length)c.tasks=c.plan.steps.map(x=>({t:x,done:false}));save();$('box').value='Plan approved. Go ahead.';send()}}
   else if(d.act==='tkclr'){const c=chat();if(c){c.tasks=null;save();render()}}
-  else if(d.act==='plno'){const c=chat();if(c){c.plan=null;save();render();$('box').focus();toast('Ki bodlate chao likho')}}
+  else if(d.act==='plno'){const c=chat();if(c){c.plan=null;save();render();$('box').focus();toast('Tell me what to change')}}
   else if(d.plm){S.planMode=d.plm;save();drawSheet()}
-  else if(d.act==='gdisc'){const c=chat();if(c&&confirm('Draft discard korbe?')){c.draft=null;save();render()}}
+  else if(d.act==='gdisc'){const c=chat();if(c&&await ask('Discard draft?','All staged changes in this draft will be removed.','Discard',true)){c.draft=null;save();render()}}
   else if(d.ipre!==undefined){const x=IMGP[+d.ipre];S.imgcfg=Object.assign({},S.imgcfg,{url:x[1],model:x[2],size:x[3]});save();drawSheet()}
   else if(d.save){const m=chat().msgs[+d.save];if(m&&m.pic){const a=document.createElement('a');a.href=m.pic;a.download='orin-image.jpg';a.target='_blank';a.rel='noopener';a.click()}}
   else if(d.more){const c=S.chats.find(x=>x.id===d.more);pop(t,'<button class="pi" data-pin="'+d.more+'"><span>'+ico('pin',15)+(c&&c.pin?'Unpin':'Pin')+'</span></button><button class="pi" data-ren="'+d.more+'"><span>'+ico('edit',15)+'Rename</span></button><button class="pi" data-del="'+d.more+'"><span>'+ico('trash',15)+'Delete</span></button>')}
   else if(d.pin){closePop();const c=S.chats.find(x=>x.id===d.pin);if(c){c.pin=!c.pin;save();renderList()}}
-  else if(d.ren){closePop();const c=S.chats.find(x=>x.id===d.ren);const n=c&&prompt('Chat er naam',c.title);if(n&&n.trim()){c.title=n.trim().slice(0,60);save();renderList();render()}}
+  else if(d.ren){closePop();const c=S.chats.find(x=>x.id===d.ren);const n=c&&await askText('Rename chat',c.title,'Rename');if(n&&n.trim()){c.title=n.trim().slice(0,60);save();renderList();render()}}
   else if(d.regen)regen()
   else if(d.edit!==undefined)editMsg(+d.edit)
   else if(d.copy){copyText(chat().msgs[+d.copy].content).then(()=>toast('Copied'))}
@@ -117,13 +118,13 @@ document.addEventListener('click',e=>{
   else if(d.up!==undefined||d.dn!==undefined){const i=+(d.up??d.dn),j=d.up!==undefined?i-1:i+1;if(S.providers[j]){[S.providers[i],S.providers[j]]=[S.providers[j],S.providers[i]];save();drawSheet()}}
   else if(d.tg){S.providers[+d.tg].on=!S.providers[+d.tg].on;save();drawSheet()}
   else if(d.ed){editing=Object.assign({},S.providers[+d.ed],{_idx:+d.ed});drawSheet()}
-  else if(d.rmed){if(confirm('Delete this provider?')){S.providers.splice(editing._idx,1);editing=null;save();drawSheet()}}
+  else if(d.rmed){if(await ask('Delete provider?','“'+(editing.name||'This provider')+'” will be removed from your provider list.','Delete',true)){S.providers.splice(editing._idx,1);editing=null;save();drawSheet()}}
   else if(d.sug!==undefined){const x=SUG[+d.sug];if(home||!chat())newChat();const b=$('box');b.value=x[2];b.dispatchEvent(new Event('input'));b.focus();b.setSelectionRange(b.value.length,b.value.length)}
-  else if(d.rm){if(confirm('Delete this provider?')){S.providers.splice(+d.rm,1);save();drawSheet()}}
+  else if(d.rm){if(await ask('Delete provider?','“'+((S.providers[+d.rm]||{}).name||'This provider')+'” will be removed from your provider list.','Delete',true)){S.providers.splice(+d.rm,1);save();drawSheet()}}
   else if(d.theme){S.theme=d.theme;save();applyTheme();drawSheet()}
   else if(d.act==='padd'){editing={_new:true,type:'openai'};drawSheet()}
   else if(d.act==='pcancel'){editing=null;drawSheet()}
-  else if(d.act==='psave'){const f=readForm();if(!f.name||!f.url||!f.model){toast('Name, URL ar model dorkar');return}
+  else if(d.act==='psave'){const f=readForm();if(!f.name||!f.url||!f.model){toast('Name, URL and model are required');return}
     if(editing._new)S.providers.push(Object.assign({id:uid(),on:true},f));else Object.assign(S.providers[editing._idx],f);
     editing=null;save();drawSheet();toast('Saved')}
   else if(d.act==='csync')syncNow().then(drawSheet)
@@ -137,7 +138,7 @@ document.addEventListener('click',e=>{
 $('pvx').innerHTML=IC.x;$('pvx').onclick=()=>{$('pv').classList.remove('on');closePreviewFrame()};
 $('pvr').onclick=()=>{if(pvc&&pvc.draft)openPreview(pvc,pvEntry)};
 $('pvd').onclick=()=>{pvMode=(pvMode+1)%3;const w=[['Phone','390px'],['Tablet','768px'],['Desktop','100%']][pvMode];$('pvd').textContent=w[0];$('pvf').style.width=w[1]};$('pvf').style.width='390px';
-$('pve').addEventListener('click',e=>{if(e.target.closest('#pvs')){const t='Preview te ei error gulo ashche, fix koro:\n- '+pvErrs.slice(0,8).join('\n- ');$('pvx').click();$('box').value=t;if(!busy)send()}});
+$('pve').addEventListener('click',e=>{if(e.target.closest('#pvs')){const t='The preview shows these errors. Please fix them:\n- '+pvErrs.slice(0,8).join('\n- ');$('pvx').click();$('box').value=t;if(!busy)send()}});
 $('fdir').onchange=e=>{addDir([...e.target.files]);e.target.value=''};
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
 $('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-add="fimg"><span>'+ico('image',16)+'Photos</span></button><button class="pi" data-add="fcam"><span>'+ico('camera',16)+'Camera</span></button><button class="pi" data-add="fi"><span>'+ico('file',16)+'Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>'+ico('folder',16)+'Folder</span></button><button class="pi" data-act="ropen"><span>'+ico('box',16)+'GitHub repo</span></button>');
@@ -158,8 +159,8 @@ $('msgs').addEventListener('scroll',updateFab,{passive:true});addEventListener('
   L.addEventListener('click',e=>{const r=e.target.closest('.ci');if(!r)return;const fresh=r===sr&&Date.now()-swiped<350;if(fresh||r.dataset.o){e.stopPropagation();e.preventDefault();if(!fresh){close(r);open=null}}},true);
 })();
 $('dclose').onclick=closeDrawer;$('dset').onclick=()=>{closeDrawer();editing=null;view='';spage='';openSheet()};
-$('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search ON':'Web search ON. Settings e Tavily key dao'):'Web search OFF')};
-$('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode ON':'Image mode ON. Settings e image provider dao'):'Image mode OFF')};
+$('webb').onclick=()=>{S.web=!S.web;rawSave();updateModes();toast(S.web?(S.search&&S.search.key?'Web search on':'Web search on. Add a Tavily key in Settings'):'Web search off')};
+$('imgb').onclick=()=>{imgMode=!imgMode;updateModes();toast(imgMode?(imgReady()?'Image mode on':'Image mode on. Add an image provider in Settings'):'Image mode off')};
 document.addEventListener('input',e=>{const t=e.target;if(t.id==='fq'){fq=t.value;if($('fl'))$('fl').innerHTML=fileListHTML();return}
   if(t.classList&&t.classList.contains('pb')){const c=chat();if(c&&c.draft){c.draft.prBody=t.value;rawSave()}}
   if(t.classList&&t.classList.contains('cm')){const c=chat();if(c&&c.draft){c.draft.msg=t.value;rawSave()}}

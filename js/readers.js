@@ -8,7 +8,7 @@ async function zipList(file){
   for(;i>=0;i--)if(tail.getUint32(i,true)===0x06054b50)break;
   if(i<0)throw new Error('Valid zip na');
   const cnt=tail.getUint16(i+10,true),cdSize=tail.getUint32(i+12,true),cdOff=tail.getUint32(i+16,true);
-  if(cdOff===0xffffffff||cnt===0xffff)throw new Error('zip64 support nai');
+  if(cdOff===0xffffffff||cnt===0xffff)throw new Error('zip64 is not supported');
   const cd=new DataView(await file.slice(cdOff,cdOff+cdSize).arrayBuffer()),dec=new TextDecoder(),out=[];let p=0;
   for(let k=0;k<cnt&&p+46<=cd.byteLength;k++){
     if(cd.getUint32(p,true)!==0x02014b50)break;
@@ -40,12 +40,12 @@ async function dirToText(list){
   const r=packText(items);r.skipped+=skipped;return r;
 }
 async function addDir(list){
-  if(!list.length)return;if(pend.length>=10){toast('Max 10 ta file');return}
+  if(!list.length)return;if(pend.length>=10){toast('You can attach up to 10 files');return}
   const nm=((list[0].webkitRelativePath||'').split('/')[0]||'folder')+'/';
   toast('Folder pora hocche…');const r=await dirToText(list);
   if(!r.n){toast('Porar moto text file pai ni');return}
   pend.push({kind:'text',name:nm,text:r.text,size:r.text.length,tok:etok(r.text)});renderTray();
-  toast(nm+': '+r.n+' ta file'+(r.skipped?' ('+r.skipped+' ta skip: binary/boro/node_modules)':''));
+  toast(nm+': '+r.n+(r.n===1?' file':' files')+(r.skipped?' ('+r.skipped+' skipped: binary, large or node_modules)':''));
 }
 const xmlDec=x=>x.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(+n)).replace(/&amp;/g,'&');
 const numSort=(a,b)=>(+(a.match(/(\d+)\.xml$/)||[0,0])[1])-(+(b.match(/(\d+)\.xml$/)||[0,0])[1]);
@@ -84,32 +84,33 @@ function pop(anchor,html){
 }
 function modelMenu(){
   const l=S.providers.filter(p=>p.on&&p.model&&p.url);
-  return '<button class="pi" data-pk="auto"><span><b>Auto</b><small>Fallback order e cholbe</small></span>'+(!S.pick?'<i>'+ico('check',16)+'</i>':'')+'</button>'+
+  return '<button class="pi" data-pk="auto"><span><b>Auto</b><small>Uses your fallback order</small></span>'+(!S.pick?'<i>'+ico('check',16)+'</i>':'')+'</button>'+
   l.map(p=>'<button class="pi" data-pk="'+p.id+'"><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></span>'+(S.pick===p.id?'<i>'+ico('check',16)+'</i>':'')+'</button>').join('');
 }
 let rec=null,recOn=false;
 function toggleMic(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){toast('Ei browser e voice nai. Chrome e try koro');return}
+  if(!SR){toast('Voice input isn’t supported in this browser. Try Chrome');return}
   if(recOn){rec&&rec.stop();return}
   const box=$('box'),base=box.value;
   rec=new SR();rec.lang=S.lang||'bn-BD';rec.interimResults=true;rec.continuous=false;
   rec.onstart=()=>{recOn=true;$('mic').classList.add('rec')};
   rec.onresult=e=>{let t='';for(const r of e.results)t+=r[0].transcript;box.value=base+(base&&!/\s$/.test(base)?' ':'')+t;box.dispatchEvent(new Event('input'))};
-  rec.onerror=e=>{toast(e.error==='not-allowed'||e.error==='service-not-allowed'?'Mic permission dao':e.error==='no-speech'?'Kichu shunte pai ni':'Voice error: '+e.error)};
+  rec.onerror=e=>{toast(e.error==='not-allowed'||e.error==='service-not-allowed'?'Allow microphone access to use voice input':e.error==='no-speech'?'No speech detected':'Voice error: '+e.error)};
   rec.onend=()=>{recOn=false;$('mic').classList.remove('rec')};
-  try{rec.start()}catch(e){toast('Mic chalu hoy ni')}
+  try{rec.start()}catch(e){toast('Couldn’t start the microphone')}
 }
+const THEME_LABEL={auto:'System',light:'Light',dark:'Dark'};
 const gl=t=>'<div class="gl">'+t+'</div>';
-function themeHTML(){return '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+t+'</button>').join('')+'</div></div>'}
-function webHTML(){return '<div class="sec"><h3>Web search</h3><p class="h">Composer er globe icon chalu korle message pathanor age web e khuje AI ke dewa hobe. <b>Tavily</b> API key lagbe (tavily.com e free plan ache).</p><input class="f" id="tk" type="password" autocomplete="off" placeholder="tvly-…" value="'+qa((S.search||{}).key)+'"></div>'}
-function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image generation</h3><p class="h">Composer er image icon chalu korle message ta chobir prompt hishebe jabe. OpenAI-compatible <code>/images/generations</code> API lagbe.</p><div class="chips">'+IMGP.map((x,i)=>'<button type="button" class="chip" data-ipre="'+i+'">'+x[0]+'</button>').join('')+'</div>'+
+function themeHTML(){return '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+THEME_LABEL[t]+'</button>').join('')+'</div></div>'}
+function webHTML(){return '<div class="sec"><h3>Web search</h3><p class="h">When the globe button in the composer is on, Orin searches the web before answering. It needs a <b>Tavily</b> API key (there is a free plan at tavily.com).</p><input class="f" id="tk" type="password" autocomplete="off" placeholder="tvly-…" value="'+qa((S.search||{}).key)+'"></div>'}
+function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image generation</h3><p class="h">When the image button in the composer is on, your message is sent as an image prompt. It needs an OpenAI-compatible <code>/images/generations</code> API.</p><div class="chips">'+IMGP.map((x,i)=>'<button type="button" class="chip" data-ipre="'+i+'">'+x[0]+'</button>').join('')+'</div>'+
  '<label>Base URL</label><input class="f" id="iu" value="'+qa(g.url)+'" placeholder="https://api.openai.com/v1">'+
  '<label>API key</label><input class="f" id="ik" type="password" autocomplete="off" value="'+qa(g.key)+'">'+
  '<label>Model</label><input class="f" id="im" value="'+qa(g.model)+'" placeholder="gpt-image-1">'+
  '<label>Size (optional)</label><input class="f" id="is" value="'+qa(g.size)+'" placeholder="1024x1024"></div>'}
 const IMGP=[['OpenAI','https://api.openai.com/v1','gpt-image-1',''],['Together','https://api.together.xyz/v1','black-forest-labs/FLUX.1-schnell','']];
-function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">Mic er bhasha. Chrome e bhalo kaj kore.</p><div class="row" style="margin-top:0">'+[['bn-BD','Bangla'],['en-US','English'],['hi-IN','Hindi']].map(x=>'<button class="btn '+((S.lang||'bn-BD')===x[0]?'':'ghost')+' sm" data-lang="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>'}
+function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">Language for the microphone. Works best in Chrome.</p><div class="row" style="margin-top:0">'+[['bn-BD','Bangla'],['en-US','English'],['hi-IN','Hindi']].map(x=>'<button class="btn '+((S.lang||'bn-BD')===x[0]?'':'ghost')+' sm" data-lang="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>'}
 let curCtl=null,stopped=false;
 function setBusyUI(on){const b=$('sendb');b.innerHTML=on?IC.stop:IC.up;b.setAttribute('aria-label',on?'Stop':'Send')}
 function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>ok(r.result.split(',')[1]);r.readAsDataURL(f)})}
@@ -167,7 +168,7 @@ async function runImg(c){
   busy=false;setBusyUI(false);save();render();
 }
 let imgMode=false;
-function updateModes(){$('webb').classList.toggle('on',!!S.web);$('imgb').classList.toggle('on',imgMode);$('box').placeholder=imgMode?'Ki chobi banabe likho…':'Message likho…'}
+function updateModes(){$('webb').classList.toggle('on',!!S.web);$('imgb').classList.toggle('on',imgMode);$('box').placeholder=imgMode?'Describe the image…':'Message Orin…'}
 async function run(c,list){
   const history=buildHistory(c);
   const fails=[];let done=false;

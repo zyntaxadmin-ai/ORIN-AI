@@ -80,7 +80,7 @@ const idb=()=>fdb||(fdb=new Promise((res,rej)=>{try{const r=indexedDB.open('orin
 async function fput(id,text){FT.set(id,text);try{const d=await idb();await new Promise((res,rej)=>{const t=d.transaction('f','readwrite');t.objectStore('f').put(text,id);t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)});return true}catch(e){return false}}
 async function fload(){try{const d=await idb();await new Promise(res=>{const q=d.transaction('f').objectStore('f').openCursor();q.onsuccess=()=>{const c=q.result;if(c){FT.set(c.key,c.value);c.continue()}else res()};q.onerror=()=>res()})}catch(e){}}
 async function fclean(){try{const used=new Set();S.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>f.id&&used.add(f.id))));const d=await idb(),t=d.transaction('f','readwrite'),st=t.objectStore('f');for(const k of [...FT.keys()])if(!used.has(k)){st.delete(k);FT.delete(k)}}catch(e){}}
-const ftext=f=>f.text!==undefined?f.text:(FT.has(f.id)?FT.get(f.id):'[file content ei device e nai]');
+const ftext=f=>f.text!==undefined?f.text:(FT.has(f.id)?FT.get(f.id):'[file content is not on this device]');
 function fullText(m,sm){return (m.content||'')+(m.files||[]).map(f=>'\n\n[File: '+f.name+']'+(sm&&sm.res.has(f.id||f.name)?sm.res.get(f.id||f.name):'\n'+ftext(f))).join('')}
 /* Smart mode: when attached files exceed the model's context budget, send only chunks relevant to the question */
 const CHI=new Map(),STOP=new Set('the and for are but not you with this that from have was were will can all any how what when where which who why your our ko ki ke kore koro kothay ache ami tumi eta ota ar na hoy hobe dao dekho bolo please file'.split(' '));
@@ -138,7 +138,7 @@ function smartPlan(c){
   if(!fs.length||tot<=fb)return null;
   const um=[...c.msgs].reverse().filter(m=>m.role==='user'),q=((um[0]&&um[0].content)||'')+((um[0]&&um[0].content||'').length<25&&um[1]?' '+um[1].content:'');
   const per=Math.floor(fb*3.2/fs.length),res=new Map();let n=0;
-  fs.forEach(f=>{const r=retrieveChunks(f.id,f.text,q,per);n+=r.n;res.set(f.id,'\n[Smart mode: file boro ('+fmtSz(f.text.length)+', '+r.ix.lines+' lines), tai shudhu prosner shathe milano ongsho dewa holo. Baki ongsho dorkar hole user ke prosno shuddho kore bolte bolo'+(agentOn()?' ba search_attachment/read_attachment tool use koro':'')+'.]\n'+r.out)});
+  fs.forEach(f=>{const r=retrieveChunks(f.id,f.text,q,per);n+=r.n;res.set(f.id,'\n[Smart mode: this file is large ('+fmtSz(f.text.length)+', '+r.ix.lines+' lines), so only the excerpts relevant to the question are included. If you need other parts, ask the user to be more specific'+(agentOn()?' or use the search_attachment/read_attachment tools':'')+'.]\n'+r.out)});
   return {res,n};
 }
 const ctxOf=p=>+p.ctx||(p.type==='gemini'?1e6:p.type==='anthropic'?2e5:128e3);
@@ -146,14 +146,14 @@ function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t
 function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
 async function addFiles(list){
   for(const f of list){
-    if(pend.length>=10){toast('Max 10 ta file');break}
+    if(pend.length>=10){toast('You can attach up to 10 files');break}
     try{
       if(f.type.startsWith('image/'))pend.push({kind:'image',name:f.name,mime:'image/jpeg',data:await readImg(f)});
       else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){if(f.size>10e6)toast(f.name+' onek boro (max 10MB)');else pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)})}
       else if(/\.zip$/i.test(f.name)){
         if(f.size>150e6){toast(f.name+' onek boro (max 150MB)');continue}
         const r=await zipToText(f);if(!r.n){toast(f.name+': porar moto text file pai ni');continue}
-        pend.push({kind:'text',name:f.name,text:r.text,size:r.text.length,tok:etok(r.text)});toast(f.name+': '+r.n+' ta file pora hoyeche'+(r.skipped?' ('+r.skipped+' ta skip: binary/boro/node_modules)':''));
+        pend.push({kind:'text',name:f.name,text:r.text,size:r.text.length,tok:etok(r.text)});toast(f.name+': read '+r.n+(r.n===1?' file':' files')+(r.skipped?' ('+r.skipped+' skipped: binary, large or node_modules)':''));
       }
       else if(/\.(docx|xlsx|pptx)$/i.test(f.name)){
         if(f.size>60e6){toast(f.name+' onek boro');continue}
@@ -161,7 +161,7 @@ async function addFiles(list){
         pend.push({kind:'text',name:f.name,text:t,size:t.length,tok:etok(t)});
       }
       else if(f.size>MAXF)toast(f.name+' onek boro (max '+fmtSz(MAXF)+')');
-      else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': ei file support kore na');continue}pend.push({kind:'text',name:f.name,text:t,size:f.size,tok:etok(t)})}
+      else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': this file type isn’t supported');continue}pend.push({kind:'text',name:f.name,text:t,size:f.size,tok:etok(t)})}
     }catch(e){toast(f.name+' porte parlam na')}
   }
   renderTray();

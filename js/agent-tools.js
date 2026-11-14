@@ -42,7 +42,7 @@ async function tool(c,name,a){
   if(name==='create_repo'){
     const n=String(a.name||'').trim();if(!/^[A-Za-z0-9._-]{1,100}$/.test(n))throw new Error('Invalid repo name');
     const pv=a.private!==false;
-    if(!confirm('AI "'+n+'" naam e notun GitHub repo banate chay ('+(pv?'private':'public')+'). Allow?'))throw new Error('User allow kore ni');
+    if(!await ask('Create a repository?','The assistant wants to create a new '+(pv?'private':'public')+' GitHub repository named "'+n+'".','Create repository'))throw new Error('The user declined this action');
     const j=await gh('/user/repos',{method:'POST',body:{name:n,description:String(a.description||'').slice(0,300),private:pv,auto_init:true}});
     S.repo={full:j.full_name,branch:j.default_branch||'main'};ghTree=null;ghRepos=undefined;rawSave();
     return 'Created '+j.full_name+' (branch '+S.repo.branch+') and selected it.';
@@ -56,7 +56,7 @@ async function tool(c,name,a){
   }
   const XR=a.repo&&String(a.repo)!==S.repo.full?String(a.repo).trim():null;
   if(XR&&['list_files','read_file','search_code'].includes(name)){
-    if(!/^[\w.-]+\/[\w.-]+$/.test(XR))throw new Error('repo owner/name format e dao');
+    if(!/^[\w.-]+\/[\w.-]+$/.test(XR))throw new Error('Use the owner/name format');
     if(name==='list_files'){
       const j=await gh('/repos/'+XR+'/git/trees/HEAD?recursive=1');let l=(j.tree||[]).filter(x=>x.type==='blob').map(x=>x.path).sort();const pre=String(a.path||'').replace(/^\/+|\/+$/g,'');
       if(pre)l=l.filter(x=>x===pre||x.startsWith(pre+'/'));
@@ -95,13 +95,13 @@ async function tool(c,name,a){
   }
   const RF='/repos/'+S.repo.full;
   if(name==='set_tasks'){const t=(Array.isArray(a.tasks)?a.tasks:[]).map(x=>String(x).slice(0,200)).filter(Boolean).slice(0,30);if(!t.length)throw new Error('tasks khali');c.tasks=t.map(x=>({t:x,done:false}));rawSave();return 'Checklist saved ('+t.length+' tasks)'}
-  if(name==='complete_task'){const i=parseInt(a.index,10)-1;if(!c.tasks||!c.tasks[i])throw new Error('Oi number er task nai');c.tasks[i].done=true;rawSave();return 'Task '+(i+1)+' done. Remaining: '+c.tasks.filter(x=>!x.done).length}
+  if(name==='complete_task'){const i=parseInt(a.index,10)-1;if(!c.tasks||!c.tasks[i])throw new Error('No task with that number');c.tasks[i].done=true;rawSave();return 'Task '+(i+1)+' done. Remaining: '+c.tasks.filter(x=>!x.done).length}
   if(name==='enable_pages'){
     let pg=null;try{pg=await gh(RF+'/pages')}catch(e){}
     if(pg)return 'Pages already on: '+(pg.html_url||'')+' (source: '+((pg.build_type==='workflow')?'GitHub Actions':(pg.source&&pg.source.branch))+')';
-    if(!confirm('AI '+S.repo.full+' e GitHub Pages on korte chay ('+(a.mode==='workflow'?'GitHub Actions':S.repo.branch+' branch')+'). Allow?'))throw new Error('User allow kore ni');
+    if(!await ask('Turn on GitHub Pages?','The assistant wants to publish '+S.repo.full+' with GitHub Pages ('+(a.mode==='workflow'?'GitHub Actions':S.repo.branch+' branch')+').','Turn on Pages'))throw new Error('The user declined this action');
     try{const j=await gh(RF+'/pages',{method:'POST',body:a.mode==='workflow'?{build_type:'workflow'}:{source:{branch:S.repo.branch,path:'/'}}});return 'Pages enabled. URL: '+(j.html_url||'https://'+S.repo.full.split('/')[0]+'.github.io/'+S.repo.full.split('/')[1]+'/')+' (first deploy takes 1-2 min)'}
-    catch(e){throw new Error(e.message+' | Hint: branch ke age push korte hobe, ar token e repo (admin) permission lagbe.')}
+    catch(e){throw new Error(e.message+' | Hint: push the branch first, and the token needs repo (admin) permission.')}
   }
   if(name==='get_actions_log'){
     let rid=parseInt(a.run_id,10),run=null,head='';
@@ -140,13 +140,13 @@ async function tool(c,name,a){
       catch(e){if(e.name==='AbortError')throw new Error('Timeout');if(e instanceof TypeError)throw new Error('Network/CORS block');throw e}
       finally{clearTimeout(to)}
     }
-    const q=String(a.query||'').trim();if(!q)throw new Error('query ba url dorkar');
-    if(!(S.search&&S.search.key))throw new Error('Settings > Web search e Tavily key dao, tarpor docs search kaj korbe');
+    const q=String(a.query||'').trim();if(!q)throw new Error('query or url is required');
+    if(!(S.search&&S.search.key))throw new Error('Add a Tavily key in Settings > Web search to use docs search');
     const rs=await webSearch(q+' documentation');
     return rs.length?rs.map((x,i)=>'['+(i+1)+'] '+x.title+' ('+x.url+')\n'+x.content).join('\n\n'):'No results';
   }
   if(name==='set_repo_info'){
-    if(!confirm('AI repo info bodlate chay (description/homepage/topics). Allow?'))throw new Error('User allow kore ni');
+    if(!await ask('Update repository details?','The assistant wants to change the description, homepage or topics of '+(S.repo?S.repo.full:'this repository')+'.','Update'))throw new Error('The user declined this action');
     const b={};if(typeof a.description==='string')b.description=a.description.slice(0,350);if(typeof a.homepage==='string')b.homepage=a.homepage.slice(0,200);
     if(Object.keys(b).length)await gh(RF,{method:'PATCH',body:b});
     if(Array.isArray(a.topics)&&a.topics.length)await gh(RF+'/topics',{method:'PUT',body:{names:a.topics.map(x=>String(x).toLowerCase().replace(/[^a-z0-9-]/g,'-').slice(0,50)).slice(0,20)}});
@@ -158,7 +158,7 @@ async function tool(c,name,a){
     return l.length?l.map(x=>'#'+x.number+' ['+x.state+'] '+x.title+(pr&&x.head?' (branch '+x.head.ref+')':'')).join('\n'):'None';
   }
   if(name==='get_issue'||name==='get_pr'){
-    const n=parseInt(a.number,10);if(!(n>0))throw new Error('number dorkar');
+    const n=parseInt(a.number,10);if(!(n>0))throw new Error('number is required');
     if(name==='get_issue'){
       const [i,cs]=await Promise.all([gh(RF+'/issues/'+n),gh(RF+'/issues/'+n+'/comments?per_page=30')]);
       return '#'+i.number+' ['+i.state+'] '+i.title+'\n'+(i.body||'(no description)').slice(0,6000)+cs.map(x=>'\n--- '+(x.user&&x.user.login)+':\n'+String(x.body||'').slice(0,2000)).join('');
@@ -169,14 +169,14 @@ async function tool(c,name,a){
       (rc.length?'\n\nReview comments:\n'+rc.map(x=>(x.user&&x.user.login)+' on '+x.path+(x.line?':'+x.line:'')+': '+String(x.body).slice(0,1000)).join('\n'):'');
   }
   if(name==='create_issue'){
-    const t=String(a.title||'').trim().slice(0,250);if(!t)throw new Error('title dorkar');
-    if(!confirm('AI '+S.repo.full+' e issue khulte chay:\n"'+t+'"\nAllow?'))throw new Error('User allow kore ni');
+    const t=String(a.title||'').trim().slice(0,250);if(!t)throw new Error('title is required');
+    if(!await ask('Open an issue?','The assistant wants to open an issue in '+S.repo.full+':\n\n"'+t+'"','Open issue'))throw new Error('The user declined this action');
     const j=await gh(RF+'/issues',{method:'POST',body:{title:t,body:String(a.body||'').slice(0,60000)}});
     return 'Created issue #'+j.number+' '+(j.html_url||'');
   }
   if(name==='switch_branch'){
-    const b=String(a.branch||'').trim();if(!b)throw new Error('branch dorkar');
-    if(c.draft&&dcount(c))throw new Error('Staged draft ache. Age push/discard korte hobe, tarpor branch bodlano jabe.');
+    const b=String(a.branch||'').trim();if(!b)throw new Error('branch is required');
+    if(c.draft&&dcount(c))throw new Error('There is a staged draft. Push or discard it before switching branches.');
     await gh(RF+'/branches/'+encodeURIComponent(b));
     S.repo=Object.assign({},S.repo,{branch:b});ghTree=null;c.draft=null;rawSave();updateChip&&updateChip();
     return 'Switched to branch '+b;
@@ -184,7 +184,7 @@ async function tool(c,name,a){
   const d=dr(c);
   if(name==='scaffold'){
     const tp=TPL[a.template];if(!tp)throw new Error('Unknown template (static|map|pwa|react|worker)');
-    if(needPlan(c,'scaffold',''))throw new Error('Plan approval dorkar (plan-first mode). Age propose_plan call koro, tarpor thamo ar user er approval er opekkha koro.');
+    if(needPlan(c,'scaffold',''))throw new Error('Plan approval required (plan-first mode). Call propose_plan first, then stop and wait for the user to approve.');
     const title=String(a.title||'My Project').slice(0,80),desc=String(a.description||'A new project.').slice(0,200),slug=title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'my-project';
     const t=await getTree(),added=[],skipped=[];
     for(const [p,txt] of Object.entries(tp)){
@@ -196,16 +196,16 @@ async function tool(c,name,a){
   }
   if(name==='compare_attachment'||name==='apply_attachment'){
     const ap=name==='apply_attachment';
-    if(ap&&needPlan(c,'apply_attachment',''))throw new Error('Plan approval dorkar (plan-first mode). Age propose_plan call koro, tarpor thamo ar user er approval er opekkha koro.');
+    if(ap&&needPlan(c,'apply_attachment',''))throw new Error('Plan approval required (plan-first mode). Call propose_plan first, then stop and wait for the user to approve.');
     const fs=chatFiles(c).filter(f=>(!a.name||f.name===a.name)&&isPack(f.text));
-    if(!fs.length)throw new Error('Zip/folder attachment pai ni'+(a.name?' ('+a.name+')':'')+'. User ke zip ba folder attach korte bolo.');
+    if(!fs.length)throw new Error('No zip/folder attachment found'+(a.name?' ('+a.name+')':'')+'. Ask the user to attach a zip or folder.');
     const f=fs[fs.length-1],t=await getTree();
     let es=attEntries(f.id,f.text).map(e=>({path:e.name.replace(/\\/g,'/').replace(/^\.?\/+/,''),text:e.text})),strip=String(a.strip||'').replace(/^\/+|\/+$/g,''),note='';
     if(!strip&&!a.no_strip){const tops=new Set(es.map(e=>e.path.split('/')[0]));if(tops.size===1&&es.every(e=>e.path.includes('/'))){const top=[...tops][0];if(![...t.paths].some(q=>q.startsWith(top+'/'))){strip=top;note='(auto-stripped top folder "'+top+'/"; pass no_strip=true if that is wrong)\n'}}}
     if(strip)es=es.filter(e=>e.path.startsWith(strip+'/')).map(e=>({path:e.path.slice(strip.length+1),text:e.text}));
     if(Array.isArray(a.only)&&a.only.length){const on=new Set(a.only.map(x=>String(x).replace(/^\/+/,'')));es=es.filter(e=>on.has(e.path))}
     if(ap&&Array.isArray(a.skip)&&a.skip.length){const sk=new Set(a.skip.map(x=>String(x).replace(/^\/+/,'')));es=es.filter(e=>!sk.has(e.path))}
-    if(!es.length)throw new Error('Kono file pai ni (strip/only/skip check koro)');
+    if(!es.length)throw new Error('No files found (check strip/only/skip)');
     const lim=ap?300:250,over=es.length-lim;es=es.slice(0,lim);
     const nz=x=>x.replace(/\r\n/g,'\n').trimEnd(),cur=async q=>{const df=d.files[q];if(df&&df.del)return undefined;if(df&&df.bin)return null;if(df)return df.content;if(!t.paths.has(q))return undefined;try{return await gh('/repos/'+S.repo.full+'/contents/'+enc(q)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true})}catch(e){return null}};
     const res=new Array(es.length);let ix=0;
@@ -235,11 +235,11 @@ async function tool(c,name,a){
     planStop=true;rawSave();return 'Plan shown to the user. STOP now: reply with one short sentence asking for approval. Do not change anything until the user approves.';
   }
   if(['write_file','edit_file','edit_many','delete_file','save_attachment','generate_image'].includes(name)&&a.path&&needPlan(c,name,okPath(a.path)))
-    throw new Error('Plan approval dorkar (plan-first mode). Age propose_plan call koro, tarpor thamo ar user er approval er opekkha koro.');
+    throw new Error('Plan approval required (plan-first mode). Call propose_plan first, then stop and wait for the user to approve.');
   if(name==='save_attachment'){
     const p=okPath(a.path),all=[];
     for(const m of [...c.msgs].reverse()){if(m.role==='user'&&m.imgs&&m.imgs.some(i=>/^image\//.test(i.mime))){m.imgs.filter(i=>/^image\//.test(i.mime)).forEach(i=>all.push(i));break}}
-    if(!all.length)throw new Error('Chat e kono image attach kora nai');
+    if(!all.length)throw new Error('No image is attached to this chat');
     const w=String(a.which||'1'),im=/^\d+$/.test(w)?all[+w-1]:all.find(i=>i.name===w);
     if(!im)throw new Error('Oi attachment pai ni');
     if(im.data.length>2.5e6)throw new Error('Image onek boro (max ~1.8MB)');
@@ -247,12 +247,12 @@ async function tool(c,name,a){
     return 'Staged binary '+p+' ('+Math.round(im.data.length*0.75/1024)+' KB)';
   }
   if(name==='generate_image'){
-    const p=okPath(a.path),pr=String(a.prompt||'').trim();if(!pr)throw new Error('prompt dorkar');
-    if(!imgReady())throw new Error('Image provider set kora nai. Settings > Image generation e URL, key, model dao.');
-    if(!/\.(jpe?g)$/i.test(p))throw new Error('Path .jpg hote hobe (image JPEG hishebe save hoy)');
-    if(!confirm('AI chobi banate chay ('+S.imgcfg.model+', tomar API credit lagbe):\n"'+pr.slice(0,150)+'"\n→ '+p+'\nAllow?'))throw new Error('User allow kore ni');
+    const p=okPath(a.path),pr=String(a.prompt||'').trim();if(!pr)throw new Error('prompt is required');
+    if(!imgReady())throw new Error('Image provider is not set up. Add a URL, key and model in Settings > Image generation.');
+    if(!/\.(jpe?g)$/i.test(p))throw new Error('Path must end in .jpg (images are saved as JPEG)');
+    if(!await ask('Generate an image?','The assistant wants to generate an image with '+S.imgcfg.model+'. This uses your API credits.\n\n"'+pr.slice(0,150)+'"\nSaves to '+p,'Generate'))throw new Error('The user declined this action');
     const pic=await genImage(pr),b=String(pic).split(',')[1];
-    if(!b||!/^data:image\//.test(pic))throw new Error('Image pawa gelo na (CORS ba format)');
+    if(!b||!/^data:image\//.test(pic))throw new Error('Could not get the image (CORS or format issue)');
     if(b.length>2.5e6)throw new Error('Image onek boro');
     const t=await getTree();d.files[p]={bin:b,mime:'image/jpeg',ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Generated and staged '+p+' ('+Math.round(b.length*0.75/1024)+' KB). Use it in the project (e.g. <img src="'+p+'">).';
@@ -276,15 +276,15 @@ async function tool(c,name,a){
     return out.trim();
   }
   if(name==='rename_file'){
-    const from=okPath(a.from),to=okPath(a.to);if(from===to)throw new Error('from ar to ek-i');
-    if(needPlan(c,'delete_file',from))throw new Error('Plan approval dorkar (plan-first mode). Age propose_plan call koro, tarpor thamo ar user er approval er opekkha koro.');
+    const from=okPath(a.from),to=okPath(a.to);if(from===to)throw new Error('from and to are the same');
+    if(needPlan(c,'delete_file',from))throw new Error('Plan approval required (plan-first mode). Call propose_plan first, then stop and wait for the user to approve.');
     const d=dr(c),t=await getTree(),df=d.files[from];
-    if(d.files[to]||t.paths.has(to))throw new Error(to+' already ache (ba staged ache). Onno nam dao.');
-    if(df&&df.del)throw new Error(from+' er delete already staged');
-    if(df&&df.bin)throw new Error('Binary file rename korte pari na (draft e image)');
+    if(d.files[to]||t.paths.has(to))throw new Error(to+' already exists (or is staged). Use a different name.');
+    if(df&&df.del)throw new Error(from+' is already staged for deletion');
+    if(df&&df.bin)throw new Error('Cannot rename a binary file (image in draft)');
     let content;
     if(df)content=df.content;
-    else{if(!t.paths.has(from))throw new Error('File nai: '+from+' (shudhu file rename hoy, folder na)');content=await readFull(c,from)}
+    else{if(!t.paths.has(from))throw new Error('File not found: '+from+' (only files can be renamed, not folders)');content=await readFull(c,from)}
     if(df&&!df.ex)delete d.files[from];else d.files[from]={del:1,ex:true,bs:(df&&df.bs)||t.shas[from]};
     d.files[to]={content,ex:false};if(t.modes[from]&&t.modes[from]!=='100644')d.files[to].mode=t.modes[from];
     rawSave();
@@ -292,7 +292,7 @@ async function tool(c,name,a){
   }
   if(name==='find_in_file'){
     const qs=(Array.isArray(a.queries)&&a.queries.length?a.queries:[a.query]).map(x=>String(x==null?'':x).trim()).filter(Boolean).slice(0,8);
-    if(!qs.length)throw new Error('queries dorkar');
+    if(!qs.length)throw new Error('queries is required');
     const pp=okPath(a.path),x=await readFull(c,pp),ls=x.split('\n'),cx=Math.min(3,Math.max(0,parseInt(a.context,10)||0));
     let out='['+pp+': '+ls.length+' lines, '+x.length+' chars]\n';
     for(const q of qs){
@@ -313,7 +313,7 @@ async function tool(c,name,a){
     const r=sliceRead(await readFull(c,p),a);RDG.set(key,TOOLNO);return r;
   }
   if(name==='write_file'){
-    if(typeof a.content!=='string')throw new Error('content dorkar');
+    if(typeof a.content!=='string')throw new Error('content is required');
     if(a.content.length>300000)throw new Error('File onek boro (max 300KB)');
     const t=await getTree();
     if(t.paths.has(p)){let o=null;try{o=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true})}catch(e){}
@@ -324,22 +324,22 @@ async function tool(c,name,a){
   if(name==='edit_file'){
     const o=String(a.old_text||'');if(!o)throw new Error('old_text khali');
     const cur=await readFull(c,p),n=cur.split(o).length-1;
-    if(n!==1)throw new Error(n?'old_text '+n+' jaygay ache, aro boro kore dao':'old_text file e nai');
-    if(o===String(a.new_text||''))throw new Error('old_text ar new_text same, kono change nai');
+    if(n!==1)throw new Error(n?'old_text matches '+n+' places, make it longer':'old_text not found in file');
+    if(o===String(a.new_text||''))throw new Error('old_text and new_text are the same, nothing to change');
     const t=await getTree(),nc=cur.replace(o,()=>String(a.new_text||''));d.files[p]={content:nc,ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Edited '+p+lintNote(p,nc);
   }
   if(name==='edit_many'){
     const es=Array.isArray(a.edits)?a.edits:[];if(!es.length)throw new Error('edits khali');
     let cur=await readFull(c,p);
-    es.forEach((e,i)=>{const o=String(e&&e.old_text||'');if(!o)throw new Error('edit #'+(i+1)+': old_text khali');const n=cur.split(o).length-1;if(n!==1)throw new Error('edit #'+(i+1)+': '+(n?'old_text '+n+' jaygay ache':'old_text file e nai')+' (kono change apply hoyni)');cur=cur.replace(o,()=>String(e.new_text||''))});
+    es.forEach((e,i)=>{const o=String(e&&e.old_text||'');if(!o)throw new Error('edit #'+(i+1)+': old_text is empty');const n=cur.split(o).length-1;if(n!==1)throw new Error('edit #'+(i+1)+': '+(n?'old_text matches '+n+' places':'old_text not found in file')+' (no changes applied)');cur=cur.replace(o,()=>String(e.new_text||''))});
     const t=await getTree();d.files[p]={content:cur,ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Edited '+p+' ('+es.length+' changes)'+lintNote(p,cur);
   }
   if(name==='delete_file'){
     const t=await getTree(),f=d.files[p];
     if(f&&!f.ex){delete d.files[p];rawSave();return 'Removed draft file '+p}
-    if(!t.paths.has(p)&&!t.trunc)throw new Error('File nai: '+p);
+    if(!t.paths.has(p)&&!t.trunc)throw new Error('File not found: '+p);
     d.files[p]={del:1,ex:true,bs:t.shas[p]};rawSave();return 'Staged delete of '+p;
   }
   throw new Error('Unknown tool '+name);

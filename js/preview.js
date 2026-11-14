@@ -38,13 +38,13 @@ async function openPreview(c,entry){
   $('pv').classList.add('on');$('pvt').textContent=pvEntry;renderPvErrs();
   try{setPreview(await buildPreview(c,pvEntry))}catch(e){setPreview('<p style="font:16px sans-serif;padding:16px">'+esc(e.message)+'</p>')}
 }
-function renderPvErrs(){const e=$('pve');if(!pvErrs.length){e.classList.remove('on');e.innerHTML='';return}e.classList.add('on');e.innerHTML=pvErrs.slice(0,8).map(x=>'<div>'+esc(x)+'</div>').join('')+'<button class="btn sm" id="pvs">'+ico('chat',15)+'AI ke fix korte bolo</button>'}
+function renderPvErrs(){const e=$('pve');if(!pvErrs.length){e.classList.remove('on');e.innerHTML='';return}e.classList.add('on');e.innerHTML=pvErrs.slice(0,8).map(x=>'<div>'+esc(x)+'</div>').join('')+'<button class="btn sm" id="pvs">'+ico('chat',15)+'Ask AI to fix</button>'}
 addEventListener('message',e=>{
   const m=e.data;
   if(m&&m.orinPreviewReady&&e.source===$('pvf').contentWindow){if(pvHtml!=null)e.source.postMessage({orinPreviewHtml:pvHtml},'*');return}
   if(!m||!m.orin||e.source!==$('pvf').contentWindow)return;
   if(m.t==='err'){if(!pvErrs.includes(m.m)&&pvErrs.length<20){pvErrs.push(m.m);renderPvErrs()}}
-  else if(m.t==='nav'&&pvc&&pvc.draft){const p=m.h;if(/\.html?$/i.test(p)||p===''||p.endsWith('/'))openPreview(pvc,p===''||p.endsWith('/')?p+'index.html':p);else toast('Ei link preview te khule na')}
+  else if(m.t==='nav'&&pvc&&pvc.draft){const p=m.h;if(/\.html?$/i.test(p)||p===''||p.endsWith('/'))openPreview(pvc,p===''||p.endsWith('/')?p+'index.html':p);else toast('This link can’t be opened in the preview')}
 });
 const RFC=new Map(),RDG=new Map();let TOOLNO=0;
 const BINX=/\.(png|jpe?g|gif|webp|ico|bmp|pdf|zip|gz|tgz|woff2?|ttf|otf|eot|mp[34]|mov|avi|wasm|exe|bin|so|dll|jar)$/i;
@@ -70,7 +70,7 @@ function sliceRead(x,a){
 async function readFull(c,p){
   const d=dr(c),f=d.files[p];
   if(f){if(f.del)throw new Error('File draft e deleted');if(f.bin)throw new Error('Binary file, porte parbo na');return f.content}
-  const t=await getTree();if(!t.trunc&&!t.paths.has(p))throw new Error('File nai: '+p);
+  const t=await getTree();if(!t.trunc&&!t.paths.has(p))throw new Error('File not found: '+p);
   const ck=S.repo.full+'@'+S.repo.branch+':'+p;if(RFC.has(ck))return RFC.get(ck);
   const txt=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true});
   if(txt.includes('\u0000'))throw new Error('Binary file, porte parbo na');

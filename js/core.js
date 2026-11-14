@@ -78,11 +78,11 @@ const IX={
 const ico=(k,w)=>_s(IX[k]||'',w||16).replace('<svg','<svg class="ic"');
 const ibtn=(a,l,k)=>'<button '+a+' aria-label="'+l+'" title="'+l+'">'+IC[k]+'</button>';
 function initIcons(){const m={menu:'menu',newc:'edit',gear:'gear',plus:'plus',webb:'globe',imgb:'image',mic:'mic',dclose:'x',tobot:'dn'};for(const k in m){const e=$(k);if(e)e.innerHTML=IC[m[k]]}$('dset').innerHTML=IC.gear+'<span>Settings</span>';setBusyUI(false)}
-const SUG=[['Email likho','Professional email draft','Ekta professional email likhte help koro: '],['Code bujhao','Step by step explain','Ei code ta step by step bujhiye dao:\n'],['Idea dao','Notun project er idea','Amake ekta project er jonno 5 ta notun idea dao.'],['Bangla te likho','Golpo, kobita, lekha','Bangla te ekta chotto golpo likho.']];
+const SUG=[['Write an email','Draft a professional email','Help me write a professional email: '],['Explain code','Step-by-step walkthrough','Explain this code step by step:\n'],['Brainstorm','Ideas for a new project','Give me 5 ideas for a new project.'],['Write in Bangla','Stories, poems, essays','Write a short story in Bangla.']];
 const sugHTML=()=>'<div class="sug">'+SUG.map((x,i)=>'<button data-sug="'+i+'"><b>'+x[0]+'</b><span>'+x[1]+'</span></button>').join('')+'</div>';
 const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 let qw=0;
-function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S,strip))}catch(e){if(Date.now()-qw>30000){qw=Date.now();toast('Storage bhore geche! Purono chat delete koro ba Backup export koro')}}}
+function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S,strip))}catch(e){if(Date.now()-qw>30000){qw=Date.now();toast('Storage is full. Delete old chats or export a backup.')}}}
 function save(){S.ts=Date.now();rawSave();schedPush()}
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),Math.max(1800,String(t).length*55))}
 function inl(t){
@@ -136,6 +136,35 @@ function md(t){
 }
 function copyText(t){return (navigator.clipboard&&window.isSecureContext?navigator.clipboard.writeText(t):Promise.reject()).catch(()=>{const a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';document.body.append(a);a.select();try{document.execCommand('copy')}catch(e){}a.remove()})}
 function applyTheme(){if(S.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=S.theme}
+/* ---------- Dialogs: replace the browser's confirm() / prompt() ---------- */
+/* dlg({title, body, ok, cancel, danger, input:{value,placeholder,max}}) -> Promise
+   confirm style: resolves true / false. With `input`: resolves the typed text, or null when cancelled. */
+function dlg(o){
+  return new Promise(res=>{
+    const prev=document.activeElement,id='d'+uid(),ov=document.createElement('div');
+    ov.className='dov';
+    ov.innerHTML='<div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="'+id+'t"'+(o.body?' aria-describedby="'+id+'b"':'')+'><h2 id="'+id+'t"></h2>'+(o.body?'<p id="'+id+'b"></p>':'')+(o.input?'<input class="f" autocomplete="off" aria-label="'+esc(o.title)+'">':'')+'<div class="dact"><button type="button" class="btn ghost"></button><button type="button" class="btn'+(o.danger?' dng':'')+'"></button></div></div>';
+    const inp=ov.querySelector('input'),[bc,bo]=ov.querySelectorAll('.dact button'),none=o.input?null:false;
+    ov.querySelector('h2').textContent=o.title;
+    if(o.body)ov.querySelector('p').textContent=o.body;
+    bc.textContent=o.cancel||'Cancel';bo.textContent=o.ok||'Confirm';
+    if(inp){inp.value=o.input.value||'';inp.placeholder=o.input.placeholder||'';inp.maxLength=o.input.max||120}
+    const done=v=>{document.removeEventListener('keydown',kd,true);ov.classList.remove('on');setTimeout(()=>ov.remove(),160);try{prev&&prev.focus&&prev.focus()}catch(e){}res(v)};
+    const kd=e=>{
+      if(e.key==='Escape'){e.preventDefault();e.stopPropagation();done(none)}
+      else if(e.key==='Enter'&&inp&&document.activeElement===inp){e.preventDefault();e.stopPropagation();done(inp.value)}
+      else if(e.key==='Tab'){const f=[...ov.querySelectorAll('input,button')],i=f.indexOf(document.activeElement);e.preventDefault();f[(i+(e.shiftKey?-1:1)+f.length)%f.length].focus()}
+    };
+    ov.onclick=e=>{if(e.target===ov)done(none)};
+    bc.onclick=()=>done(none);bo.onclick=()=>done(inp?inp.value:true);
+    document.addEventListener('keydown',kd,true);
+    document.body.append(ov);
+    requestAnimationFrame(()=>ov.classList.add('on'));
+    (inp||(o.danger?bc:bo)).focus();if(inp)inp.select();
+  });
+}
+const ask=(title,body,ok,danger)=>dlg({title,body,ok,danger});
+const askText=(title,value,ok)=>dlg({title,ok:ok||'Save',input:{value}});
 function chat(){return S.chats.find(c=>c.id===S.cur)}
 function newChat(){const c={id:uid(),title:'New chat',msgs:[],t:Date.now()};S.chats.unshift(c);S.cur=c.id;home=false;save();closeDrawer();render();$('box').focus()}
 
