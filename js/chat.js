@@ -48,7 +48,7 @@ function render(typing){
   {const tu=c.msgs.reduce((a,m)=>{if(m.u){a.i+=m.u.i;a.o+=m.u.o;if(m.u.c!=null){a.c+=m.u.c;a.hc=1}if(m.u.e)a.e=1;a.n++}return a},{i:0,o:0,c:0,n:0});
   if(tu.n>1)h+='<div class="src" style="align-self:center;margin-top:0">Total: ↑'+fmtTok(tu.i)+' ↓'+fmtTok(tu.o)+(tu.e?'~':'')+(tu.hc?' · '+fmtCost(tu.c):'')+'</div>'}
   if(!busy)h+=taskHTML(c)+planHTML(c)+draftHTML(c);
-  if(typing||busy)h+='<div class="m a" id="liveb">'+(live?md(live):'<div class="dots"><span></span><span></span><span></span></div>')+'</div>';
+  if(typing||busy)h+='<div class="m a" id="liveb">'+liveInner()+'</div>';
   el.innerHTML=h;el.scrollTop=el.scrollHeight;
 }
 let q='';

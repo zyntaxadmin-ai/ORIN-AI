@@ -167,12 +167,13 @@ async function runAgent(c,list){
   RFC.clear();RDG.clear();TOOLNO=0;
   try{await ensureNotes(c)}catch(e){}
   const history=buildHistory(c,true),work=[],log=[],fails=[],sys=agentSys(c);
+  liveLog=log;liveT='';livePn='';
   let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
   try{
     for(let step=0;step<40&&!stopped&&!done&&!failedAll;step++){
       let res=null;
       while(pi<list.length&&!stopped){
-        try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{live=(log.length?log.map(l=>'- '+logTxt(l)).join('\n')+'\n\n':'')+(t||'')+(pn?'\n→ '+pn+'…':'');draw()});by=list[pi].name;break}
+        try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{liveT=t||'';livePn=pn||'';draw()});by=list[pi].name;break}
         catch(e){if(stopped||e.message==='STOP')break;fails.push(list[pi].name+': '+e.message);pi++}
       }
       if(!res){if(!stopped)failedAll=true;break}
@@ -180,7 +181,7 @@ async function runAgent(c,list){
       if(!res.calls.length){final=res.text;done=true;break}
       work.push({role:'assistant',text:res.text,calls:res.calls,raw:res.raw});
       for(const k of res.calls){
-        log.push(dlabel(k));live=log.map(l=>'- '+logTxt(l)).join('\n');draw();
+        log.push(dlabel(k));liveT='';livePn='';draw();
         let out;TOOLNO++;try{out=await tool(c,k.name,k.args||{})}catch(e){out='Error: '+e.message}
         work.push({role:'tool',id:k.id,name:k.name,result:String(out).slice(0,66000)});
       }
@@ -192,8 +193,8 @@ async function runAgent(c,list){
   else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,skipped:[],log,u})}
   else if(failedAll)c.msgs.push({role:'error',content:'All providers failed. In agent mode the model must support tool calling.\n'+fails.join('\n')});
   else c.msgs.push({role:'assistant',content:'Reached the step limit. Type "continue" to keep going.',by,skipped:[],log,u});
-  busy=false;live='';setBusyUI(false);save();render();
+  busy=false;live='';liveLog=null;liveT='';livePn='';setBusyUI(false);save();render();
 }
 const logParse=l=>{const m=/^([a-z]+):(.*)$/s.exec(l);return m&&IX[m[1]]?[m[1],m[2]]:[null,String(l).replace(/^[^\w#\s]+\uFE0F?\s*/u,'')]};
 const logTxt=l=>logParse(l)[1];
-const logHTML=m=>m.log&&m.log.length?'<details class="lg"><summary>'+ico('wrench',14)+m.log.length+' step</summary>'+m.log.map(l=>{const [k,t]=logParse(l);return (k?ico(k,14):'')+esc(t)}).join('<br>')+'</details>':'';
+const logHTML=m=>m.log&&m.log.length?'<details class="act lg"><summary class="acth">'+ico('wrench',14)+'<span class="actt">'+m.log.length+(m.log.length===1?' step':' steps')+'</span></summary><ul class="actl">'+m.log.map(l=>'<li>'+stepInner(l)+'</li>').join('')+'</ul></details>':'';
