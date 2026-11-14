@@ -1,23 +1,23 @@
 /* Orin · styles
-   Palette: graphite ink on a cool paper background, one teal accent. Amber (--warn) is reserved for warnings.
+   Palette: Orin blue on a cool blue-white background, one accent. Amber (--warn) is reserved for warnings.
    Radius scale: --r1 small controls · --r2 inputs, buttons, menus · --r3 cards and dialogs · pills are 99px. */
 :root{
-  --bg:#f3f4f6;--sf:#fff;--sf2:#eceef2;--ink:#15181d;--mute:#626b78;--line:#e1e4ea;
-  --ac:#0f766e;--ac2:#e0f2f0;--acink:#fff;--me:#1c222b;--meink:#fff;
-  --err:#c62f2f;--errink:#fff;--ok:#17803d;--warn:#b86a0a;
+  --bg:#f2f7ff;--sf:#fff;--sf2:#e9effa;--ink:#0f1b33;--mute:#5b6b88;--line:#dce6f5;
+  --ac:#2563eb;--ac2:#e8f0ff;--acink:#fff;--me:#2563eb;--meink:#fff;
+  --err:#d93025;--errink:#fff;--ok:#17803d;--warn:#b86a0a;
   --r1:8px;--r2:12px;--r3:18px;--r:var(--r3);
   --sh1:0 1px 2px rgba(16,24,40,.06);--sh2:0 16px 40px rgba(16,24,40,.18);
   --sb:288px;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){
-  --bg:#0e1013;--sf:#161a1f;--sf2:#1f242b;--ink:#e9ecf0;--mute:#8d95a2;--line:#272d36;
-  --ac:#3ac4b6;--ac2:#12302d;--acink:#04201d;--me:#262d37;--meink:#e9ecf0;
-  --err:#ff8f85;--errink:#2b0806;--ok:#4cc277;--warn:#f0b04a;--sh2:0 16px 40px rgba(0,0,0,.5)}}
+  --bg:#0a1224;--sf:#111c33;--sf2:#1a2744;--ink:#e6eeff;--mute:#8ca0c4;--line:#1f2e4d;
+  --ac:#5b9bff;--ac2:#14284d;--acink:#06112b;--me:#2f6bff;--meink:#fff;
+  --err:#ff8a80;--errink:#2b0806;--ok:#4cc277;--warn:#f0b04a;--sh2:0 16px 40px rgba(0,0,0,.5)}}
 :root[data-theme=dark]{
-  --bg:#0e1013;--sf:#161a1f;--sf2:#1f242b;--ink:#e9ecf0;--mute:#8d95a2;--line:#272d36;
-  --ac:#3ac4b6;--ac2:#12302d;--acink:#04201d;--me:#262d37;--meink:#e9ecf0;
-  --err:#ff8f85;--errink:#2b0806;--ok:#4cc277;--warn:#f0b04a;--sh2:0 16px 40px rgba(0,0,0,.5)}
+  --bg:#0a1224;--sf:#111c33;--sf2:#1a2744;--ink:#e6eeff;--mute:#8ca0c4;--line:#1f2e4d;
+  --ac:#5b9bff;--ac2:#14284d;--acink:#06112b;--me:#2f6bff;--meink:#fff;
+  --err:#ff8a80;--errink:#2b0806;--ok:#4cc277;--warn:#f0b04a;--sh2:0 16px 40px rgba(0,0,0,.5)}
 
 *{box-sizing:border-box;margin:0}
 html,body{height:100%;height:100dvh}
