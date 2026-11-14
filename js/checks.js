@@ -17,7 +17,7 @@ function lintFile(path,text){
       const re=/<script\b([^>]*)>([\s\S]*?)<\/script>/gi;let m;
       while((m=re.exec(text))){if(/\bsrc\s*=/i.test(m[1]))continue;const ty=(m[1].match(/type\s*=\s*["']?([^"'\s>]+)/i)||[])[1]||'';if(ty&&!/javascript|ecmascript/i.test(ty))continue;if(/^\s*(import|export)\s/m.test(m[2]))continue;if(m[2].trim()){try{new Function(m[2])}catch(e){if(!okErr(e))throw e}}}
       if((text.match(/<script\b/gi)||[]).length!==(text.match(/<\/script>/gi)||[]).length)out.push('A <script> tag is not closed properly');
-    }else if(ext==='css'){const t=text.replace(/\/\*[\s\S]*?\*\//g,'').replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,'');if((t.match(/{/g)||[]).length!==(t.match(/}/g)||[]).length)out.push('CSS e { } milche na')}
+    }else if(ext==='css'){const t=text.replace(/\/\*[\s\S]*?\*\//g,'').replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,'');if((t.match(/{/g)||[]).length!==(t.match(/}/g)||[]).length)out.push('CSS braces { } do not match')}
   }catch(e){if(!okErr(e))out.push('Syntax error: '+e.message)}
   return out.map(x=>path+': '+x).concat(scanSecrets(path,text).map(x=>path+': SECRET? '+x));
 }

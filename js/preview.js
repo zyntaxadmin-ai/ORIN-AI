@@ -17,7 +17,7 @@ async function buildPreview(c,entry){
     try{const r=await fetch('https://api.github.com/repos/'+R+'/contents/'+enc(p)+'?ref='+encodeURIComponent(B),{headers:{Authorization:'Bearer '+S.gh.token,Accept:'application/vnd.github.raw+json'}});if(!r.ok)return null;const b=await r.blob();if(b.size>2.5e6)return null;
       return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b)})}catch(e){return null}};
   const cssUrls=async(css,base)=>{const m=[...css.matchAll(/url\(\s*(['"]?)([^)'"]+)\1\s*\)/g)].filter(x=>isRel(x[2].trim()));for(const x of m){const u=await bin(resolveP(base,x[2].trim()));if(u)css=css.split(x[0]).join('url('+u+')')}return css};
-  let html=await text(entry);if(html==null)throw new Error('Entry HTML pai ni: '+entry);
+  let html=await text(entry);if(html==null)throw new Error('Entry HTML not found: '+entry);
   const dir=entry.includes('/')?entry.slice(0,entry.lastIndexOf('/')+1):'';
   const files={};
   async function repl(re,fn){const ms=[...html.matchAll(re)];for(const m of ms){const r=await fn(m);if(r!=null)html=html.replace(m[0],()=>r)}}
@@ -69,11 +69,11 @@ function sliceRead(x,a){
 }
 async function readFull(c,p){
   const d=dr(c),f=d.files[p];
-  if(f){if(f.del)throw new Error('File draft e deleted');if(f.bin)throw new Error('Binary file, porte parbo na');return f.content}
+  if(f){if(f.del)throw new Error('File is deleted in the draft');if(f.bin)throw new Error('Binary file, cannot be read');return f.content}
   const t=await getTree();if(!t.trunc&&!t.paths.has(p))throw new Error('File not found: '+p);
   const ck=S.repo.full+'@'+S.repo.branch+':'+p;if(RFC.has(ck))return RFC.get(ck);
   const txt=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true});
-  if(txt.includes('\u0000'))throw new Error('Binary file, porte parbo na');
+  if(txt.includes('\u0000'))throw new Error('Binary file, cannot be read');
   if(RFC.size>=60)RFC.delete(RFC.keys().next().value);
   RFC.set(ck,txt);return txt;
 }
