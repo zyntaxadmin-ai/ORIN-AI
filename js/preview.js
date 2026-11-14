@@ -3,7 +3,10 @@
 /* ---- live preview ---- */
 const MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',ico:'image/x-icon',woff:'font/woff',woff2:'font/woff2',ttf:'font/ttf',otf:'font/otf',json:'application/json',css:'text/css'};
 const mimeOf=p=>MIME[((p.match(/\.([a-z0-9]+)$/i)||[])[1]||'').toLowerCase()]||'application/octet-stream';
-let pvc=null,pvEntry='',pvErrs=[],pvMode=0;
+let pvc=null,pvEntry='',pvErrs=[],pvMode=0,pvHtml=null,pvN=0;
+/* the preview runs in preview.html (own page, no CSP) inside the sandboxed iframe: load it, wait for its "ready" message, then send the project html */
+function setPreview(html){pvHtml=html;$('pvf').src='preview.html?v='+(++pvN)}
+function closePreviewFrame(){pvHtml=null;$('pvf').src='preview.html?v='+(++pvN)}
 const isRel=u=>u&&!/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(u);
 const resolveP=(base,ref)=>{try{return decodeURIComponent(new URL(ref.split('#')[0].split('?')[0],'http://p/'+base).pathname.slice(1))}catch(e){return ''}};
 function pickEntry(d){const h=Object.keys(d.files).filter(p=>/\.html?$/i.test(p)&&!d.files[p].del).sort((a,b)=>a.split('/').length-b.split('/').length);return h[0]||''}
@@ -33,11 +36,13 @@ async function buildPreview(c,entry){
 async function openPreview(c,entry){
   pvc=c;pvEntry=entry||pickEntry(c.draft)||'index.html';pvErrs=[];
   $('pv').classList.add('on');$('pvt').textContent=pvEntry;renderPvErrs();
-  try{$('pvf').srcdoc=await buildPreview(c,pvEntry)}catch(e){$('pvf').srcdoc='<p style="font:16px sans-serif;padding:16px">'+esc(e.message)+'</p>'}
+  try{setPreview(await buildPreview(c,pvEntry))}catch(e){setPreview('<p style="font:16px sans-serif;padding:16px">'+esc(e.message)+'</p>')}
 }
 function renderPvErrs(){const e=$('pve');if(!pvErrs.length){e.classList.remove('on');e.innerHTML='';return}e.classList.add('on');e.innerHTML=pvErrs.slice(0,8).map(x=>'<div>'+esc(x)+'</div>').join('')+'<button class="btn sm" id="pvs">'+ico('chat',15)+'AI ke fix korte bolo</button>'}
 addEventListener('message',e=>{
-  const m=e.data;if(!m||!m.orin||e.source!==$('pvf').contentWindow)return;
+  const m=e.data;
+  if(m&&m.orinPreviewReady&&e.source===$('pvf').contentWindow){if(pvHtml!=null)e.source.postMessage({orinPreviewHtml:pvHtml},'*');return}
+  if(!m||!m.orin||e.source!==$('pvf').contentWindow)return;
   if(m.t==='err'){if(!pvErrs.includes(m.m)&&pvErrs.length<20){pvErrs.push(m.m);renderPvErrs()}}
   else if(m.t==='nav'&&pvc&&pvc.draft){const p=m.h;if(/\.html?$/i.test(p)||p===''||p.endsWith('/'))openPreview(pvc,p===''||p.endsWith('/')?p+'index.html':p);else toast('Ei link preview te khule na')}
 });

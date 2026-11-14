@@ -50,6 +50,7 @@ No build step, no framework, no server. Plain HTML, CSS and JavaScript files tha
 | --- | --- |
 | `index.html` | The page: HTML and the list of scripts to load (order matters) |
 | `css/app.css` | All styles |
+| `preview.html`, `js/preview-frame.js` | Empty page (no CSP, by design) that the sandboxed live-preview iframe loads; the draft HTML is sent to it with `postMessage` |
 | `js/core.js` | State, storage, helpers, markdown, chat list |
 | `js/cloud.js` | Cloud sync and login (Supabase URL and publishable key are here) |
 | `js/providers.js` | AI provider calls and streaming |
@@ -114,6 +115,15 @@ Open the live link in Chrome and choose **Install app** (or **Add to Home screen
 - If this is only for you or a few people, turn off **Allow new users to sign up** in Supabase (**Authentication → Sign In / Providers**) and add users manually.
 - Images and PDFs are kept in memory for the current session only. They are not saved to the device or the cloud.
 - Logging out clears local data from that device. Your data stays in the cloud.
+
+## Content Security Policy
+
+`index.html` carries a CSP `<meta>` (GitHub Pages cannot set headers): scripts only from this site (no inline scripts or `on…=` handlers), no plugins, `base-uri`/`form-action` limited to self. This blocks injected inline script, e.g. from a bad markdown/HTML string.
+
+- `'unsafe-eval'` is needed only because the pre-push check parses your draft JS with `new Function` (it is never run).
+- `connect-src` still allows any `https:` and localhost URLs, because providers use URLs you type yourself. So the CSP does **not** stop a script from sending data out; it stops script from being injected in the first place.
+- The live preview runs your draft in a sandboxed iframe (no `allow-same-origin`) that loads `preview.html`, which has no CSP so the draft's own inline scripts and CDN libraries work. The draft cannot read the app's storage, keys or DOM.
+- `npm run`-free check: `node scripts/check.js` (also run by the `Check` workflow) fails if the CSP is weakened, an inline script/handler is added, or a page/script is missing from `sw.js`.
 
 ## Known limitations
 

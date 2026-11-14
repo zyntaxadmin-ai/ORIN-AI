@@ -134,7 +134,7 @@ document.addEventListener('click',e=>{
   else if(d.act==='exp'){const a=document.createElement('a');const ex=JSON.parse(JSON.stringify(Object.assign({},S,{cloud:undefined}),strip));ex.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text===undefined&&FT.has(f.id))f.text=FT.get(f.id)})));a.href=URL.createObjectURL(new Blob([JSON.stringify(ex)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));S.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text!==undefined){fput(f.id,f.text);delete f.text}})));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
 });
-$('pvx').innerHTML=IC.x;$('pvx').onclick=()=>{$('pv').classList.remove('on');$('pvf').srcdoc=''};
+$('pvx').innerHTML=IC.x;$('pvx').onclick=()=>{$('pv').classList.remove('on');closePreviewFrame()};
 $('pvr').onclick=()=>{if(pvc&&pvc.draft)openPreview(pvc,pvEntry)};
 $('pvd').onclick=()=>{pvMode=(pvMode+1)%3;const w=[['Phone','390px'],['Tablet','768px'],['Desktop','100%']][pvMode];$('pvd').textContent=w[0];$('pvf').style.width=w[1]};$('pvf').style.width='390px';
 $('pve').addEventListener('click',e=>{if(e.target.closest('#pvs')){const t='Preview te ei error gulo ashche, fix koro:\n- '+pvErrs.slice(0,8).join('\n- ');$('pvx').click();$('box').value=t;if(!busy)send()}});
