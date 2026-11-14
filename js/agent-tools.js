@@ -48,7 +48,7 @@ async function tool(c,name,a){
     return 'Created '+j.full_name+' (branch '+S.repo.branch+') and selected it.';
   }
   if(name==='search_attachment'||name==='read_attachment'){
-    const fs=chatFiles(c).filter(f=>!a.name||f.name===a.name);if(!fs.length)throw new Error('Attached file pai ni'+(a.name?' ('+a.name+')':''));
+    const fs=chatFiles(c).filter(f=>!a.name||f.name===a.name);if(!fs.length)throw new Error('No attached file found'+(a.name?' ('+a.name+')':''));
     const f=fs[fs.length-1];
     if(name==='search_attachment'){const r=retrieveChunks(f.id,f.text,String(a.query||''),14000);return f.name+' ('+r.ix.lines+' lines) matches:\n'+r.out}
     const ls=f.text.split('\n'),a0=Math.max(1,parseInt(a.start_line,10)||1),b0=Math.min(ls.length,a0+399,parseInt(a.end_line,10)||a0+99);
@@ -67,13 +67,13 @@ async function tool(c,name,a){
       if(x.includes('\u0000'))throw new Error('Binary file');
       return sliceRead(x,a);
     }
-    const q=String(a.query||'').trim();if(!q)throw new Error('query khali');
+    const q=String(a.query||'').trim();if(!q)throw new Error('query is empty');
     const j=await gh('/search/code?q='+encodeURIComponent(q+' repo:'+XR)+'&per_page=12',{accept:'application/vnd.github.text-match+json'});
     return (j.items||[]).map(x=>x.path).join('\n')||'No matches';
   }
   if(name==='save_repo_notes'){const n=String(a.notes||'').slice(0,2500);S.repoNotes=Object.assign({},S.repoNotes);S.repoNotes[S.repo.full]=n;rawSave();return 'Notes saved ('+n.length+' chars)'}
   if(name==='search_code'){
-    const q=String(a.query||'').trim();if(!q)throw new Error('query khali');
+    const q=String(a.query||'').trim();if(!q)throw new Error('query is empty');
     {
       const t0=await getTree(),d0=dr(c),pre=String(a.path||'').replace(/^\/+|\/+$/g,''),ps=new Set(t0.paths);
       for(const [pp,f] of Object.entries(d0.files)){if(f.del)ps.delete(pp);else if(!f.bin)ps.add(pp)}
@@ -94,7 +94,7 @@ async function tool(c,name,a){
     return it.map(x=>x.path+(x.text_matches?'\n'+x.text_matches.slice(0,2).map(m=>'  > '+String(m.fragment||'').replace(/\s+/g,' ').slice(0,200)).join('\n'):'')).join('\n');
   }
   const RF='/repos/'+S.repo.full;
-  if(name==='set_tasks'){const t=(Array.isArray(a.tasks)?a.tasks:[]).map(x=>String(x).slice(0,200)).filter(Boolean).slice(0,30);if(!t.length)throw new Error('tasks khali');c.tasks=t.map(x=>({t:x,done:false}));rawSave();return 'Checklist saved ('+t.length+' tasks)'}
+  if(name==='set_tasks'){const t=(Array.isArray(a.tasks)?a.tasks:[]).map(x=>String(x).slice(0,200)).filter(Boolean).slice(0,30);if(!t.length)throw new Error('tasks is empty');c.tasks=t.map(x=>({t:x,done:false}));rawSave();return 'Checklist saved ('+t.length+' tasks)'}
   if(name==='complete_task'){const i=parseInt(a.index,10)-1;if(!c.tasks||!c.tasks[i])throw new Error('No task with that number');c.tasks[i].done=true;rawSave();return 'Task '+(i+1)+' done. Remaining: '+c.tasks.filter(x=>!x.done).length}
   if(name==='enable_pages'){
     let pg=null;try{pg=await gh(RF+'/pages')}catch(e){}
@@ -241,8 +241,8 @@ async function tool(c,name,a){
     for(const m of [...c.msgs].reverse()){if(m.role==='user'&&m.imgs&&m.imgs.some(i=>/^image\//.test(i.mime))){m.imgs.filter(i=>/^image\//.test(i.mime)).forEach(i=>all.push(i));break}}
     if(!all.length)throw new Error('No image is attached to this chat');
     const w=String(a.which||'1'),im=/^\d+$/.test(w)?all[+w-1]:all.find(i=>i.name===w);
-    if(!im)throw new Error('Oi attachment pai ni');
-    if(im.data.length>2.5e6)throw new Error('Image onek boro (max ~1.8MB)');
+    if(!im)throw new Error('That attachment was not found');
+    if(im.data.length>2.5e6)throw new Error('Image is too large (max ~1.8MB)');
     const t=await getTree();d.files[p]={bin:im.data,mime:im.mime,ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Staged binary '+p+' ('+Math.round(im.data.length*0.75/1024)+' KB)';
   }
@@ -253,7 +253,7 @@ async function tool(c,name,a){
     if(!await ask('Generate an image?','The assistant wants to generate an image with '+S.imgcfg.model+'. This uses your API credits.\n\n"'+pr.slice(0,150)+'"\nSaves to '+p,'Generate'))throw new Error('The user declined this action');
     const pic=await genImage(pr),b=String(pic).split(',')[1];
     if(!b||!/^data:image\//.test(pic))throw new Error('Could not get the image (CORS or format issue)');
-    if(b.length>2.5e6)throw new Error('Image onek boro');
+    if(b.length>2.5e6)throw new Error('Image is too large');
     const t=await getTree();d.files[p]={bin:b,mime:'image/jpeg',ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Generated and staged '+p+' ('+Math.round(b.length*0.75/1024)+' KB). Use it in the project (e.g. <img src="'+p+'">).';
   }
@@ -267,7 +267,7 @@ async function tool(c,name,a){
     return (l.length?l.slice(0,400).join('\n'):(t.empty?'(repo empty)':'(no files)'))+(l.length>400?'\n... '+(l.length-400)+' more':'')+(t.trunc?'\n(tree truncated by GitHub)':'');
   }
   if(name==='read_files'){
-    const ps=(Array.isArray(a.paths)?a.paths:[]).map(x=>String(x)).slice(0,12);if(!ps.length)throw new Error('paths khali');
+    const ps=(Array.isArray(a.paths)?a.paths:[]).map(x=>String(x)).slice(0,12);if(!ps.length)throw new Error('paths is empty');
     const per=Math.max(2500,Math.floor(30000/ps.length));let out='';
     for(const q of ps){
       try{const pp=okPath(q),x=await readFull(c,pp);out+='\n=== '+pp+' ('+x.split('\n').length+' lines) ===\n'+(x.length>per?x.slice(0,per)+'\n[... cut at '+per+' chars of '+x.length+'; use read_file with start_line for the rest]':x)+'\n'}
@@ -314,7 +314,7 @@ async function tool(c,name,a){
   }
   if(name==='write_file'){
     if(typeof a.content!=='string')throw new Error('content is required');
-    if(a.content.length>300000)throw new Error('File onek boro (max 300KB)');
+    if(a.content.length>300000)throw new Error('File is too large (max 300KB)');
     const t=await getTree();
     if(t.paths.has(p)){let o=null;try{o=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true})}catch(e){}
       if(o!==null&&o.trimEnd()===a.content.trimEnd()){delete d.files[p];rawSave();return 'NO CHANGE: new content is identical to the current file, nothing staged. Tell the user the file already looks like this.'}}
@@ -322,7 +322,7 @@ async function tool(c,name,a){
     return 'Staged '+p+' ('+a.content.split('\n').length+' lines)'+lintNote(p,a.content);
   }
   if(name==='edit_file'){
-    const o=String(a.old_text||'');if(!o)throw new Error('old_text khali');
+    const o=String(a.old_text||'');if(!o)throw new Error('old_text is empty');
     const cur=await readFull(c,p),n=cur.split(o).length-1;
     if(n!==1)throw new Error(n?'old_text matches '+n+' places, make it longer':'old_text not found in file');
     if(o===String(a.new_text||''))throw new Error('old_text and new_text are the same, nothing to change');
@@ -330,7 +330,7 @@ async function tool(c,name,a){
     return 'Edited '+p+lintNote(p,nc);
   }
   if(name==='edit_many'){
-    const es=Array.isArray(a.edits)?a.edits:[];if(!es.length)throw new Error('edits khali');
+    const es=Array.isArray(a.edits)?a.edits:[];if(!es.length)throw new Error('edits is empty');
     let cur=await readFull(c,p);
     es.forEach((e,i)=>{const o=String(e&&e.old_text||'');if(!o)throw new Error('edit #'+(i+1)+': old_text is empty');const n=cur.split(o).length-1;if(n!==1)throw new Error('edit #'+(i+1)+': '+(n?'old_text matches '+n+' places':'old_text not found in file')+' (no changes applied)');cur=cur.replace(o,()=>String(e.new_text||''))});
     const t=await getTree();d.files[p]={content:cur,ex:t.paths.has(p),bs:t.shas[p]};rawSave();

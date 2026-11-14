@@ -6,7 +6,7 @@ async function inflate(u8){const r=new Blob([u8]).stream().pipeThrough(new Decom
 async function zipList(file){
   const tail=new DataView(await file.slice(Math.max(0,file.size-66000)).arrayBuffer());let i=tail.byteLength-22;
   for(;i>=0;i--)if(tail.getUint32(i,true)===0x06054b50)break;
-  if(i<0)throw new Error('Valid zip na');
+  if(i<0)throw new Error('Not a valid zip file');
   const cnt=tail.getUint16(i+10,true),cdSize=tail.getUint32(i+12,true),cdOff=tail.getUint32(i+16,true);
   if(cdOff===0xffffffff||cnt===0xffff)throw new Error('zip64 is not supported');
   const cd=new DataView(await file.slice(cdOff,cdOff+cdSize).arrayBuffer()),dec=new TextDecoder(),out=[];let p=0;
@@ -42,8 +42,8 @@ async function dirToText(list){
 async function addDir(list){
   if(!list.length)return;if(pend.length>=10){toast('You can attach up to 10 files');return}
   const nm=((list[0].webkitRelativePath||'').split('/')[0]||'folder')+'/';
-  toast('Folder pora hocche…');const r=await dirToText(list);
-  if(!r.n){toast('Porar moto text file pai ni');return}
+  toast('Reading folder…');const r=await dirToText(list);
+  if(!r.n){toast('No readable text files found');return}
   pend.push({kind:'text',name:nm,text:r.text,size:r.text.length,tok:etok(r.text)});renderTray();
   toast(nm+': '+r.n+(r.n===1?' file':' files')+(r.skipped?' ('+r.skipped+' skipped: binary, large or node_modules)':''));
 }
@@ -53,7 +53,7 @@ const colIdx=r=>{let n=0;for(const ch of (r.match(/^[A-Z]+/)||[''])[0])n=n*26+ch
 const csvq=v=>/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
 async function officeToText(file){
   const es=await zipList(file),by=n=>es.find(e=>e.name===n),nm=file.name.toLowerCase();
-  if(nm.endsWith('.docx')){const e=by('word/document.xml');if(!e)throw new Error('docx na');return xmlDec((await zipStr(file,e)).replace(/<w:tab\/>/g,'\t').replace(/<w:br\/>/g,'\n').replace(/<\/w:p>/g,'\n').replace(/<[^>]+>/g,'')).replace(/\n{3,}/g,'\n\n')}
+  if(nm.endsWith('.docx')){const e=by('word/document.xml');if(!e)throw new Error('Not a valid .docx file');return xmlDec((await zipStr(file,e)).replace(/<w:tab\/>/g,'\t').replace(/<w:br\/>/g,'\n').replace(/<\/w:p>/g,'\n').replace(/<[^>]+>/g,'')).replace(/\n{3,}/g,'\n\n')}
   if(nm.endsWith('.pptx')){
     const sl=es.filter(e=>/^ppt\/slides\/slide\d+\.xml$/.test(e.name)).sort((a,b)=>numSort(a.name,b.name));let o='';
     for(const [i,e] of sl.entries())o+='--- Slide '+(i+1)+' ---\n'+xmlDec((await zipStr(file,e)).replace(/<\/a:p>/g,'\n').replace(/<[^>]+>/g,''))+'\n';return o;
@@ -179,6 +179,6 @@ async function run(c,list){
       c.msgs.push({role:'assistant',content:out,by:p.name,skipped:fails.slice(),src:srcOf(c),u:mkUsage(p,history,out)});done=true;break;
     }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,skipped:[],src:srcOf(c),u:mkUsage(p,history,live)});done=true;break}fails.push(p.name+': '+e.message)}
   }
-  if(!done&&!stopped)c.msgs.push({role:'error',content:'Sob provider fail korse.\n'+fails.join('\n')});
+  if(!done&&!stopped)c.msgs.push({role:'error',content:'All providers failed.\n'+fails.join('\n')});
   busy=false;live='';setBusyUI(false);save();render();
 }

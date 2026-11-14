@@ -149,20 +149,20 @@ async function addFiles(list){
     if(pend.length>=10){toast('You can attach up to 10 files');break}
     try{
       if(f.type.startsWith('image/'))pend.push({kind:'image',name:f.name,mime:'image/jpeg',data:await readImg(f)});
-      else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){if(f.size>10e6)toast(f.name+' onek boro (max 10MB)');else pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)})}
+      else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){if(f.size>10e6)toast(f.name+' is too large (max 10MB)');else pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)})}
       else if(/\.zip$/i.test(f.name)){
-        if(f.size>150e6){toast(f.name+' onek boro (max 150MB)');continue}
-        const r=await zipToText(f);if(!r.n){toast(f.name+': porar moto text file pai ni');continue}
+        if(f.size>150e6){toast(f.name+' is too large (max 150MB)');continue}
+        const r=await zipToText(f);if(!r.n){toast(f.name+': no readable text files found');continue}
         pend.push({kind:'text',name:f.name,text:r.text,size:r.text.length,tok:etok(r.text)});toast(f.name+': read '+r.n+(r.n===1?' file':' files')+(r.skipped?' ('+r.skipped+' skipped: binary, large or node_modules)':''));
       }
       else if(/\.(docx|xlsx|pptx)$/i.test(f.name)){
-        if(f.size>60e6){toast(f.name+' onek boro');continue}
-        const t=await officeToText(f);if(!t.trim()){toast(f.name+': kono text pai ni');continue}
+        if(f.size>60e6){toast(f.name+' is too large');continue}
+        const t=await officeToText(f);if(!t.trim()){toast(f.name+': no text found');continue}
         pend.push({kind:'text',name:f.name,text:t,size:t.length,tok:etok(t)});
       }
-      else if(f.size>MAXF)toast(f.name+' onek boro (max '+fmtSz(MAXF)+')');
+      else if(f.size>MAXF)toast(f.name+' is too large (max '+fmtSz(MAXF)+')');
       else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': this file type isn’t supported');continue}pend.push({kind:'text',name:f.name,text:t,size:f.size,tok:etok(t)})}
-    }catch(e){toast(f.name+' porte parlam na')}
+    }catch(e){toast(f.name+' could not be read')}
   }
   renderTray();
 }
