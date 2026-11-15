@@ -85,7 +85,8 @@ function pop(anchor,html){
 function modelMenu(){
   const l=S.providers.filter(p=>p.on&&p.model&&p.url);
   return '<button class="pi" data-pk="auto"><span><b>Auto</b><small>Uses your fallback order</small></span>'+(!S.pick?'<i>'+ico('check',16)+'</i>':'')+'</button>'+
-  l.map(p=>'<button class="pi" data-pk="'+p.id+'"><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></span>'+(S.pick===p.id?'<i>'+ico('check',16)+'</i>':'')+'</button>').join('');
+  l.map(p=>'<button class="pi" data-pk="'+p.id+'"><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></span>'+(S.pick===p.id?'<i>'+ico('check',16)+'</i>':'')+'</button>').join('')+
+  (S.pick?'<button class="pi" data-pkfb="1" role="switch" aria-checked="'+(S.pickFb?'true':'false')+'"><span><b>If it fails, use my other providers</b><small>'+(S.pickFb?'On: this model first, then the rest':'Off: only this model')+'</small></span><i>'+(S.pickFb?ico('check',16):'')+'</i></button>':'');
 }
 let rec=null,recOn=false;
 function toggleMic(){
@@ -114,7 +115,8 @@ function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">L
 let curCtl=null,stopped=false;
 function setBusyUI(on){const b=$('sendb');b.innerHTML=on?IC.stop:IC.up;b.setAttribute('aria-label',on?'Stop':'Send')}
 function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>ok(r.result.split(',')[1]);r.readAsDataURL(f)})}
-function provList(){let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=[o]}return l}
+/* providers to use for a message: all enabled ones in your order; a pinned model goes alone, or first when "if it fails, use my other providers" is on */
+function provList(){let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=S.pickFb?[o].concat(l.filter(p=>p!==o)):[o]}return l}
 const qa=t=>esc(t||'').replace(/"/g,'&quot;');
 const srcOf=c=>{const u=c.msgs[c.msgs.length-1];return u&&u.web&&u.web.r?u.web.r.map(x=>({title:x.title,url:x.url})):undefined};
 const webCtx=m=>m.web&&m.web.r&&m.web.r.length?'\n\n[Web search results for "'+m.web.q+'" (today: '+new Date().toDateString()+'). Use them if helpful and cite as [n].]\n'+m.web.r.map((x,i)=>'['+(i+1)+'] '+x.title+' ('+x.url+')\n'+x.content).join('\n\n'):'';
@@ -173,14 +175,17 @@ async function run(c,list){
   liveBy=null;
   try{await ensureSummary(c,list)}catch(e){}
   const history=buildHistory(c);
-  const fails=[];let done=false;
-  for(const p of list){
-    if(stopped)break;
-    try{
-      liveBy={by:p.name,model:p.model};live='';shown=0;const out=await callProvider(p,history,t=>{live=t;draw()});await drain();
-      c.msgs.push({role:'assistant',content:out,by:p.name,model:p.model,skipped:fails.slice(),src:srcOf(c),u:mkUsage(p,history,out),cut:lastCut||undefined});done=true;break;
-    }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,model:p.model,skipped:[],src:srcOf(c),u:mkUsage(p,history,live),cut:1});done=true;break}fails.push(p.name+': '+e.message)}
-  }
-  if(!done&&!stopped)c.msgs.push({role:'error',content:'All providers failed.\n'+fails.join('\n')});
+  let curP=null;
+  const r=await withFallback(list,async p=>{
+    live='';shown=0;
+    const out=await callProvider(p,history,t=>{live=t;draw()});await drain();
+    return out;
+  },{onStart:p=>{curP=p;liveBy={by:p.name,model:p.model}}});
+  if(r.value!==undefined){
+    const p=r.p;c.msgs.push({role:'assistant',content:r.value,by:p.name,model:p.model,skipped:r.fails.slice(),src:srcOf(c),u:mkUsage(p,history,r.value),cut:lastCut||undefined});
+  }else if(r.stopped){
+    if(live&&curP)c.msgs.push({role:'assistant',content:live,by:curP.name,model:curP.model,skipped:[],src:srcOf(c),u:mkUsage(curP,history,live),cut:1});
+  }else c.msgs.push({role:'error',content:failMsg(r.fails,r.kinds)});
+  setLiveNote('');
   busy=false;live='';shown=0;setBusyUI(false);save();render();
 }

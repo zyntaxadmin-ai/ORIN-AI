@@ -17,6 +17,7 @@ function settingsMenu(){
    row('bk',ico('save',20),'Backup','Export / Import');
 }
 function drawSheet(){
+  let hi=null;   /* health of the provider row being drawn */
   const b=$('sbody');$('sheet').querySelector('h1').textContent=view==='repo'?'GitHub':'Settings';
   if(view==='repo'){
     const has=!!(S.gh&&S.gh.token);
@@ -48,10 +49,11 @@ function drawSheet(){
   if(!spage||!SP[spage]){$('sheet').querySelector('h1').textContent='Settings';b.innerHTML=settingsMenu();return}
   $('sheet').querySelector('h1').textContent=SP[spage][0];
   if(spage==='prov')b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Providers are tried from top to bottom. If one fails, the next one takes over.</p>'+
-   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+(needKey(p)?' · <span class="nk">no key</span>':'')+'</small></div>'+
-   '<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
+   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+(needKey(p)?' · <span class="nk">no key</span>':'')+'</small>'+((hi=healthInfo(p))?'<small class="ph '+hi.cls+'">'+esc(hi.txt)+'</small>':'')+'</div>'+
+   (hi?'<button class="sm-ib" data-hr="'+i+'" aria-label="Retry now" title="Retry now">'+ico('refresh',16)+'</button>':'')+'<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
    '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">No providers yet.</p>')+
-   '<div class="row"><button class="btn" data-act="padd">Add provider</button></div></div>';
+   '<div class="row"><button class="btn" data-act="padd">Add provider</button></div></div>'+
+   (()=>{const c=fbCfg();return '<div class="sec"><h3>Fallback rules</h3><p class="h">Temporary errors (rate limit, overloaded, network) are tried again a few times. A provider that keeps failing rests for a while and is tried last. A rejected key or a missing model rests until you fix it, or press Retry now.</p><label>Retries on temporary errors (0 to 5)</label><input class="f" id="fbr" inputmode="numeric" value="'+c.retries+'"><label>Rest time after repeated failures (minutes)</label><input class="f" id="fbc" inputmode="numeric" value="'+c.cool+'"><label>First reply timeout (seconds)</label><input class="f" id="fbt" inputmode="numeric" value="'+c.ttfb+'"></div>'})();
   else if(spage==='sys')b.innerHTML='<div class="sec"><h3>System prompt</h3><p class="h">Instructions the AI receives at the start of every chat (optional).</p><textarea class="f" id="sp" rows="8">'+esc(S.system)+'</textarea></div>'+
     '<div class="sec"><h3>Long chats</h3><div class="row" style="margin-top:0;align-items:center;gap:10px"><p class="h" style="flex:1;margin:0">Summarize old messages automatically after about 36 messages, so the AI keeps the context and each message sends fewer tokens. Your chat on screen is not changed.</p><button class="tgl '+(S.autosum===false?'':'on')+'" data-act="sumtg" role="switch" aria-checked="'+(S.autosum===false?'false':'true')+'" aria-label="Summarize long chats"></button></div></div>'+
     '<div class="sec"><h3>Creativity (temperature)</h3><p class="h">Low is precise and steady (good for code and facts). High is more varied and creative (good for stories and ideas). Leave it on Default if unsure. It applies to normal chat, not to the GitHub agent. Claude models cap it at 1.</p><div class="row" style="margin-top:6px;align-items:center;gap:10px"><input type="range" id="tmp" min="0" max="2" step="0.1" value="'+(S.temp==null?1:+S.temp)+'" aria-label="Temperature" style="flex:1"><b id="tmv" style="min-width:56px;text-align:right">'+(S.temp==null?'Default':+S.temp)+'</b><button class="btn ghost sm" data-act="tmpreset">Default</button></div></div>';
@@ -62,6 +64,7 @@ function drawSheet(){
   else if(spage==='acct')b.innerHTML=cloudHTML();
   else if(spage==='bk')b.innerHTML='<div class="sec"><h3>Backup</h3><p class="h">Save your providers, keys and chats to one file, then import it on another device.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div><p class="h" style="margin-top:10px">API keys are stored only in this browser, and they are included in the backup file. Don’t share it with anyone.</p></div>';
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
+  for(const [id,k] of [['fbr','retries'],['fbc','cool'],['fbt','ttfb']]){const el=$(id);if(el)el.oninput=()=>{S.fb=S.fb||{};S.fb[k]=el.value.trim();rawSave()}}
   const tmp=$('tmp');if(tmp)tmp.oninput=()=>{S.temp=+tmp.value;$('tmv').textContent=tmp.value;save()};
   const gt2=$('gt');if(gt2)gt2.oninput=()=>{S.gh={token:gt2.value.trim()};save()};
   const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
@@ -78,6 +81,8 @@ document.addEventListener('click',async e=>{
   else if(d.rmp!==undefined){pend.splice(+d.rmp,1);renderTray()}
   else if(d.add){closePop();$(d.add).click()}
   else if(d.tog){closePop();d.tog==='web'?toggleWeb():toggleImg()}
+  else if(d.pkfb){S.pickFb=!S.pickFb;rawSave();t.setAttribute('aria-checked',S.pickFb?'true':'false');t.querySelector('small').textContent=S.pickFb?'On: this model first, then the rest':'Off: only this model';t.querySelector('i').innerHTML=S.pickFb?ico('check',16):''}
+  else if(d.hr!==undefined){hreset(S.providers[+d.hr]);drawSheet()}
   else if(d.pk!==undefined){S.pick=d.pk==='auto'?null:d.pk;rawSave();closePop();updatePill()}
   else if(d.lang){S.lang=d.lang;rawSave();drawSheet()}
   else if(d.dv!==undefined){dview[d.dv]=!dview[d.dv];render();if(dview[d.dv]){const c=chat(),f=c&&c.draft&&c.draft.files[d.dv];if(f&&f.ex&&!(okey(c.draft,d.dv) in origC))loadOrig(c.draft,d.dv).then(render)}}

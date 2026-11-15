@@ -13,7 +13,7 @@ function cv(p,m){
 const tempFor=p=>{const t=S.temp;if(t===undefined||t===null||t===''||isNaN(+t))return null;const v=Math.max(0,+t);return p.type==='anthropic'?Math.min(1,v):Math.min(2,v)};
 /* opts: {sys: replaces the Settings system prompt, notemp: ignore the temperature setting} (used by the summary call) */
 async function callProvider(p,history,onDelta,opts){
-  const ctl=new AbortController();curCtl=ctl;lastUsage=null;lastCut=false;let to=setTimeout(()=>ctl.abort(),120000);
+  const ctl=new AbortController();curCtl=ctl;lastUsage=null;lastCut=false;let to=setTimeout(()=>ctl.abort(),fbCfg().ttfb*1000);
   const sys=(opts&&opts.sys!=null?opts.sys:S.system).trim();const base=p.url.replace(/\/+$/,'');
   try{
     let url,headers={'Content-Type':'application/json'},body;
@@ -39,7 +39,7 @@ async function callProvider(p,history,onDelta,opts){
       const j0=await r.clone().json().catch(()=>null),e0=Array.isArray(j0)?j0[0]:j0,x0=e0&&e0.error,m0=x0?(typeof x0==='string'?x0:x0.message||''):'';
       if(r.status===400&&/temperature/i.test(m0)){delete body.temperature;if(body.generationConfig)delete body.generationConfig;r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal})}
     }
-    if(!r.ok){const j=await r.json().catch(()=>({}));const e=Array.isArray(j)?j[0]:j;const x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw httpErr(r,j)}
     const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
     for(;;){
       clearTimeout(to);to=setTimeout(()=>ctl.abort(),60000);
@@ -50,7 +50,7 @@ async function callProvider(p,history,onDelta,opts){
         if(!ln.startsWith('data:'))continue;
         const d=ln.slice(5).trim();if(!d||d==='[DONE]')continue;
         let j;try{j=JSON.parse(d)}catch(_){continue}
-        if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
+        if(j.error)throw streamErr(j.error);
         /* reply was cut off because it hit the output limit: the chat then offers a Continue button */
         if(p.type==='anthropic'){if(j.type==='message_delta'&&j.delta&&j.delta.stop_reason==='max_tokens')lastCut=true}
         else if(p.type==='gemini'){const fr=j.candidates&&j.candidates[0]&&j.candidates[0].finishReason;if(fr==='MAX_TOKENS')lastCut=true}
@@ -64,11 +64,11 @@ async function callProvider(p,history,onDelta,opts){
         if(t){out+=t;onDelta(out)}
       }
     }
-    if(!out)throw new Error('Empty reply');
+    if(!out)throw new ProvErr('Empty reply','empty');
     return out;
   }catch(e){
-    if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout');
-    if(e instanceof TypeError)throw new Error('Network/CORS block');
+    if(e.name==='AbortError'){if(stopped)throw new Error('STOP');throw new ProvErr('No response in time','timeout')}
+    if(e instanceof TypeError)throw new ProvErr('Network/CORS block','net');
     throw e;
   }finally{clearTimeout(to)}
 }
@@ -161,7 +161,7 @@ function retrieveChunks(id,text,query,maxChars){
   return {ix,out:[...pick].sort((a,b)=>a-b).map(i=>'--- lines '+ix.chunks[i].sl+'-'+ix.chunks[i].el+' ---\n'+ix.chunks[i].text).join('\n'),n:pick.size};
 }
 const fbudget=ctx=>Math.floor(ctx*0.55);
-const curCtx=()=>{let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=[o]}return l.length?ctxOf(l[0]):128e3};
+const curCtx=()=>{const l=provList();return l.length?ctxOf(l[0]):128e3};
 function chatFiles(c){const o=[];(c.msgs||[]).forEach(m=>(m.files||[]).forEach(f=>{const t=ftext(f);o.push({id:f.id||f.name,name:f.name,text:t,tok:etok(t)})}));return o}
 const LAZY_TOK=6000,attEnt=new Map();
 function attEntries(id,text){

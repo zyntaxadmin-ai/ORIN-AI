@@ -3,8 +3,7 @@
 let busy=false;
 async function send(){
   const txt=$('box').value.trim();if((!txt&&!pend.length)||busy)return;
-  let list=S.providers.filter(p=>p.on&&p.model&&p.url);
-  if(S.pick){const o=list.find(p=>p.id===S.pick);if(o)list=[o]}
+  let list=provList();
   if(recOn&&rec)rec.stop();
   if(imgMode){if(pend.length){toast('Image mode doesn’t support attachments. Remove them first');return}if(!txt){toast('Describe the image you want');return}if(!imgReady()){toast('Add an image provider in Settings first');spage='img';openSheet();return}}
   else if(!list.length){toast('Add a provider in Settings first');spage='prov';openSheet();return}
@@ -51,7 +50,7 @@ function render(typing){
   {const tu=c.msgs.reduce((a,m)=>{if(m.u){a.i+=m.u.i;a.o+=m.u.o;if(m.u.c!=null){a.c+=m.u.c;a.hc=1}if(m.u.e)a.e=1;a.n++}return a},{i:0,o:0,c:0,n:0});
   if(tu.n>1)h+='<div class="src" style="align-self:center;margin-top:0">Total: ↑'+fmtTok(tu.i)+' ↓'+fmtTok(tu.o)+(tu.e?'~':'')+(tu.hc?' · '+fmtCost(tu.c):'')+'</div>'}
   if(!busy)h+=taskHTML(c)+planHTML(c)+draftHTML(c);
-  if(typing||busy)h+=(busy?liveWho():'')+'<div class="m a" id="liveb">'+liveInner()+'</div>';
+  if(typing||busy)h+=(busy?liveWho()+liveNoteHTML():'')+'<div class="m a" id="liveb">'+liveInner()+'</div>';
   el.innerHTML=h;el.scrollTop=el.scrollHeight;
 }
 let q='';

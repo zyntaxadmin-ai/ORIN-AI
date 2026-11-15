@@ -58,7 +58,7 @@ function agentCall0(p,history,work0,sys){
   return {url,headers,body};
 }
 async function agentCall(p,history,work,sys,onLive){
-  const ctl=new AbortController();curCtl=ctl;let to=setTimeout(()=>ctl.abort(),120000);
+  const ctl=new AbortController();curCtl=ctl;let to=setTimeout(()=>ctl.abort(),fbCfg().ttfb*1000);
   try{
     const {url,headers,body}=agentCall0(p,history,work,sys);const isz=JSON.stringify(body).length;
     if(p.type==='openai'&&/api\.(openai|groq|deepseek|together)\.|openrouter\.ai/.test(p.url))body.stream_options={include_usage:true};
@@ -67,7 +67,7 @@ async function agentCall(p,history,work,sys,onLive){
     const ct=r.headers.get('content-type')||'';
     if(!r.ok||!/event-stream/.test(ct)){
       const j=await r.json().catch(()=>({}));
-      if(!r.ok){const e=Array.isArray(j)?j[0]:j,x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
+      if(!r.ok)throw httpErr(r,j);
       if(p.type==='anthropic'){
         for(const b of j.content||[]){if(b.type==='text')text+=b.text;else if(b.type==='tool_use')calls.push({id:b.id,name:b.name,args:b.input||{}})}
         if(j.usage){const k=j.usage.cache_read_input_tokens||0;us={i:(j.usage.input_tokens||0)+k+(j.usage.cache_creation_input_tokens||0),o:j.usage.output_tokens||0,k}}
@@ -76,7 +76,7 @@ async function agentCall(p,history,work,sys,onLive){
         parts.forEach((x,i)=>{if(x.text&&!x.thought)text+=x.text;if(x.functionCall)calls.push({id:'g'+Date.now().toString(36)+i,name:x.functionCall.name,args:x.functionCall.args||{}})});
         if(jj.usageMetadata)us={i:jj.usageMetadata.promptTokenCount||0,o:(jj.usageMetadata.candidatesTokenCount||0)+(jj.usageMetadata.thoughtsTokenCount||0)};
       }else{
-        const m=j.choices&&j.choices[0]&&j.choices[0].message;if(!m)throw new Error('Empty reply');
+        const m=j.choices&&j.choices[0]&&j.choices[0].message;if(!m)throw new ProvErr('Empty reply','empty');
         text=typeof m.content==='string'?m.content:Array.isArray(m.content)?m.content.map(x=>x.text||'').join(''):'';
         calls=(m.tool_calls||[]).filter(t=>t.function).map(t=>({id:t.id||('c'+Math.random().toString(36).slice(2,9)),name:t.function.name,args:sp(t.function.arguments)}));
         if(j.usage&&j.usage.prompt_tokens!=null)us={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
@@ -93,7 +93,7 @@ async function agentCall(p,history,work,sys,onLive){
           if(!ln.startsWith('data:'))continue;
           const d=ln.slice(5).trim();if(!d||d==='[DONE]')continue;
           let j;try{j=JSON.parse(d)}catch(_){continue}
-          if(j.error)throw new Error((typeof j.error==='string'?j.error:j.error.message)||JSON.stringify(j.error));
+          if(j.error)throw streamErr(j.error);
           if(p.type==='anthropic'){
             if(j.type==='message_start'&&j.message&&j.message.usage){const mu=j.message.usage,k=mu.cache_read_input_tokens||0;us={i:(mu.input_tokens||0)+k+(mu.cache_creation_input_tokens||0),o:mu.output_tokens||0,k}}
             else if(j.type==='message_delta'&&j.usage)us=Object.assign(us||{i:0,o:0},{o:j.usage.output_tokens||0});
@@ -121,12 +121,12 @@ async function agentCall(p,history,work,sys,onLive){
       else if(p.type==='gemini')raw=gp.length?gp:undefined;
       else calls=Object.keys(tc).sort((x,y)=>x-y).map(k=>tc[k]).filter(t=>t.name).map(t=>({id:t.id||('c'+Math.random().toString(36).slice(2,9)),name:t.name,args:sp(t.js)}));
     }
-    if(!text.trim()&&!calls.length)throw new Error('Empty reply');
+    if(!text.trim()&&!calls.length)throw new ProvErr('Empty reply','empty');
     if(!us)us={i:Math.ceil(isz/3),o:Math.ceil((text.length+JSON.stringify(calls).length)/3),e:1};
     return {text,calls,raw,us};
   }catch(e){
-    if(e.name==='AbortError')throw new Error(stopped?'STOP':'Timeout');
-    if(e instanceof TypeError)throw new Error('Network/CORS block');
+    if(e.name==='AbortError'){if(stopped)throw new Error('STOP');throw new ProvErr('No response in time','timeout')}
+    if(e instanceof TypeError)throw new ProvErr('Network/CORS block','net');
     throw e;
   }finally{clearTimeout(to)}
 }
@@ -206,16 +206,15 @@ async function runAgent(c,list){
   try{await ensureSummary(c,list)}catch(e){}
   const history=buildHistory(c,true),work=[],log=[],fails=[],sys=agentSys(c);
   liveLog=log;liveT='';shownT=0;livePn='';
-  let pi=0,final='',by='',mdl='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
+  let last=null,final='',by='',mdl='',done=false,failedAll=false,failList=[],failKinds=[];const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
   try{
     for(let step=0;step<40&&!stopped&&!done&&!failedAll;step++){
-      let res=null;
-      while(pi<list.length&&!stopped){
-        liveBy={by:list[pi].name,model:list[pi].model};try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{liveT=t||'';livePn=pn||'';draw()});by=list[pi].name;mdl=list[pi].model;break}
-        catch(e){if(stopped||e.message==='STOP')break;fails.push(list[pi].name+': '+e.message);pi++}
-      }
-      if(!res){if(!stopped)failedAll=true;break}
-      {const u=res.us,pp=list[pi],k=u.k||0;tot.i+=u.i;tot.o+=u.o;tot.k+=k;if(u.e)tot.e=1;if(pp.pin||pp.pout){tot.c+=((u.i-k+k*0.1)*(+pp.pin||0)+u.o*(+pp.pout||0))/1e6;tot.hc=1}}
+      const r=await withFallback(list,p=>agentCall(p,history,work,sys,(t,pn)=>{liveT=t||'';livePn=pn||'';draw()}),{first:last,onStart:p=>{liveBy={by:p.name,model:p.model}}});
+      r.fails.forEach(f=>fails.push(f));
+      if(r.stopped)break;
+      if(!r.value){failedAll=true;failList=r.fails;failKinds=r.kinds;break}
+      const res=r.value;last=r.p;by=r.p.name;mdl=r.p.model;
+      {const u=res.us,pp=r.p,k=u.k||0;tot.i+=u.i;tot.o+=u.o;tot.k+=k;if(u.e)tot.e=1;if(pp.pin||pp.pout){tot.c+=((u.i-k+k*0.1)*(+pp.pin||0)+u.o*(+pp.pout||0))/1e6;tot.hc=1}}
       if(!res.calls.length){final=res.text;done=true;break}
       work.push({role:'assistant',text:res.text,calls:res.calls,raw:res.raw});
       for(const k of res.calls){
@@ -230,9 +229,9 @@ async function runAgent(c,list){
   if(done)await drain();
   if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Done. Review the draft below.':'Done.'),by,model:mdl,skipped:fails.slice(),log,src,u});
   else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,model:mdl,skipped:[],log,u})}
-  else if(failedAll)c.msgs.push({role:'error',content:'All providers failed. In agent mode the model must support tool calling.\n'+fails.join('\n')});
+  else if(failedAll)c.msgs.push({role:'error',content:failMsg(failList.length?failList:fails,failKinds,true)});
   else c.msgs.push({role:'assistant',content:'Reached the step limit. Type "continue" to keep going.',by,model:mdl,skipped:[],log,u});
-  busy=false;live='';shown=0;liveLog=null;liveT='';shownT=0;livePn='';setBusyUI(false);save();render();
+  setLiveNote('');busy=false;live='';shown=0;liveLog=null;liveT='';shownT=0;livePn='';setBusyUI(false);save();render();
 }
 const logParse=l=>{const m=/^([a-z]+):(.*)$/s.exec(l);return m&&IX[m[1]]?[m[1],m[2]]:[null,String(l).replace(/^[^\w#\s]+\uFE0F?\s*/u,'')]};
 const logTxt=l=>logParse(l)[1];
