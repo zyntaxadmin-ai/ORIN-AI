@@ -55,7 +55,8 @@ No build step, no framework, no server. Plain HTML, CSS and JavaScript files tha
 | File | Purpose |
 | --- | --- |
 | `index.html` | The page: HTML and the list of scripts to load (order matters) |
-| `css/app.css` | All styles |
+| `css/app.css` | All styles (design "Orbit": ink sidebar, cobalt accent, one amber satellite) |
+| `fonts/` | Inter and Poppins, Latin subsets as WOFF, served from the app itself (offline-safe) |
 | `preview.html`, `js/preview-frame.js` | Empty page (no CSP, by design) that the sandboxed live-preview iframe loads; the draft HTML is sent to it with `postMessage` |
 | `js/core.js` | State, storage, helpers, markdown, chat list |
 | `js/cloud.js` | Cloud sync and login (Supabase URL and publishable key are here) |
