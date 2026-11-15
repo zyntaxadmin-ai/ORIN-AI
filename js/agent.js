@@ -209,7 +209,7 @@ async function runAgent(c,list){
   let last=null,final='',by='',mdl='',done=false,failedAll=false,failList=[],failKinds=[];const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
   try{
     for(let step=0;step<40&&!stopped&&!done&&!failedAll;step++){
-      const r=await withFallback(list,p=>agentCall(p,history,work,sys,(t,pn)=>{liveT=t||'';livePn=pn||'';draw()}),{first:last,onStart:p=>{liveBy={by:p.name,model:p.model}}});
+      const r=await withFallback(list,p=>agentCall(p,history,work,sys,(t,pn)=>{liveT=t||'';livePn=pn||'';draw()}),{first:last,onStart:p=>{liveBy={by:p.name,model:p.model}},need:{tools:true,vision:history.some(m=>m.imgs&&m.imgs.length),tok:estTokens(history,sys.length+JSON.stringify(work).length+3500)+3000}});
       r.fails.forEach(f=>fails.push(f));
       if(r.stopped)break;
       if(!r.value){failedAll=true;failList=r.fails;failKinds=r.kinds;break}

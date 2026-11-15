@@ -40,6 +40,7 @@ function drawSheet(){
     '<label>API key</label><input class="f" id="pk" type="password" value="'+esc(p.key||'')+'" autocomplete="off">'+
     '<label>Model name</label><input class="f" id="pm" value="'+esc(p.model||'')+'" placeholder="e.g. llama-3.3-70b-versatile">'+
     '<label>Context window (tokens, optional)</label><input class="f" id="pcx" inputmode="numeric" placeholder="auto: Gemini 1M · Claude 200k · baki 128k" value="'+qa(p.ctx||'')+'">'+
+    '<label>What this model can do (switch off what it cannot)</label><label class="ck"><input type="checkbox" id="pcv" '+(capOn(p,'vision')?'checked':'')+'> Understands images</label><label class="ck"><input type="checkbox" id="pct" '+(capOn(p,'tools')?'checked':'')+'> Supports tool calling (needed for the GitHub agent)</label>'+
     '<label>Price per 1M input tokens $ (optional)</label><input class="f" id="pci" inputmode="decimal" value="'+qa(p.pin||'')+'">'+
     '<label>Price per 1M output tokens $ (optional)</label><input class="f" id="pco" inputmode="decimal" value="'+qa(p.pout||'')+'">'+
     '<div class="row"><button class="btn" data-act="psave">Save</button><button class="btn ghost" data-act="pcancel">Cancel</button>'+(p._new?'':'<button class="btn danger" data-rmed="1">Delete</button>')+'</div></div>';
@@ -49,7 +50,7 @@ function drawSheet(){
   if(!spage||!SP[spage]){$('sheet').querySelector('h1').textContent='Settings';b.innerHTML=settingsMenu();return}
   $('sheet').querySelector('h1').textContent=SP[spage][0];
   if(spage==='prov')b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Providers are tried from top to bottom. If one fails, the next one takes over.</p>'+
-   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+(needKey(p)?' · <span class="nk">no key</span>':'')+'</small>'+((hi=healthInfo(p))?'<small class="ph '+hi.cls+'">'+esc(hi.txt)+'</small>':'')+'</div>'+
+   (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+(needKey(p)?' · <span class="nk">no key</span>':'')+(capOn(p,'vision')?'':' · no images')+(capOn(p,'tools')?'':' · no tools')+'</small>'+((hi=healthInfo(p))?'<small class="ph '+hi.cls+'">'+esc(hi.txt)+'</small>':'')+'</div>'+
    (hi?'<button class="sm-ib" data-hr="'+i+'" aria-label="Retry now" title="Retry now">'+ico('refresh',16)+'</button>':'')+'<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
    '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">No providers yet.</p>')+
    '<div class="row"><button class="btn" data-act="padd">Add provider</button></div></div>'+
@@ -70,7 +71,7 @@ function drawSheet(){
   const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
   ['iu','ik','im','is'].forEach((id,n)=>{const e=$(id);if(e)e.oninput=()=>{S.imgcfg=Object.assign({},S.imgcfg,{[['url','key','model','size'][n]]:e.value.trim()});save()}});
 }
-function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim(),ctx:parseInt($('pcx').value,10)||0,pin:parseFloat($('pci').value)||0,pout:parseFloat($('pco').value)||0}}
+function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim(),ctx:parseInt($('pcx').value,10)||0,pin:parseFloat($('pci').value)||0,pout:parseFloat($('pco').value)||0,cap:(!$('pcv').checked||!$('pct').checked)?Object.assign({},$('pcv').checked?{}:{vision:false},$('pct').checked?{}:{tools:false}):undefined}}
 
 const confirmDelChat=id=>{const c=S.chats.find(x=>x.id===id);return ask('Delete this chat?','“'+(c&&c.title||'This chat')+'” and all of its messages will be permanently deleted.','Delete',true)};
 document.addEventListener('click',async e=>{

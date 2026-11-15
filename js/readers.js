@@ -180,7 +180,7 @@ async function run(c,list){
     live='';shown=0;
     const out=await callProvider(p,history,t=>{live=t;draw()});await drain();
     return out;
-  },{onStart:p=>{curP=p;liveBy={by:p.name,model:p.model}}});
+  },{onStart:p=>{curP=p;liveBy={by:p.name,model:p.model}},need:{vision:history.some(m=>m.imgs&&m.imgs.length),tok:estTokens(history,S.system.length)+2000}});
   if(r.value!==undefined){
     const p=r.p;c.msgs.push({role:'assistant',content:r.value,by:p.name,model:p.model,skipped:r.fails.slice(),src:srcOf(c),u:mkUsage(p,history,r.value),cut:lastCut||undefined});
   }else if(r.stopped){

@@ -59,6 +59,9 @@ function failMsg(fails,kinds,agent){
   if(has('rate'))h.push('Rate limited: wait a minute, then press Retry.');
   if(has('server'))h.push('The provider seems to be down: try again soon.');
   if(has('net'))h.push('Network problem, or the provider blocks browser access (CORS): check your connection and the Base URL.');
+  if(has('capv'))h.push('No provider can read images: turn on "Understands images" for one that can (Settings → Providers → Edit), or remove the images.');
+  if(has('capt'))h.push('No provider has tool calling switched on: turn it on for one that supports it, or add one.');
+  if(has('capc'))h.push('The chat is too big for these models: start a new chat, or raise the Context window of a provider if it is set too low.');
   if(has('ctx'))h.push('The chat is too long for these models: start a new chat.');
   if(has('timeout'))h.push('No answer in time: raise "First reply timeout" in Settings → Providers, or try another provider.');
   if(agent)h.push('In agent mode the model must support tool calling.');
@@ -113,6 +116,20 @@ const liveNoteHTML=()=>liveNote?'<div class="fbn" id="livenote" role="status">'+
 /* wait ms, but wake up when Stop is pressed; resolves false if stopped */
 const sleepStop=ms=>new Promise(res=>{const t0=Date.now();(function w(){if(stopped)res(false);else if(Date.now()-t0>=ms)res(true);else setTimeout(w,120)})()});
 
+/* ---------- what a provider can do ----------
+   p.cap = {vision:false, tools:false} only holds what you switched OFF in the provider settings; unknown counts as "can".
+   Before any call, providers that cannot do the job are left out, so no time is lost on a certain failure. */
+const capOn=(p,k)=>!(p.cap&&p.cap[k]===false);
+const estTokens=(history,extraChars)=>{let ch=extraChars||0,im=0;for(const m of history){ch+=(typeof m.content==='string'?m.content:JSON.stringify(m.content||'')).length;im+=(m.imgs||[]).length}return Math.ceil(ch/3.2)+im*1500};
+/* need: {vision, tools, tok}; returns {kind,why} when the provider is unfit, else null */
+function capSkip(p,need){
+  if(!need)return null;
+  if(need.vision&&!capOn(p,'vision'))return {kind:'capv',why:'does not read images (switched off in its settings)'};
+  if(need.tools&&!capOn(p,'tools'))return {kind:'capt',why:'no tool calling (switched off in its settings)'};
+  if(need.tok){const lim=ctxOf(p);if(need.tok>lim)return {kind:'capc',why:'needs about '+fmtTok(need.tok)+' tokens, its limit is '+fmtTok(lim)}}
+  return null;
+}
+
 /* providers to try, best first: the one that worked last (if given), healthy before resting */
 function fbOrder(list,first){
   let l=list.slice();
@@ -125,7 +142,9 @@ function fbOrder(list,first){
    opts: first (try this provider first), onStart(p) (called before every attempt).
    Returns {value,p,fails,kinds} on success, {stopped:true,p,...} if stopped, {fails,kinds} if everything failed. */
 async function withFallback(list,attempt,opts){
-  const o=opts||{},cfg=fbCfg(),order=fbOrder(list,o.first),fails=[],kinds=[];
+  const o=opts||{},cfg=fbCfg(),fails=[],kinds=[],pool=[];
+  for(const p of list){const r=capSkip(p,o.need);if(r){fails.push(p.name+': skipped, '+r.why);kinds.push(r.kind)}else pool.push(p)}
+  const order=fbOrder(pool,o.first);
   setLiveNote('');
   for(let i=0;i<order.length;i++){
     const p=order[i];let tries=0;
