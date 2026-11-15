@@ -31,18 +31,21 @@ async function send(){
 /* small label above a message: "Me" for the user, the provider name (as set in Settings) that wrote the reply for the AI */
 const whoHTML=m=>{const n=m.by||'';if(!n&&!m.model)return '';return '<div class="who">'+esc(n||m.model)+(m.skipped&&m.skipped.length?' (fallback)':'')+'</div>'};
 const liveWho=()=>liveBy?whoHTML(liveBy).replace('class="who"','class="who" id="livewho" data-k="'+qa(liveBy.by+'|'+liveBy.model)+'"'):'';
+let rst={id:null,n:0};   /* what the last render showed: only messages added since then get the entrance animation */
 function render(typing){
   const c=chat();
   updatePill();updateChip();setTimeout(updateFab,0);
   if(wide.matches)renderList();
   $('form').style.display=home?'none':'';
-  if(home){const hv=$('hbox')?$('hbox').value:'';$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();if(hv){$('hbox').value=hv;$('hsend').disabled=false}return}$('title').textContent=c?c.title:'Orin';
+  if(home){rst={id:null,n:0};const hv=$('hbox')?$('hbox').value:'';$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();if(hv){$('hbox').value=hv;$('hsend').disabled=false}return}$('title').textContent=c?c.title:'Orin';
   const el=$('msgs');
   if(!c||!c.msgs.length&&!typing){
+    rst={id:c?c.id:null,n:0};
     el.innerHTML='<div class="empty"><div class="logo"><i></i></div><h2>What can I help with?</h2><p>'+(S.providers.length?'Type a message, or start from a suggestion.':'Add a provider to get started.')+'</p>'+(S.providers.length?sugHTML():'<button class="btn" data-act="hset" style="margin-top:14px">Add provider</button>')+'</div>';return}
+  const fresh=rst.id===c.id&&c.msgs.length>rst.n?rst.n:1e9;rst={id:c.id,n:c.msgs.length};
   let h='';
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
-    if(m.role==='user')h+='<div class="who r">Me</div><div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">'+ico('pdf',13)+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?ico('pdf',13):ico('image',13))+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">'+ico('file',13)+esc(f.name)+'</span>').join('')+(m.sm?'<span class="tag">'+ico('search',13)+'Smart · '+m.sm+' excerpts</span>':'')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r">'+ibtn('data-edit="'+i+'"','Edit','edit')+'</div>';
+    if(m.role==='user')h+='<div class="who r">Me</div><div class="m u'+(i>=fresh?' fresh':'')+'">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">'+ico('pdf',13)+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?ico('pdf',13):ico('image',13))+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">'+ico('file',13)+esc(f.name)+'</span>').join('')+(m.sm?'<span class="tag">'+ico('search',13)+'Smart · '+m.sm+' excerpts</span>':'')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r">'+ibtn('data-edit="'+i+'"','Edit','edit')+'</div>';
     else if(m.role==='assistant'){
       h+=whoHTML(m)+'<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+usageStr(m.u).replace(/^ · /,'')+'</span>'+(m.pic?ibtn('data-save="'+i+'"','Save image','dl'):ibtn('data-copy="'+i+'"','Copy','copy'))+ibtn('data-fork="'+i+'"','Fork: new chat from here','fork')+(i===c.msgs.length-1?ibtn('data-regen="1"','Regenerate','refresh')+(m.cut&&!m.pic?'<button class="chip" data-cont="1">Continue</button>':''):'')+'</div>';
     }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta">'+ibtn('data-regen="1"','Retry','refresh')+'<span>Retry</span></div>':'');

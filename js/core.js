@@ -131,7 +131,7 @@ function hl(code,lang){
 }
 function md(t){
   return esc(t).split('```').map((p,i)=>{
-    if(i%2){const mm=p.match(/^([\w+#.-]*)\n/),lg=mm?mm[1]:'',cd=mm?p.slice(mm[0].length):p;return '<div class="cw"><button class="cp" data-cc="1">Copy</button><pre><code>'+hl(cd,lg)+'</code></pre></div>'}
+    if(i%2){const mm=p.match(/^([\w+#.-]*)\n/),lg=mm?mm[1]:'',cd=mm?p.slice(mm[0].length):p;return '<div class="cw"><span class="cl">'+lg+'</span><button class="cp" data-cc="1">Copy</button><pre><code>'+hl(cd,lg)+'</code></pre></div>'}
     let h='',tb=[];const stk=[],LI=/^(\s*)([*+-]|\d+[.)])\s+(.*)$/;
     const eL=()=>{while(stk.length)h+='</'+stk.pop().t+'>'};
     const eT=()=>{if(tb.length){h+=tbl(tb);tb=[]}};

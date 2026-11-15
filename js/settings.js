@@ -5,16 +5,18 @@ let editing=null,view='',spage='';
 function openSheet(){view=view||'';drawSheet();$('sheet').classList.add('on')}
 function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'],search:['Web search'],img:['Image generation'],gh:['GitHub'],app:['Appearance & Voice'],acct:['Account & Sync'],bk:['Backup']}}
 function settingsMenu(){
-  const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session;
-  const row=(k,ic,t,sub)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+esc(sub)+'</small></span><span class="ar">›</span></button>';
-  return gl('AI')+row('prov',ico('bot',20),'Providers & Models',S.providers.length?S.providers.length+(S.providers.length===1?' provider · ':' providers · ')+(on[0]?on[0].model:'all off'):'No providers yet. Add one')+
-   row('sys',ico('chat',20),'System prompt',S.system.trim()?S.system.trim().slice(0,50):'Not set')+
-   gl('Tools')+row('search',ico('globe',20),'Web search',S.search&&S.search.key?'On (Tavily)':'No key yet')+
-   row('img',ico('image',20),'Image generation',im.model?im.model:'Not set up')+
-   row('gh',ico('github',20),'GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token saved, no repository chosen'):'Not connected')+
-   gl('App')+row('app',ico('palette',20),'Appearance & Voice','Theme: '+THEME_LABEL[S.theme||'auto']+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||''))+
-   gl('Account & data')+row('acct',ico('cloud',20),'Account & Sync',cl?(S.cloud.email||'Logged in'):'Not logged in')+
-   row('bk',ico('save',20),'Backup','Export / Import');
+  const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session,nm=((S.cloud&&S.cloud.email)||'').split('@')[0];
+  const row=(k,ic,t,sub,st)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+(st?'<i class="sd '+st+'"></i>':'')+esc(sub)+'</small></span><span class="ar">›</span></button>';
+  const grp=h=>'<div class="grp">'+h+'</div>';
+  return (cl?'<div class="prof"><span class="av">'+esc((nm||'o')[0])+'</span><div class="pt2"><b>'+esc(nm||'Orin')+'</b><small>'+esc(S.cloud.email||'')+(S.providers.length?' · '+S.providers.length+(S.providers.length===1?' provider':' providers'):'')+'</small></div></div>':'')+
+   gl('AI')+grp(row('prov',ico('bot',20),'Providers & Models',S.providers.length?S.providers.length+(S.providers.length===1?' provider · ':' providers · ')+(on[0]?on[0].model:'all off'):'No providers yet. Add one',S.providers.length?(on.length?'ok':'warn'):'warn')+
+   row('sys',ico('chat',20),'System prompt',S.system.trim()?S.system.trim().slice(0,50):'Not set'))+
+   gl('Tools')+grp(row('search',ico('globe',20),'Web search',S.search&&S.search.key?'On (Tavily)':'No key yet',S.search&&S.search.key?'ok':'')+
+   row('img',ico('image',20),'Image generation',im.model?im.model:'Not set up',im.model?'ok':'')+
+   row('gh',ico('github',20),'GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token saved, no repository chosen'):'Not connected',g?'ok':''))+
+   gl('App')+grp(row('app',ico('palette',20),'Appearance & Voice','Theme: '+THEME_LABEL[S.theme||'auto']+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||'')))+
+   gl('Account & data')+grp(row('acct',ico('cloud',20),'Account & Sync',cl?(S.cloud.email||'Logged in'):'Not logged in',cl?'ok':'warn')+
+   row('bk',ico('save',20),'Backup','Export / Import'));
 }
 function drawSheet(){
   let hi=null;   /* health of the provider row being drawn */
@@ -51,8 +53,8 @@ function drawSheet(){
   $('sheet').querySelector('h1').textContent=SP[spage][0];
   if(spage==='prov')b.innerHTML='<div class="sec"><h3>Providers</h3><p class="h">Providers are tried from top to bottom. If one fails, the next one takes over.</p>'+
    (S.providers.map((p,i)=>'<div class="pr '+(p.on?'':'off')+'"><span class="rk">'+(i+1)+'</span><div class="n"><b>'+esc(p.name)+'</b><small>'+esc(p.model)+(needKey(p)?' · <span class="nk">no key</span>':'')+(capOn(p,'vision')?'':' · no images')+(capOn(p,'tools')?'':' · no tools')+'</small>'+((hi=healthInfo(p))?'<small class="ph '+hi.cls+'">'+esc(hi.txt)+'</small>':'')+'</div>'+
-   (hi?'<button class="sm-ib" data-hr="'+i+'" aria-label="Retry now" title="Retry now">'+ico('refresh',16)+'</button>':'')+'<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
-   '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">No providers yet.</p>')+
+   '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button>'+
+   '<div class="pa2"><button class="chip" data-ed="'+i+'">Edit</button>'+(hi?'<button class="chip" data-hr="'+i+'">Retry now</button>':'')+'<span class="sp1"></span><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div></div>').join('')||'<p class="h">No providers yet.</p>')+
    '<div class="row"><button class="btn" data-act="padd">Add provider</button></div></div>'+
    (()=>{const c=fbCfg();return '<div class="sec"><h3>Fallback rules</h3><p class="h">Temporary errors (rate limit, overloaded, network) are tried again a few times. A provider that keeps failing rests for a while and is tried last. A rejected key or a missing model rests until you fix it, or press Retry now.</p><label>Retries on temporary errors (0 to 5)</label><input class="f" id="fbr" inputmode="numeric" value="'+c.retries+'"><label>Rest time after repeated failures (minutes)</label><input class="f" id="fbc" inputmode="numeric" value="'+c.cool+'"><label>First reply timeout (seconds)</label><input class="f" id="fbt" inputmode="numeric" value="'+c.ttfb+'"></div>'})();
   else if(spage==='sys')b.innerHTML='<div class="sec"><h3>System prompt</h3><p class="h">Instructions the AI receives at the start of every chat (optional).</p><textarea class="f" id="sp" rows="8">'+esc(S.system)+'</textarea></div>'+
@@ -157,7 +159,7 @@ $('pve').addEventListener('click',e=>{if(e.target.closest('#pvs')){const t='The 
 $('fdir').onchange=e=>{addDir([...e.target.files]);e.target.value=''};
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
 $('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-tog="web"><span>'+ico('globe',16)+'Web search</span>'+(S.web?'<i>On</i>':'')+'</button><button class="pi" data-tog="img"><span>'+ico('image',16)+'Create image</span>'+(imgMode?'<i>On</i>':'')+'</button><hr><button class="pi" data-add="fimg"><span>'+ico('image',16)+'Photos</span></button><button class="pi" data-add="fcam"><span>'+ico('camera',16)+'Camera</span></button><button class="pi" data-add="fi"><span>'+ico('file',16)+'Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>'+ico('folder',16)+'Folder</span></button><button class="pi" data-act="ropen"><span>'+ico('box',16)+'GitHub repo</span></button>');
-$('modelb').onclick=e=>pop(e.currentTarget,modelMenu());
+$('modelb').onclick=e=>pop(e.currentTarget,modelMenu(),'Model');
 $('mic').onclick=toggleMic;
 $('tobot').onclick=()=>{const m=$('msgs');m.scrollTo({top:m.scrollHeight,behavior:'smooth'})};
 $('msgs').addEventListener('scroll',updateFab,{passive:true});addEventListener('resize',updateFab);

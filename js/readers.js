@@ -73,20 +73,22 @@ async function officeToText(file){
       o+=Array.from(row,v=>v||'').join(',')+'\n'}}
   return o;
 }
-function updatePill(){const p=S.pick&&S.providers.find(x=>x.id===S.pick&&x.on);$('modelb').innerHTML=esc(p?p.name:'Auto')+IC.chev}
+function updatePill(){const p=S.pick&&S.providers.find(x=>x.id===S.pick&&x.on);$('modelb').innerHTML='<i class="pd'+(p?' pin':'')+'"></i>'+esc(p?p.name:'Auto')+IC.chev}
 function closePop(){['pov','pop'].forEach(i=>{const e=$(i);if(e)e.remove()})}
-function pop(anchor,html){
-  closePop();const r=anchor.getBoundingClientRect();
-  const o=document.createElement('div');o.id='pov';o.onclick=closePop;
-  const p=document.createElement('div');p.id='pop';p.innerHTML=html;
-  p.style.left=Math.max(8,Math.min(r.left,innerWidth-250))+'px';if(r.top<260)p.style.top=(r.bottom+8)+'px';else p.style.bottom=(innerHeight-r.top+8)+'px';
+/* Popup menu. On a phone it is a bottom sheet (easier to reach and to tap); on a wide screen it opens next to the button. */
+function pop(anchor,html,title){
+  closePop();const r=anchor.getBoundingClientRect(),sh=innerWidth<=700;
+  const o=document.createElement('div');o.id='pov';o.onclick=closePop;if(sh)o.className='sh';
+  const p=document.createElement('div');p.id='pop';p.innerHTML=(sh?'<i class="grab"></i>':'')+(title?'<div class="pt">'+title+'</div>':'')+html;
+  if(sh)p.className='sh';
+  else{p.style.left=Math.max(8,Math.min(r.left,innerWidth-250))+'px';if(r.top<260)p.style.top=(r.bottom+8)+'px';else p.style.bottom=(innerHeight-r.top+8)+'px'}
   document.body.append(o,p);
 }
 function modelMenu(){
   const l=S.providers.filter(p=>p.on&&p.model&&p.url);
-  return '<button class="pi" data-pk="auto"><span><b>Auto</b><small>Uses your fallback order</small></span>'+(!S.pick?'<i>'+ico('check',16)+'</i>':'')+'</button>'+
-  l.map(p=>'<button class="pi" data-pk="'+p.id+'"><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small></span>'+(S.pick===p.id?'<i>'+ico('check',16)+'</i>':'')+'</button>').join('')+
-  (S.pick?'<button class="pi" data-pkfb="1" role="switch" aria-checked="'+(S.pickFb?'true':'false')+'"><span><b>If it fails, use my other providers</b><small>'+(S.pickFb?'On: this model first, then the rest':'Off: only this model')+'</small></span><i>'+(S.pickFb?ico('check',16):'')+'</i></button>':'');
+  return '<button class="pi'+(!S.pick?' sel':'')+'" data-pk="auto"><em class="pn2 au">'+ico('spark',14)+'</em><span><b>Auto</b><small>Tries your providers in order</small></span>'+(!S.pick?'<i>'+ico('check',16)+'</i>':'')+'</button>'+
+  l.map((p,n)=>{const hi=healthInfo(p);return '<button class="pi'+(S.pick===p.id?' sel':'')+'" data-pk="'+p.id+'"><em class="pn2">'+(n+1)+'</em><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small>'+(hi?'<small class="ph '+hi.cls+'">'+esc(hi.txt)+'</small>':'')+'</span>'+(S.pick===p.id?'<i>'+ico('check',16)+'</i>':'')+'</button>'}).join('')+
+  (S.pick?'<hr><button class="pi" data-pkfb="1" role="switch" aria-checked="'+(S.pickFb?'true':'false')+'"><span><b>If it fails, use my other providers</b><small>'+(S.pickFb?'On: this model first, then the rest':'Off: only this model')+'</small></span><i>'+(S.pickFb?ico('check',16):'')+'</i></button>':'');
 }
 let rec=null,recOn=false;
 function toggleMic(){
@@ -103,7 +105,7 @@ function toggleMic(){
 }
 const THEME_LABEL={auto:'System',light:'Light',dark:'Dark'};
 const gl=t=>'<div class="gl">'+t+'</div>';
-function themeHTML(){return '<div class="sec"><h3>Theme</h3><div class="row" style="margin-top:6px">'+['auto','light','dark'].map(t=>'<button class="btn '+(S.theme===t?'':'ghost')+' sm" data-theme="'+t+'">'+THEME_LABEL[t]+'</button>').join('')+'</div></div>'}
+function themeHTML(){return '<div class="sec"><h3>Theme</h3><div class="thms">'+['auto','light','dark'].map(t=>'<button class="thm'+(S.theme===t?' on':'')+'" data-theme="'+t+'" aria-pressed="'+(S.theme===t)+'"><span class="tp '+t+'"><i></i><i></i></span><b>'+THEME_LABEL[t]+'</b></button>').join('')+'</div></div>'}
 function webHTML(){return '<div class="sec"><h3>Web search</h3><p class="h">When the globe button in the composer is on, Orin searches the web before answering. It needs a <b>Tavily</b> API key (there is a free plan at tavily.com).</p><input class="f" id="tk" type="password" autocomplete="off" placeholder="tvly-…" value="'+qa((S.search||{}).key)+'"></div>'}
 function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image generation</h3><p class="h">When the image button in the composer is on, your message is sent as an image prompt. It needs an OpenAI-compatible <code>/images/generations</code> API.</p><div class="chips">'+IMGP.map((x,i)=>'<button type="button" class="chip" data-ipre="'+i+'">'+x[0]+'</button>').join('')+'</div>'+
  '<label>Base URL</label><input class="f" id="iu" value="'+qa(g.url)+'" placeholder="https://api.openai.com/v1">'+
@@ -111,7 +113,7 @@ function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image gener
  '<label>Model</label><input class="f" id="im" value="'+qa(g.model)+'" placeholder="gpt-image-1">'+
  '<label>Size (optional)</label><input class="f" id="is" value="'+qa(g.size)+'" placeholder="1024x1024"></div>'}
 const IMGP=[['OpenAI','https://api.openai.com/v1','gpt-image-1',''],['Together','https://api.together.xyz/v1','black-forest-labs/FLUX.1-schnell','']];
-function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">Language for the microphone. Works best in Chrome.</p><div class="row" style="margin-top:0">'+[['bn-BD','Bangla'],['en-US','English'],['hi-IN','Hindi']].map(x=>'<button class="btn '+((S.lang||'bn-BD')===x[0]?'':'ghost')+' sm" data-lang="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>'}
+function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">Language for the microphone. Works best in Chrome.</p><div class="seg">'+[['bn-BD','Bangla'],['en-US','English'],['hi-IN','Hindi']].map(x=>'<button class="'+((S.lang||'bn-BD')===x[0]?'on':'')+'" data-lang="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>'}
 let curCtl=null,stopped=false;
 function setBusyUI(on){const b=$('sendb');b.innerHTML=on?IC.stop:IC.up;b.setAttribute('aria-label',on?'Stop':'Send')}
 function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>ok(r.result.split(',')[1]);r.readAsDataURL(f)})}
