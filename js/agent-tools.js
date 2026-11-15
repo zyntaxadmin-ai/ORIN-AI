@@ -2,7 +2,8 @@
    Plain script (no modules): shares one global scope with the other js/*.js files, loaded in the order listed in index.html. */
 const TOOLS=[
  {name:'list_repos',description:"List the user's GitHub repositories (optionally filtered by a text query).",parameters:{type:'object',properties:{query:{type:'string',description:'optional text filter'}}}},
- {name:'list_files',description:'List files in the current repository (with staged draft changes applied). Optionally only under a folder path.',parameters:{type:'object',properties:{path:{type:'string',description:'optional folder prefix, e.g. src'},repo:{type:'string',description:'optional other repo as owner/name (read-only, default branch)'}}}},
+ {name:'repo_map',description:'FASTEST way to find code. Returns an index of the current repo: every file with its functions, classes, routes and headings and their line numbers (staged drafts included; built once, then cached, so repeat calls are instant). Call it FIRST instead of list_files plus several searches. Pass find (up to 8 names or words at once, e.g. ["triggerBuiltinModelDiscovery","keys route"]) to get only the matching symbols and files as path:line, or path (a folder) to map just that folder. Then read_file with a narrow start_line/end_line around the line. It lists declarations only: use search_code for text inside files.',parameters:{type:'object',properties:{find:{type:'array',items:{type:'string'},description:'names or words to locate'},path:{type:'string',description:'optional folder prefix to limit the map, e.g. server/src'}}}},
+ {name:'list_files',description:'List files in the current repository (with staged draft changes applied). Optionally only under a folder path. Prefer repo_map, which also shows what is inside the files.',parameters:{type:'object',properties:{path:{type:'string',description:'optional folder prefix, e.g. src'},repo:{type:'string',description:'optional other repo as owner/name (read-only, default branch)'}}}},
  {name:'read_file',description:'Read a text file from the current repository (staged draft version if changed). Optionally from another repo (owner/name, read-only, default branch). A BIG file read without start_line/end_line only returns an outline: use find_in_file first, then read a narrow range.',parameters:{type:'object',properties:{path:{type:'string'},start_line:{type:'integer',description:'optional, 1-based; for big files read in ranges'},end_line:{type:'integer',description:'optional'},repo:{type:'string'}},required:['path']}},
  {name:'write_file',description:'Create or fully overwrite a file with COMPLETE content. Staged as a draft; the user pushes it.',parameters:{type:'object',properties:{path:{type:'string'},content:{type:'string',description:'full file content'}},required:['path','content']}},
  {name:'edit_file',description:'Replace one exact piece of text in an existing file. old_text must appear exactly once. Staged as draft.',parameters:{type:'object',properties:{path:{type:'string'},old_text:{type:'string'},new_text:{type:'string'}},required:['path','old_text','new_text']}},
@@ -72,6 +73,7 @@ async function tool(c,name,a){
     return (j.items||[]).map(x=>x.path).join('\n')||'No matches';
   }
   if(name==='save_repo_notes'){const n=String(a.notes||'').slice(0,2500);S.repoNotes=Object.assign({},S.repoNotes);S.repoNotes[S.repo.full]=n;rawSave();return 'Notes saved ('+n.length+' chars)'}
+  if(name==='repo_map')return await repoMapTool(c,a);
   if(name==='search_code'){
     const q=String(a.query||'').trim();if(!q)throw new Error('query is empty');
     {
@@ -89,8 +91,13 @@ async function tool(c,name,a){
         return out.slice(0,8000);
       }
     }
+    /* big repo: too many files to read for a text search. Try the repo map first: exact path:line, always current, cached. */
+    try{
+      const rm=await rmBuild(c,String(a.path||'').replace(/^\/+|\/+$/g,'')),found=rmFind(rm,[q]);
+      if(rm.files.length&&!/no declaration or file name matches/.test(found))return found+rmNote(rm)+'\n(Declarations and file names only. For text inside files, pass path (a folder) to narrow the search.)';
+    }catch(e){}
     const j=await gh('/search/code?q='+encodeURIComponent(q+' repo:'+S.repo.full)+'&per_page=12',{accept:'application/vnd.github.text-match+json'});
-    const it=j.items||[];if(!it.length)return 'No matches (search only covers default branch & may lag; try list_files/read_file).';
+    const it=j.items||[];if(!it.length)return 'No matches (search only covers default branch & may lag; try repo_map with find, or read_file).';
     return it.map(x=>x.path+(x.text_matches?'\n'+x.text_matches.slice(0,2).map(m=>'  > '+String(m.fragment||'').replace(/\s+/g,' ').slice(0,200)).join('\n'):'')).join('\n');
   }
   const RF='/repos/'+S.repo.full;

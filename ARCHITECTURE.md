@@ -23,6 +23,7 @@ A short map for people and AI assistants who edit this repo. The README explains
 | `js/push.js` | Drafts, diffs, push, deploy status, PR actions, undo |
 | `js/checks.js`, `js/preview.js`, `js/preview-frame.js` | Pre-push checks, live preview in a sandboxed iframe |
 | `js/templates.js` | Project templates (data only) |
+| `js/repomap.js` | Repo map: index of files → functions, classes, routes, headings with line numbers, cached by blob sha (`repo_map` tool, also used by `search_code` on big repos) |
 | `js/chat.js`, `js/settings.js` | `send()`, `render()`, settings screens, the global click handler, start-up |
 
 ## Where to start for common changes
