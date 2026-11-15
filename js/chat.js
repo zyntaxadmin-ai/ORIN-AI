@@ -29,8 +29,8 @@ async function send(){
 }
 
 /* ---------- Render ---------- */
-/* small label above a message: "Me" for the user, the provider and model that wrote the reply for the AI */
-const whoHTML=m=>{const n=m.by||'';if(!n&&!m.model)return '';return '<div class="who">'+esc(n)+(m.model&&m.model!==n?' · '+esc(m.model):'')+(m.skipped&&m.skipped.length?' (fallback)':'')+'</div>'};
+/* small label above a message: "Me" for the user, the provider name (as set in Settings) that wrote the reply for the AI */
+const whoHTML=m=>{const n=m.by||'';if(!n&&!m.model)return '';return '<div class="who">'+esc(n||m.model)+(m.skipped&&m.skipped.length?' (fallback)':'')+'</div>'};
 const liveWho=()=>liveBy?whoHTML(liveBy).replace('class="who"','class="who" id="livewho" data-k="'+qa(liveBy.by+'|'+liveBy.model)+'"'):'';
 function render(typing){
   const c=chat();
