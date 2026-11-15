@@ -84,11 +84,15 @@ function cloudHTML(){
   return '<div class="sec"><h3>Account</h3><p class="h">'+esc(c.email||'')+'<br>'+esc(cst||'ready')+'</p><p class="h">Chats, the provider list and settings sync across devices. API keys and the GitHub token never sync, for security: enter them once on each new device.</p><div class="row" style="margin-top:0"><button class="btn sm" data-act="csync">Sync now</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
 }
 function homeHTML(){
-  const c=C(),on=S.providers.filter(p=>p.on&&p.model&&p.url),nm=(c.email||'').split('@')[0];
-  const rec=S.chats.slice().sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,6);
-  return '<div class="home"><div class="hero"><div class="logo"><i></i></div><h2>Hello, '+esc(nm)+'</h2><p>What are we working on today?</p></div><button class="btn" data-act="hnew">New chat</button>'+sugHTML()+
-  (on.length?'<div class="prv"><i></i><span><b>'+esc(on[0].name)+'</b> · '+esc(on[0].model)+(on.length>1?' · +'+(on.length-1)+' fallback':'')+'</span></div>':'<button class="prv" data-act="hset">Add a provider</button>')+
-  (rec.length?'<h3 class="gl2">Recent chats</h3>'+rec.map(x=>'<button class="rc" data-open="'+x.id+'">'+esc(x.title)+'</button>').join(''):'')+
-  '<div class="row" style="justify-content:center;margin-top:20px"><button class="btn ghost sm" data-act="hset">Settings</button><button class="btn ghost sm" data-act="cout">Log out</button></div></div>';
+  const c=C(),on=S.providers.filter(p=>p.on&&p.model&&p.url),nm=(c.email||'').split('@')[0],hr=new Date().getHours();
+  const gr=hr<5?'Hello':hr<12?'Good morning':hr<17?'Good afternoon':'Good evening';
+  /* one satellite per active provider (up to 6), spread over three rings; the first provider is the amber one */
+  const sats=on.slice(0,6).map((p,i)=>{const o=i%3,dur=[17,26,37][o]+Math.floor(i/3)*6;return '<span class="ob o'+(o+1)+(i===0?' pri':'')+'" style="animation-duration:'+dur+'s;animation-delay:-'+(i*5.3).toFixed(1)+'s'+(i%2?';animation-direction:reverse':'')+'"><b></b></span>'}).join('');
+  const orb='<div class="orb" aria-hidden="true"><i class="r r1"></i><i class="r r2"></i><i class="r r3"></i>'+sats+'<div class="core"><i></i></div></div>';
+  const st=on.length?'<div class="hm"><i></i><span><b>'+esc(on[0].name)+'</b>'+(on.length>1?' · +'+(on.length-1)+' backup':'')+'</span></div>':'<button type="button" class="hm add" data-act="hset"><i></i><span>Add a provider to start</span></button>';
+  return '<div class="home">'+orb+'<h2 class="hgreet">'+gr+(nm?', '+esc(nm):'')+'</h2><p class="hsub">Type below to start a new chat.</p>'+
+  '<form class="comp hcomp" id="hform"><textarea id="hbox" rows="2" placeholder="Ask Orin anything…" aria-label="Message Orin"></textarea><div class="bar">'+st+'<span class="sp1"></span><button class="send" id="hsend" aria-label="Send" disabled>'+IC.up+'</button></div></form>'+
+  '<div class="hchips">'+SUG.map((x,i)=>'<button type="button" data-hs="'+i+'">'+x[0]+'</button>').join('')+'</div></div>';
 }
+
 

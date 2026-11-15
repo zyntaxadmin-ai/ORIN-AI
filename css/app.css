@@ -45,7 +45,7 @@ svg.ic{vertical-align:-3px;margin-right:6px;flex:none}
 /* ---------- The mark: a ring with one satellite ---------- */
 .logo{--s:72px;position:relative;flex:none;width:var(--s);height:var(--s);border-radius:calc(var(--s)*.3);background:var(--tile);display:grid;place-items:center;margin:0 auto 14px}
 .logo i{display:block;width:calc(var(--s)*.42);height:calc(var(--s)*.42);border:calc(var(--s)*.085) solid #fff;border-radius:50%}
-.logo::after{content:'';position:absolute;inset:12%;border-radius:50%;background:radial-gradient(circle at 50% 0,var(--orb) 0 calc(var(--s)*.075),transparent calc(var(--s)*.08));animation:orbit 16s linear infinite}
+.logo::after{content:'';position:absolute;inset:12%;border-radius:50%;background:radial-gradient(circle at 50% calc(var(--s)*.078),var(--orb) 0 calc(var(--s)*.07),transparent calc(var(--s)*.075));animation:orbit 16s linear infinite}
 @keyframes orbit{to{transform:rotate(360deg)}}
 
 /* ---------- App frame ---------- */
@@ -103,26 +103,42 @@ header h1{flex:1;min-width:0;font:500 15px/1.3 var(--disp);letter-spacing:-.005e
 
 /* ---------- Empty state and home: left-aligned, orbit lines behind the greeting ---------- */
 .empty{position:relative;margin:auto;padding:24px 6px;max-width:560px;width:100%;text-align:left;color:var(--mute)}
-.empty::before,.hero::before{content:'';position:absolute;right:-90px;top:-24px;width:300px;height:300px;background:var(--orbit) center/contain no-repeat;pointer-events:none;opacity:.9}
-.empty>*,.hero>*{position:relative}
+.empty::before{content:'';position:absolute;right:-90px;top:-24px;width:300px;height:300px;background:var(--orbit) center/contain no-repeat;pointer-events:none;opacity:.9}
+.empty>*{position:relative}
 .empty h2{color:var(--ink);font:700 30px/1.15 var(--disp);margin-bottom:8px;letter-spacing:-.02em}
-.empty .logo,.hero .logo{--s:56px;margin:0 0 22px}
+.empty .logo{--s:56px;margin:0 0 22px}
 .empty p{max-width:30em}
 .sug{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;margin-top:26px;text-align:left}
 .sug button{display:flex;flex-direction:column;background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;padding:14px 2px 16px;text-align:left;font-size:14px;line-height:1.4;color:var(--ink);transition:border-color .15s}
 .sug button b{font:500 14.5px/1.3 var(--disp);margin-bottom:3px;transition:color .15s}.sug button span{color:var(--mute);font-size:13px}
 .sug button:hover{border-top-color:var(--ac)}.sug button:hover b{color:var(--ac)}
-.home{position:relative;margin:auto 0;padding:6px 0 20px;max-width:560px;width:100%;align-self:center}
-.hero{position:relative;text-align:left;padding:18px 0 6px}
-.hero h2{font:700 32px/1.12 var(--disp);letter-spacing:-.02em;overflow-wrap:anywhere}.hero p{margin-top:8px;color:var(--mute);font-size:17px}
-.home>.btn{width:100%;margin:18px 0 0;padding:13px 16px;font-size:15.5px}.home .sug{margin-top:22px}
-.prv{display:flex;align-items:center;gap:9px;width:fit-content;max-width:100%;margin:22px 0 0;padding:8px 14px;font-size:13.5px;color:var(--mute);background:var(--sf);border:1px solid var(--line);border-radius:99px}
-.prv i{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 22%,transparent)}.prv span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.prv b{color:var(--ink);font-weight:600}
-button.prv:hover{border-color:var(--ac);color:var(--ink)}
-.gl2{margin:30px 2px 4px;font:500 14px/1.3 var(--disp);color:var(--ink)}
-.rc{display:block;width:100%;padding:13px 2px;text-align:left;background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink);font-size:15px}
-.rc:hover{color:var(--ac)}
+/* Home: the orbit is the hero. Each active provider is a satellite on its own ring; the first one (the model that answers first) is amber.
+   The rings draw in once when the screen opens, then the satellites keep circling slowly. The box below starts a new chat. */
+.home{position:relative;margin:auto;padding:10px 0 28px;max-width:600px;width:100%;align-self:center;text-align:center}
+.orb{position:relative;width:210px;height:210px;margin:0 auto 14px}
+.orb .r{position:absolute;left:50%;top:50%;translate:-50% -50%;border-radius:50%;border:1px solid color-mix(in srgb,var(--ac) 30%,transparent);animation:ringin .9s cubic-bezier(.2,.8,.2,1) both}
+.orb .r1{width:104px;height:104px;animation-delay:.05s}.orb .r2{width:156px;height:156px;animation-delay:.18s;border-color:color-mix(in srgb,var(--ac) 22%,transparent)}.orb .r3{width:208px;height:208px;animation-delay:.31s;border-color:color-mix(in srgb,var(--ac) 14%,transparent)}
+@keyframes ringin{from{opacity:0;scale:.55}}
+.orb .ob{position:absolute;left:50%;top:50%;animation:orbit linear infinite}
+.orb .o1{--rd:104px}.orb .o2{--rd:156px}.orb .o3{--rd:208px}
+.orb .ob{width:var(--rd);height:var(--rd);margin:calc(var(--rd)/-2) 0 0 calc(var(--rd)/-2)}
+.orb .ob b{position:absolute;top:-4px;left:50%;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--ac);animation:dotin .5s .7s both}
+.orb .ob.pri b{top:-6px;width:12px;height:12px;margin-left:-6px;background:var(--orb);box-shadow:0 0 0 5px color-mix(in srgb,var(--orb) 24%,transparent),0 0 18px var(--orb)}
+@keyframes dotin{from{opacity:0;scale:0}}
+.orb .core{position:absolute;inset:0;margin:auto;width:58px;height:58px;border-radius:19px;background:var(--tile);display:grid;place-items:center;box-shadow:0 10px 28px color-mix(in srgb,var(--tile) 38%,transparent);animation:ringin .6s cubic-bezier(.2,.8,.2,1) both}
+.orb .core i{display:block;width:25px;height:25px;border:5px solid #fff;border-radius:50%}
+.hgreet{font:700 28px/1.2 var(--disp);letter-spacing:-.02em;overflow-wrap:anywhere}
+.hsub{margin-top:6px;color:var(--mute);font-size:16px}
+.hcomp{margin-top:24px;padding:14px 14px 10px;text-align:left}
+.hcomp textarea{display:block;width:100%;min-height:56px;max-height:180px;resize:none;border:0;background:transparent;outline:none;padding:2px 6px 8px;font-size:16px;line-height:1.55}
+.hcomp textarea::placeholder{color:var(--mute);opacity:.85}
+.hm{display:flex;align-items:center;gap:8px;min-width:0;padding:0 6px;font-size:13px;color:var(--mute)}
+.hm i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 22%,transparent)}
+.hm span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hm b{color:var(--ink);font-weight:600}
+button.hm.add{color:var(--warn);font-weight:600}button.hm.add i{background:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 22%,transparent)}
+.hchips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:18px}
+.hchips button{padding:8px 15px;font-size:14px;font-weight:500;background:var(--sf);border:1px solid var(--line);border-radius:99px;transition:border-color .15s,color .15s}
+.hchips button:hover{border-color:var(--ac);color:var(--ac)}
 
 /* ---------- Composer ---------- */
 form.in{padding:4px 14px 12px;background:var(--bg)}
@@ -334,14 +350,17 @@ details.act>summary{cursor:pointer}details.act[open]>summary .actt{color:var(--m
 }
 @media(max-width:520px){
   .sug{grid-template-columns:1fr}
-  .hero h2,.empty h2{font-size:27px}
-  .empty::before,.hero::before{right:-120px;top:-30px;width:260px;height:260px}
+  .empty h2{font-size:27px}
+  .orb{width:190px;height:190px;transform:scale(.92)}
+  .hgreet{font-size:25px}
+  .empty::before{right:-120px;top:-30px;width:260px;height:260px}
   #msgs{padding:12px 16px 24px}
 }
 
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
   .dots{animation:none}
+  .orb .ob{animation:none}
   .spin{animation:none}
 }
 

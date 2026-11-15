@@ -131,6 +131,7 @@ document.addEventListener('click',async e=>{
   else if(d.tg){S.providers[+d.tg].on=!S.providers[+d.tg].on;save();drawSheet()}
   else if(d.ed){editing=Object.assign({},S.providers[+d.ed],{_idx:+d.ed});drawSheet()}
   else if(d.rmed){if(await ask('Delete provider?','“'+(editing.name||'This provider')+'” will be removed from your provider list.','Delete',true)){S.providers.splice(editing._idx,1);editing=null;save();drawSheet()}}
+  else if(d.hs!==undefined){const b=$('hbox');if(b){b.value=SUG[+d.hs][2];b.dispatchEvent(new Event('input',{bubbles:true}));b.focus();b.setSelectionRange(b.value.length,b.value.length)}}
   else if(d.sug!==undefined){const x=SUG[+d.sug];if(home||!chat())newChat();const b=$('box');b.value=x[2];b.dispatchEvent(new Event('input'));b.focus();b.setSelectionRange(b.value.length,b.value.length)}
   else if(d.rm){if(await ask('Delete provider?','“'+((S.providers[+d.rm]||{}).name||'This provider')+'” will be removed from your provider list.','Delete',true)){S.providers.splice(+d.rm,1);save();drawSheet()}}
   else if(d.theme){S.theme=d.theme;save();applyTheme();drawSheet()}
@@ -190,6 +191,13 @@ let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationF
 $('box').addEventListener('paste',e=>{const fs=[...((e.clipboardData&&e.clipboardData.files)||[])].filter(f=>/^image\//.test(f.type)||f.type==='application/pdf');if(fs.length){e.preventDefault();addFiles(fs)}});
 document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault()});
 document.addEventListener('drop',e=>{if(e.dataTransfer&&e.dataTransfer.files.length&&!home){e.preventDefault();addFiles([...e.dataTransfer.files])}});
+/* Home screen: the message box there starts a new chat and sends the first message */
+function homeGo(){const h=$('hbox'),txt=h?h.value.trim():'';if(!txt){if(h)h.focus();return}if(busy)return;if(!provList().length){toast('Add a provider in Settings first');editing=null;view='';spage='prov';openSheet();return}newChat();$('box').value=txt;send()}
+document.addEventListener('submit',e=>{if(e.target.id==='hform'){e.preventDefault();homeGo()}});
+document.addEventListener('keydown',e=>{if(e.target.id==='hbox'&&e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229&&window.innerWidth>700){e.preventDefault();homeGo()}});
+document.addEventListener('input',e=>{if(e.target.id!=='hbox')return;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,180)+'px';$('hsend').disabled=!b.value.trim()});
+const HPH=['Ask Orin anything…','Explain this code step by step','Draft an email to my landlord','বাংলায় একটা ছোট গল্প লেখো'];let hpi=0;
+setInterval(()=>{const h=$('hbox');if(!h||h.value||document.hidden||document.activeElement===h)return;hpi=(hpi+1)%HPH.length;h.placeholder=HPH[hpi]},3600);
 initIcons();applyTheme();render();updateModes();
 fload().then(()=>{fclean();render()});
 setMode('in');

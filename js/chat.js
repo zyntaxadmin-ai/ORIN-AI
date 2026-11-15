@@ -36,7 +36,7 @@ function render(typing){
   updatePill();updateChip();setTimeout(updateFab,0);
   if(wide.matches)renderList();
   $('form').style.display=home?'none':'';
-  if(home){$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();return}$('title').textContent=c?c.title:'Orin';
+  if(home){const hv=$('hbox')?$('hbox').value:'';$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();if(hv){$('hbox').value=hv;$('hsend').disabled=false}return}$('title').textContent=c?c.title:'Orin';
   const el=$('msgs');
   if(!c||!c.msgs.length&&!typing){
     el.innerHTML='<div class="empty"><div class="logo"><i></i></div><h2>What can I help with?</h2><p>'+(S.providers.length?'Type a message, or start from a suggestion.':'Add a provider to get started.')+'</p>'+(S.providers.length?sugHTML():'<button class="btn" data-act="hset" style="margin-top:14px">Add provider</button>')+'</div>';return}
