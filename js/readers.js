@@ -177,10 +177,10 @@ async function run(c,list){
   for(const p of list){
     if(stopped)break;
     try{
-      liveBy={by:p.name,model:p.model};live='';const out=await callProvider(p,history,t=>{live=t;draw()});
+      liveBy={by:p.name,model:p.model};live='';shown=0;const out=await callProvider(p,history,t=>{live=t;draw()});await drain();
       c.msgs.push({role:'assistant',content:out,by:p.name,model:p.model,skipped:fails.slice(),src:srcOf(c),u:mkUsage(p,history,out),cut:lastCut||undefined});done=true;break;
     }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,model:p.model,skipped:[],src:srcOf(c),u:mkUsage(p,history,live),cut:1});done=true;break}fails.push(p.name+': '+e.message)}
   }
   if(!done&&!stopped)c.msgs.push({role:'error',content:'All providers failed.\n'+fails.join('\n')});
-  busy=false;live='';setBusyUI(false);save();render();
+  busy=false;live='';shown=0;setBusyUI(false);save();render();
 }

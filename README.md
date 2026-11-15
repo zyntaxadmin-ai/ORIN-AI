@@ -11,7 +11,7 @@ No build step, no framework, no server. Plain HTML, CSS and JavaScript files tha
 - **Any provider.** Add OpenAI-compatible APIs (OpenRouter, Groq, DeepSeek, Together, OpenAI, local servers), Anthropic, or Gemini. Quick-fill presets included.
 - **Auto fallback.** Providers are tried in your chosen order. If one fails (error, rate limit, timeout), the next one takes over.
 - **Model picker.** Choose **Auto** or pin one specific provider from the composer.
-- **Streaming replies** with a **Stop** button.
+- **Streaming replies** with a **Stop** button. Text is revealed smoothly instead of jumping in bursts (switched off if your device asks for reduced motion).
 - **Code highlighting.** Code blocks are coloured (JS, Python, HTML, CSS, JSON, SQL, shell and more) with a small built-in highlighter, no library.
 - **Continue.** If a reply is cut off by the output limit (or you press Stop), a **Continue** button carries on from where it stopped.
 - **Fork a chat.** The fork button under a reply copies the chat up to that message into a new chat, to try another direction.

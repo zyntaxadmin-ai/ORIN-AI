@@ -72,39 +72,56 @@ async function callProvider(p,history,onDelta,opts){
     throw e;
   }finally{clearTimeout(to)}
 }
-let live='',raf=0,lastUsage=null,lastCut=false,liveBy=null;
+let live='',raf=0,lastUsage=null,lastCut=false,liveBy=null,shown=0,shownT=0;   /* shown/shownT: how many characters of live/liveT are on screen (smooth reveal) */
 /* Agent progress: steps are kept as a list and appended one by one, so earlier rows are never redrawn. */
 let liveLog=null,liveT='',livePn='';
 const stepInner=l=>{const [k,t]=logParse(l);return (k?ico(k,14):'')+'<span>'+esc(t)+'</span>'};
 const actNow=()=>livePn?'Preparing '+livePn.replace(/_/g,' ')+'…':liveLog.length?logTxt(liveLog[liveLog.length-1]):'Thinking…';
 const actCount=()=>liveLog.length?liveLog.length+(liveLog.length===1?' step':' steps'):'';
 function liveInner(){
-  if(!liveLog)return live?md(live):'<div class="dots" role="status" aria-label="Thinking"><span></span><span></span><span></span></div>';
-  return '<div class="act"><div class="acth" role="status"><span class="spin" aria-hidden="true"></span><span class="actt">'+esc(actNow())+'</span><span class="actn">'+actCount()+'</span></div>'+(liveLog.length?'<ul class="actl">'+liveLog.map(l=>'<li>'+stepInner(l)+'</li>').join('')+'</ul>':'')+'</div><div class="actx">'+(liveT?md(liveT):'')+'</div>';
+  if(!liveLog)return live&&shown?md(live.slice(0,shown)):'<div class="dots" role="status" aria-label="Thinking"><span></span><span></span><span></span></div>';
+  return '<div class="act"><div class="acth" role="status"><span class="spin" aria-hidden="true"></span><span class="actt">'+esc(actNow())+'</span><span class="actn">'+actCount()+'</span></div>'+(liveLog.length?'<ul class="actl">'+liveLog.map(l=>'<li>'+stepInner(l)+'</li>').join('')+'</ul>':'')+'</div><div class="actx">'+(shownT?md(liveT.slice(0,shownT)):'')+'</div>';
 }
 function patchLive(el){
   let ul=el.querySelector('.actl');
   if(!el.querySelector('.act')||(liveLog.length&&!ul)){el.innerHTML=liveInner();return}
   if(ul){for(let n=ul.children.length;n<liveLog.length;n++){const li=document.createElement('li');li.className='in';li.innerHTML=stepInner(liveLog[n]);ul.append(li)}ul.scrollTop=ul.scrollHeight}
   el.querySelector('.actt').textContent=actNow();el.querySelector('.actn').textContent=actCount();
-  const x=el.querySelector('.actx');if(x._t!==liveT){x._t=liveT;x.innerHTML=liveT?md(liveT):''}
+  const x=el.querySelector('.actx'),tt=liveT.slice(0,shownT);if(x._t!==tt){x._t=tt;x.innerHTML=tt?md(tt):''}
 }
 const fmtTok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(n||0);
 const fmtCost=c=>'$'+(c<0.01?c.toFixed(4):c.toFixed(2));
 const usageStr=u=>u?' · ↑'+fmtTok(u.i)+(u.k?' ('+fmtTok(u.k)+' cached)':'')+' ↓'+fmtTok(u.o)+(u.e?'~':'')+(u.c!=null?' · '+fmtCost(u.c):''):'';
 function mkUsage(p,hist,out){const us=lastUsage;let i,o,e=0;if(us&&(us.i||us.o)){i=us.i||0;o=us.o||0}else{e=1;i=Math.ceil(hist.reduce((a,m)=>a+(m.content||'').length,0)/3);o=Math.ceil(out.length/3)}const k=(us&&us.k)||0,r={i,o};if(k)r.k=k;if(e)r.e=1;if(p.pin||p.pout)r.c=((i-k+k*0.1)*(+p.pin||0)+o*(+p.pout||0))/1e6;return r}
 function updateFab(){const f=$('tobot'),m=$('msgs');if(!f)return;const far=!home&&m.scrollHeight-m.scrollTop-m.clientHeight>240;f.classList.toggle('on',far);if(far){const r=m.getBoundingClientRect();f.style.left=(r.right-54)+'px';f.style.top=(r.bottom-52)+'px'}}
-let lastT=0;
-const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)return;
-  const now=performance.now();if(now-lastT<60){draw();return}lastT=now;
+/* Smooth streaming. Text arrives from the network in bursts, so showing it as it arrives makes it jump. Instead the
+   screen keeps its own counter (shown) and reveals a share of the waiting text every frame: big bursts are spread
+   over a fraction of a second, small ones go out a few characters at a time. It never falls far behind (about 0.3s),
+   and when the reply ends drain() lets the last characters finish before the message is replaced by the final one. */
+const RM=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+let lastT=0,lastR=0,rcost=0;
+const cutAt=(s,n)=>{if(n>0&&n<s.length){const c=s.charCodeAt(n-1);if(c>=0xD800&&c<=0xDBFF)n++}return n};   /* never cut an emoji in half */
+const ease=(full,cur,dt)=>{const back=full.length-cur;if(back<=0)return full.length;if(RM)return full.length;const k=1-Math.pow(.86,dt/16.7);return cutAt(full,Math.min(full.length,cur+Math.max(1,Math.ceil(back*k))))};
+const backlog=()=>shown<live.length||shownT<liveT.length;
+const draw=()=>{if(raf)return;raf=requestAnimationFrame(tick)};
+function tick(){
+  raf=0;if(!busy){lastR=0;return}
+  const now=performance.now();
+  if(lastT&&now-lastT<Math.max(16,rcost*2)){raf=requestAnimationFrame(tick);return}   /* heavy messages render less often, never freeze the page */
+  const dt=Math.min(120,lastR?now-lastR:16.7);lastR=now;
+  if(shown>live.length)shown=live.length;if(shownT>liveT.length)shownT=liveT.length;
+  shown=ease(live,shown,dt);shownT=ease(liveT,shownT,dt);
   const el=$('liveb'),m=$('msgs');
-  if(!el){render(true);return}
+  if(!el){render(true);if(backlog())draw();return}
   {const wh=liveWho(),w0=$('livewho');if(wh){if(!w0)el.insertAdjacentHTML('beforebegin',wh);else if(w0.dataset.k!==liveBy.by+'|'+liveBy.model)w0.outerHTML=wh}}
-  const near=m.scrollHeight-m.scrollTop-m.clientHeight<140;
-  if(liveLog)patchLive(el);else el.innerHTML=md(live);
+  const near=m.scrollHeight-m.scrollTop-m.clientHeight<140,t0=performance.now();
+  if(liveLog)patchLive(el);else el.innerHTML=shown?md(live.slice(0,shown)):liveInner();
+  rcost=rcost*.7+(performance.now()-t0)*.3;lastT=now;
   if(near)m.scrollTop=m.scrollHeight;
   updateFab();
-})};
+  if(backlog())draw();else lastR=0;
+}
+const drain=()=>new Promise(res=>{const t0=performance.now();(function w(){if(!backlog()||!busy||stopped||performance.now()-t0>1500)res();else setTimeout(w,30)})()});
 let pend=[];
 /* big text files live in IndexedDB (not localStorage); messages keep {name,id,size,tok} */
 const FT=new Map(),MAXF=15e6,etok=n=>Math.ceil((typeof n==='string'?n.length:n)/3.2),fmtSz=n=>n>=1e6?(n/1e6).toFixed(1)+'MB':Math.max(1,Math.round(n/1e3))+'KB';
