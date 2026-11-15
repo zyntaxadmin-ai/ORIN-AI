@@ -11,7 +11,8 @@ No build step, no framework, no server. Plain HTML, CSS and JavaScript files tha
 - **Any provider.** Add OpenAI-compatible APIs (OpenRouter, Groq, DeepSeek, Together, OpenAI, local servers), Anthropic, or Gemini. Quick-fill presets included.
 - **Smart fallback.** Providers are tried in your chosen order, and every error is understood: a rejected key or missing model skips to the next provider right away and is flagged in Settings; a rate limit, overload or network error is retried a couple of times first; a message too long for one model moves on to the next. A provider that keeps failing rests for a few minutes (or until you fix it) and is tried last. A short notice above the reply says what is happening, and when everything fails you get a plain explanation of what to fix. Retries, rest time and the first-reply timeout are set in Settings → Providers & Models. Each provider can be marked as not reading images or not supporting tool calling (Edit provider), and providers that cannot do the job, or whose context window is too small for the chat, are skipped before any call is made. Health is kept on your device only.
 - **Pinned model with backup.** When you pick one model in the model menu, turn on "If it fails, use my other providers" to have it tried first and the rest as backup.
-- **Model picker.** Choose **Auto** or pin one specific provider from the composer.
+- **Model picker.** Choose **Auto** or pin one specific provider from the composer. On a phone it opens as a bottom sheet; providers are numbered in fallback order, a provider that is resting shows why, and the fallback option is a switch.
+- **Home screen.** After login you land on a home screen with a message box: type there and a new chat starts with that message. Each active provider is shown as a small satellite circling the Orin ring (the first one, which answers first, is amber), with quick-start chips for common tasks. Your chat history stays in the menu (sidebar on wide screens).
 - **Streaming replies** with a **Stop** button. Text is revealed smoothly instead of jumping in bursts (switched off if your device asks for reduced motion).
 - **Code highlighting.** Code blocks are coloured (JS, Python, HTML, CSS, JSON, SQL, shell and more) with a small built-in highlighter, no library.
 - **Continue.** If a reply is cut off by the output limit (or you press Stop), a **Continue** button carries on from where it stopped.
@@ -37,7 +38,7 @@ No build step, no framework, no server. Plain HTML, CSS and JavaScript files tha
 - **Plan-first (safer agent).** In Settings → GitHub choose Off / Big tasks / Always. The AI shows a plan card (summary, files, steps) and waits for **Approve** before touching more than one file or deleting anything. Edits are blocked in code until you approve.
 - **Cheaper agent runs.** Claude requests use prompt caching (system, tools and conversation prefix); old bulky tool outputs are trimmed so they are not re-sent every step; the usage line shows how many input tokens were cached.
 - **Big files.** Text files up to 15MB per attachment (no silent truncation). **Smart mode** kicks in automatically when attached files exceed ~55% of the model's context: only the excerpts relevant to your question are sent (local BM25 search, no server), and in GitHub agent mode the AI can also use `search_attachment` / `read_attachment` to explore the file. Files are stored in IndexedDB, not localStorage, so chats stay light; the tray shows size and token estimate, and Orin warns before sending more than the model's context window (set per provider in Settings → Providers → Context window).
-- **Organised Settings.** Settings opens as a menu (Providers & Models, System prompt, Web search, Image generation, GitHub, Appearance & Voice, Account & Sync, Backup); each item opens its own page with a short status line.
+- **Organised Settings.** Settings opens as a grouped menu with a profile card at the top (Providers & Models, System prompt, Web search, Image generation, GitHub, Appearance & Voice, Account & Sync, Backup); each row has a status dot (green: ready, orange: needs attention) and opens its own page. Each provider row has an on/off switch and Edit, Retry now and move buttons. Theme is chosen from three previews (System, Light, Dark).
 - **GitHub agent mode.** Pick any of your repos (or create a new one) from the **+** menu. The AI lists, reads, creates and edits files by itself using tool calling (OpenAI-compatible, Anthropic, Gemini). Changes are staged as a draft; you review them and press **Push**. **Undo** restores the previous commit. Needs a GitHub token (classic, `repo` scope). Writes to `.git/` and `.github/workflows/` are blocked. The draft card shows a red/green line diff, and you can push straight to the branch or open a **Branch + Pull Request** (with Merge/Close buttons). Any branch of the repo can be selected.
   - Smarter agent: streaming replies, repo-wide code search, multi-edit per file, saved repo notes (so later chats already know the project), read-only access to other repos.
   - Issues & PRs: the agent can list/read/create issues, read PRs with review comments, switch to a PR branch to fix them, and write the PR description (editable before opening).
@@ -48,7 +49,16 @@ No build step, no framework, no server. Plain HTML, CSS and JavaScript files tha
 - **Accounts and cloud sync.** Email and password login via Supabase. Providers, API keys, system prompt, and chat history follow you to every device.
 - **Multiple accounts.** Each account's data is separate and protected by Row Level Security.
 - **Installable (PWA).** Add to home screen and use it like a native app.
-- **Light and dark themes** in a white and blue style.
+- **Light and dark themes** (see Design below), following the system setting by default.
+
+## Design
+
+The look is called **Orbit**. Orin's mark is a ring, and every provider you add is something that can take over when another one fails, so the mark carries one amber satellite. It is the only thing that moves on its own: it circles the logo slowly, speeds up while Orin is thinking, sits at the end of a reply while it is being written, and each active provider orbits on the home screen.
+
+- **Colours:** ink `#0d1230`, paper `#f4f6fb`, cobalt `#2f4dff`, satellite amber `#ffb224` (used for the satellite and warnings only). The chat history drawer and sidebar are ink-coloured in both themes. Colours are CSS variables at the top of `css/app.css`, with a dark set under `prefers-color-scheme` and `data-theme`.
+- **Type:** Poppins for titles, Inter for text and the interface. Both are Latin subsets in `fonts/` (OFL licence in `fonts/LICENSE.txt`), so the app makes no font requests to other sites and works offline. Bangla uses the device's own Bangla font.
+- **Motion:** the satellite, the rings drawing in on the home screen, a short entrance for your own new messages, and bottom-sheet menus. Everything stops when the device asks for reduced motion.
+- **Phone first:** pop-up menus become bottom sheets under 700px; from 1024px the chat history is a permanent sidebar.
 
 ## Project structure
 
@@ -58,17 +68,17 @@ No build step, no framework, no server. Plain HTML, CSS and JavaScript files tha
 | `css/app.css` | All styles (design "Orbit": ink sidebar, cobalt accent, one amber satellite) |
 | `fonts/` | Inter and Poppins, Latin subsets as WOFF, served from the app itself (offline-safe) |
 | `preview.html`, `js/preview-frame.js` | Empty page (no CSP, by design) that the sandboxed live-preview iframe loads; the draft HTML is sent to it with `postMessage` |
-| `js/core.js` | State, storage, helpers, markdown, chat list |
-| `js/cloud.js` | Cloud sync and login (Supabase URL and publishable key are here) |
+| `js/core.js` | State, storage, helpers, markdown and code highlighting, chat list |
+| `js/cloud.js` | Cloud sync and login (Supabase URL and publishable key are here), the home screen markup |
 | `js/providers.js` | AI provider calls and streaming |
-| `js/readers.js` | zip / folder / office file readers |
+| `js/readers.js` | zip / folder / office file readers, pop-up menus and the model picker, theme and voice settings blocks |
 | `js/github.js` | GitHub API helper (`gh()`), repos, branches, history, tree cache |
 | `js/checks.js`, `js/preview.js` | Pre-push checks, live preview |
 | `js/templates.js` | Project templates (data) |
 | `js/agent-tools.js` | Agent tool definitions (`TOOLS`) and the `tool()` executor |
 | `js/agent.js` | Agent loop, history trimming, system prompt |
 | `js/push.js` | Drafts, diffs, push, deploy status, PR actions, undo |
-| `js/chat.js`, `js/settings.js` | `send()`, `render()`, settings screens, start-up |
+| `js/chat.js`, `js/settings.js` | `send()`, `render()`, settings screens, click handling, home message box, start-up |
 | `manifest.json` | PWA manifest (name, colors, icons) |
 | `sw.js` | Service worker for installability and offline shell |
 | `icon-192.png`, `icon-512.png` | App icons |
@@ -113,7 +123,7 @@ Open the live link in Chrome and choose **Install app** (or **Add to Home screen
 1. Log in.
 2. Open **Settings → Add provider**. Pick a preset or enter a name, format, base URL, API key, and model name.
 3. Reorder providers with the arrows. Toggle them on or off.
-4. Start chatting. Use **+** for attachments, the model pill to pick Auto or a specific provider, and the mic for voice.
+4. Start chatting: type in the box on the home screen to begin a new chat. Inside a chat, use **+** for attachments, the model pill to pick Auto or a specific provider, and the mic for voice.
 
 ## Security notes
 
@@ -140,7 +150,7 @@ Open the live link in Chrome and choose **Install app** (or **Add to Home screen
 
 ## Tech
 
-Plain HTML, CSS, and JavaScript. Supabase Auth and PostgREST over `fetch`. No dependencies.
+Plain HTML, CSS, and JavaScript. Supabase Auth and PostgREST over `fetch`. No dependencies (the two fonts are bundled files, not a library).
 
 The `js/*.js` files are plain scripts, not modules: they share one global scope and `index.html` loads them in a fixed order, so a new file must be added to the `<script>` list (and to `sw.js`). Top-level code in a file may only call functions from files loaded earlier or from functions that run later (event handlers, timers). The `Check` workflow parses every file and the files joined in load order, which catches duplicate `const` names across files.
 
