@@ -116,6 +116,22 @@ const liveNoteHTML=()=>liveNote?'<div class="fbn" id="livenote" role="status">'+
 /* wait ms, but wake up when Stop is pressed; resolves false if stopped */
 const sleepStop=ms=>new Promise(res=>{const t0=Date.now();(function w(){if(stopped)res(false);else if(Date.now()-t0>=ms)res(true);else setTimeout(w,120)})()});
 
+/* ---------- app in the background ----------
+   Phones freeze or cut network calls when the browser goes to the background. A call that dies while the page
+   was hidden (or offline) says nothing about the provider, so it must not count as a failure or make the provider
+   rest: wait until the app is back, then try the same provider again. */
+let pageAway=0;   /* last time the page was hidden, shown, frozen, resumed, or went offline/online */
+for(const ev of ['visibilitychange','freeze','resume'])document.addEventListener(ev,()=>{pageAway=Date.now()});
+for(const ev of ['pagehide','pageshow','online','offline'])window.addEventListener(ev,()=>{pageAway=Date.now()});
+const awayNow=()=>document.hidden||navigator.onLine===false;
+/* wait until the page is visible and online again, then a moment for the network to wake up; false if Stop was pressed */
+async function waitBack(){
+  while(awayNow()){if(stopped)return false;await new Promise(r=>setTimeout(r,400))}
+  return sleepStop(800);
+}
+/* did this failed call (started at t0) overlap a time when the app was away? */
+const wasAway=t0=>awayNow()||pageAway>=t0;
+
 /* ---------- what a provider can do ----------
    p.cap = {vision:false, tools:false} only holds what you switched OFF in the provider settings; unknown counts as "can".
    Before any call, providers that cannot do the job are left out, so no time is lost on a certain failure. */
@@ -147,10 +163,11 @@ async function withFallback(list,attempt,opts){
   const order=fbOrder(pool,o.first);
   setLiveNote('');
   for(let i=0;i<order.length;i++){
-    const p=order[i];let tries=0;
+    const p=order[i];let tries=0,away=0;
     for(;;){
       if(stopped)return {stopped:true,p,fails,kinds};
       tries++;
+      const t0=Date.now();
       try{
         if(o.onStart)o.onStart(p);
         const value=await attempt(p);
@@ -158,6 +175,15 @@ async function withFallback(list,attempt,opts){
       }catch(e){
         if(stopped||e.message==='STOP')return {stopped:true,p,fails,kinds};
         const pe=asProvErr(e);
+        /* the call died because the app was in the background or offline: not the provider's fault.
+           Wait until the app is back and retry the same provider without counting it (at most 5 times). */
+        if((pe.kind==='net'||pe.kind==='timeout')&&away<5&&wasAway(t0)){
+          away++;tries--;
+          setLiveNote('The app was in the background. Reconnecting to '+p.name+'…');
+          if(!await waitBack())return {stopped:true,p,fails,kinds};
+          setLiveNote('');
+          continue;
+        }
         if(FB_RETRY.has(pe.kind)&&tries<=cfg.retries&&(pe.wait||0)<=15){
           const w=pe.wait||[1,3,6,10,15][tries-1]||15;
           setLiveNote(p.name+': '+FBL[pe.kind].toLowerCase()+'. Trying again in '+w+'s…');
