@@ -59,5 +59,14 @@ try{JSON.parse(rd('manifest.json'))}catch(e){bad('manifest.json: '+e.message)}
 const SECRET=/gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|sk-(ant-|proj-)?[A-Za-z0-9_-]{30,}/;
 const scan=[...pages,'sw.js','manifest.json','README.md',...assets].filter(ex);
 for(const f of scan){const m=rd(f).match(SECRET);if(m)bad('possible secret in '+f+': '+m[0].slice(0,8)+'…')}
+/* Warning only, never fails the check: very long lines are hard to read, to diff and to read by line range.
+   js/templates.js is data (whole project files as strings), so it is skipped. */
+const LONG=400,longs=[];
+for(const f of [...loaded].sort()){
+  if(f==='js/templates.js'||!ex(f))continue;
+  const ls=rd(f).split('\n'),n=ls.filter(l=>l.length>LONG).length;
+  if(n)longs.push(f+' ('+n+' line'+(n>1?'s':'')+', longest '+Math.max(...ls.map(l=>l.length))+' chars)');
+}
+if(longs.length)console.warn('WARNING: lines over '+LONG+' characters, please break them up when you edit these files:\n- '+longs.join('\n- '));
 if(fail.length){console.error('FAILED:\n- '+fail.join('\n- '));process.exit(1)}
 console.log('OK: '+pages.length+' pages, '+nScripts+' scripts, '+css.size+' stylesheet(s); each parses, each page parses together; CSP present and strict for scripts; sw.js, manifest.json, secrets scan fine');

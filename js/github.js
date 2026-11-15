@@ -5,8 +5,61 @@ const enc=x=>String(x).split('/').map(encodeURIComponent).join('/');
 const agentOn=()=>!!(S.repo&&S.gh&&S.gh.token);
 let rsub='',hist=null,flist,fq='';
 let ghTree=null,ghRepos,rfilter='',dview={},pushing=false,rloading=false;
+let ghAcc='';   /* html of the last "Check access" result, shown in Settings → GitHub */
 const GH_HELP='<p class="h">To let the assistant work on your repositories you need a GitHub token (one time). Go to <b>github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)</b>. Name it Orin, choose an expiration, tick <b>repo</b>, generate it, then copy and paste it below. Never share the token.</p>';
-function ghHTML(){const pm=S.planMode||'big';return '<div class="sec"><h3>Plan first</h3><p class="h">Before changing files, the assistant shows a plan and waits for your approval.</p><div class="seg">'+[['off','Off'],['big','Big tasks'],['always','Always']].map(x=>'<button data-plm="'+x[0]+'" class="'+(pm===x[0]?'on':'')+'">'+x[1]+'</button>').join('')+'</div><p class="h" style="margin-top:8px">Big tasks: the assistant edits a single file on its own, but asks for a plan before touching more than one file or deleting anything.</p></div><div class="sec"><h3>GitHub agent mode</h3><p class="h">The assistant reads and writes repository files by itself, and nothing reaches GitHub until you press Push. Choose a repository from the + menu in the composer.</p><input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" aria-label="GitHub token" value="'+qa((S.gh||{}).token)+'"><div class="row"><button class="btn ghost sm" data-act="ropen">Choose a repository</button></div></div>'}
+function ghHTML(){
+  const pm=S.planMode||'big';
+  const seg=[['off','Off'],['big','Big tasks'],['always','Always']]
+    .map(x=>'<button data-plm="'+x[0]+'" class="'+(pm===x[0]?'on':'')+'">'+x[1]+'</button>').join('');
+  return '<div class="sec"><h3>Plan first</h3>'+
+    '<p class="h">Before changing files, the assistant shows a plan and waits for your approval.</p>'+
+    '<div class="seg">'+seg+'</div>'+
+    '<p class="h" style="margin-top:8px">Big tasks: the assistant edits a single file on its own, but asks for a plan before touching more than one file or deleting anything.</p></div>'+
+    '<div class="sec"><h3>GitHub agent mode</h3>'+
+    '<p class="h">The assistant reads and writes repository files by itself, and nothing reaches GitHub until you press Push. Choose a repository from the + menu in the composer.</p>'+
+    '<input class="f" id="gt" type="password" autocomplete="off" placeholder="ghp_…" aria-label="GitHub token" value="'+qa((S.gh||{}).token)+'">'+
+    '<div class="row"><button class="btn ghost sm" data-act="ropen">Choose a repository</button>'+
+    '<button class="btn ghost sm" data-act="gcheck">Check access</button></div>'+
+    '<div id="gacc">'+ghAcc+'</div></div>';
+}
+/* What can the saved token do? Reads /user (classic scopes come in a header), the rate limit, and push rights on the chosen repo. */
+async function ghAccess(){
+  const t=S.gh&&S.gh.token;if(!t)throw new Error('GitHub token is missing');
+  const r=await fetch('https://api.github.com/user',{headers:{Authorization:'Bearer '+t,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}});
+  if(r.status===401)throw new Error('GitHub rejected the token (401). It may be wrong, expired or revoked.');
+  if(!r.ok)throw new Error('GitHub answered '+r.status+' when checking the token.');
+  const u=await r.json(),sc=r.headers.get('x-oauth-scopes');
+  const out={
+    login:u.login,
+    fine:/^github_pat_/.test(t),
+    scopes:sc===null?null:sc.split(',').map(s=>s.trim()).filter(Boolean),
+    limit:r.headers.get('x-ratelimit-limit'),
+    left:r.headers.get('x-ratelimit-remaining'),
+    reset:parseInt(r.headers.get('x-ratelimit-reset'),10)||0,
+    repo:S.repo?S.repo.full:'',
+    perm:null
+  };
+  if(S.repo){
+    try{out.perm=(await gh('/repos/'+enc(S.repo.full))).permissions||{}}
+    catch(e){out.perm={err:e.message}}
+  }
+  return out;
+}
+function ghAccHTML(a){
+  const row=(ok,txt)=>'<p class="h">'+(ok?'✓ ':'⚠ ')+txt+'</p>';
+  let h=row(true,'Signed in as <b>@'+esc(a.login)+'</b> ('+(a.fine?'fine-grained token':'classic token')+')');
+  if(a.fine)h+=row(true,'Fine-grained tokens do not list their permissions here. The repo needs <b>Contents</b>, <b>Pull requests</b>, <b>Issues</b>, <b>Actions</b> (read), <b>Pages</b> and <b>Workflows</b>.');
+  else if(a.scopes){
+    h+=row(a.scopes.includes('repo'),'<b>repo</b> scope '+(a.scopes.includes('repo')?'is on: files can be read and written.':'is missing: the assistant cannot read private repos or push.'));
+    h+=row(a.scopes.includes('workflow'),'<b>workflow</b> scope '+(a.scopes.includes('workflow')?'is on.':'is missing: pushing files under .github/workflows/ will be refused.'));
+  }
+  if(a.repo){
+    if(a.perm&&a.perm.err)h+=row(false,esc(a.repo)+': '+esc(a.perm.err));
+    else if(a.perm)h+=row(!!a.perm.push,esc(a.repo)+(a.perm.push?': you can push.':': read only, push is not allowed.'));
+  }else h+='<p class="h">Choose a repository to also check push rights on it.</p>';
+  if(a.left!==null&&a.limit!==null)h+='<p class="h">Rate limit: '+esc(a.left)+' of '+esc(a.limit)+' requests left'+(a.reset?', resets at '+new Date(a.reset*1000).toLocaleTimeString():'')+'.</p>';
+  return h;
+}
 /* seconds to wait if GitHub answered with a rate limit (primary or secondary), else null */
 function rateWait(r,j){
   if(r.status!==403&&r.status!==429)return null;
