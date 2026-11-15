@@ -200,17 +200,18 @@ function needPlan(c,name,p){
   const d=c.draft;return name==='delete_file'||!!(d&&d.files&&Object.keys(d.files).length&&!(p in d.files));
 }
 async function runAgent(c,list){
+  liveBy=null;
   RFC.clear();RDG.clear();TOOLNO=0;
   try{await ensureNotes(c)}catch(e){}
   try{await ensureSummary(c,list)}catch(e){}
   const history=buildHistory(c,true),work=[],log=[],fails=[],sys=agentSys(c);
   liveLog=log;liveT='';livePn='';
-  let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
+  let pi=0,final='',by='',mdl='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
   try{
     for(let step=0;step<40&&!stopped&&!done&&!failedAll;step++){
       let res=null;
       while(pi<list.length&&!stopped){
-        try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{liveT=t||'';livePn=pn||'';draw()});by=list[pi].name;break}
+        liveBy={by:list[pi].name,model:list[pi].model};try{res=await agentCall(list[pi],history,work,sys,(t,pn)=>{liveT=t||'';livePn=pn||'';draw()});by=list[pi].name;mdl=list[pi].model;break}
         catch(e){if(stopped||e.message==='STOP')break;fails.push(list[pi].name+': '+e.message);pi++}
       }
       if(!res){if(!stopped)failedAll=true;break}
@@ -226,10 +227,10 @@ async function runAgent(c,list){
     }
   }catch(e){fails.push('agent: '+e.message);failedAll=!done&&!stopped}
   const src=srcOf(c),u=tot.i||tot.o?{i:tot.i,o:tot.o,k:tot.k||undefined,e:tot.e||undefined,c:tot.hc?tot.c:undefined}:undefined;
-  if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Done. Review the draft below.':'Done.'),by,skipped:fails.slice(),log,src,u});
-  else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,skipped:[],log,u})}
+  if(done)c.msgs.push({role:'assistant',content:final.trim()||(dcount(c)?'Done. Review the draft below.':'Done.'),by,model:mdl,skipped:fails.slice(),log,src,u});
+  else if(stopped){if(log.length)c.msgs.push({role:'assistant',content:'Stopped.',by,model:mdl,skipped:[],log,u})}
   else if(failedAll)c.msgs.push({role:'error',content:'All providers failed. In agent mode the model must support tool calling.\n'+fails.join('\n')});
-  else c.msgs.push({role:'assistant',content:'Reached the step limit. Type "continue" to keep going.',by,skipped:[],log,u});
+  else c.msgs.push({role:'assistant',content:'Reached the step limit. Type "continue" to keep going.',by,model:mdl,skipped:[],log,u});
   busy=false;live='';liveLog=null;liveT='';livePn='';setBusyUI(false);save();render();
 }
 const logParse=l=>{const m=/^([a-z]+):(.*)$/s.exec(l);return m&&IX[m[1]]?[m[1],m[2]]:[null,String(l).replace(/^[^\w#\s]+\uFE0F?\s*/u,'')]};

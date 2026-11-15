@@ -170,15 +170,16 @@ async function runImg(c){
 let imgMode=false;
 function updateModes(){$('mchips').innerHTML=(S.web?'<button type="button" class="chip on" data-tog="web" aria-label="Turn off web search">'+ico('globe',14)+'Web search'+ico('x',12)+'</button>':'')+(imgMode?'<button type="button" class="chip on" data-tog="img" aria-label="Turn off image mode">'+ico('image',14)+'Create image'+ico('x',12)+'</button>':'');$('box').placeholder=imgMode?'Describe the image…':'Message Orin…'}
 async function run(c,list){
+  liveBy=null;
   try{await ensureSummary(c,list)}catch(e){}
   const history=buildHistory(c);
   const fails=[];let done=false;
   for(const p of list){
     if(stopped)break;
     try{
-      live='';const out=await callProvider(p,history,t=>{live=t;draw()});
-      c.msgs.push({role:'assistant',content:out,by:p.name,skipped:fails.slice(),src:srcOf(c),u:mkUsage(p,history,out),cut:lastCut||undefined});done=true;break;
-    }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,skipped:[],src:srcOf(c),u:mkUsage(p,history,live),cut:1});done=true;break}fails.push(p.name+': '+e.message)}
+      liveBy={by:p.name,model:p.model};live='';const out=await callProvider(p,history,t=>{live=t;draw()});
+      c.msgs.push({role:'assistant',content:out,by:p.name,model:p.model,skipped:fails.slice(),src:srcOf(c),u:mkUsage(p,history,out),cut:lastCut||undefined});done=true;break;
+    }catch(e){if(stopped||e.message==='STOP'){if(live)c.msgs.push({role:'assistant',content:live,by:p.name,model:p.model,skipped:[],src:srcOf(c),u:mkUsage(p,history,live),cut:1});done=true;break}fails.push(p.name+': '+e.message)}
   }
   if(!done&&!stopped)c.msgs.push({role:'error',content:'All providers failed.\n'+fails.join('\n')});
   busy=false;live='';setBusyUI(false);save();render();

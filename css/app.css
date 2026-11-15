@@ -62,6 +62,7 @@ header h1{flex:1;min-width:0;font-size:16px;font-weight:650;padding-left:4px;whi
 .m th,.m td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top;overflow-wrap:normal}
 .m th{background:var(--sf2);font-weight:600}
 .m li.tk{list-style:none;margin-left:-1.2em}.m li.tk input{margin-right:4px}.m s{opacity:.7}
+.who{align-self:flex-start;margin:0 4px -12px;font-size:12px;font-weight:600;color:var(--mute);max-width:100%;overflow-wrap:anywhere}.who.r{align-self:flex-end}
 .meta{align-self:flex-start;display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-top:-14px;font-size:12.5px;color:var(--mute)}
 .meta.r{align-self:flex-end}
 .meta span{margin-right:6px}

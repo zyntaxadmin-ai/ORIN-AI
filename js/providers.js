@@ -72,7 +72,7 @@ async function callProvider(p,history,onDelta,opts){
     throw e;
   }finally{clearTimeout(to)}
 }
-let live='',raf=0,lastUsage=null,lastCut=false;
+let live='',raf=0,lastUsage=null,lastCut=false,liveBy=null;
 /* Agent progress: steps are kept as a list and appended one by one, so earlier rows are never redrawn. */
 let liveLog=null,liveT='',livePn='';
 const stepInner=l=>{const [k,t]=logParse(l);return (k?ico(k,14):'')+'<span>'+esc(t)+'</span>'};
@@ -99,6 +99,7 @@ const draw=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!busy)retu
   const now=performance.now();if(now-lastT<60){draw();return}lastT=now;
   const el=$('liveb'),m=$('msgs');
   if(!el){render(true);return}
+  {const wh=liveWho(),w0=$('livewho');if(wh){if(!w0)el.insertAdjacentHTML('beforebegin',wh);else if(w0.dataset.k!==liveBy.by+'|'+liveBy.model)w0.outerHTML=wh}}
   const near=m.scrollHeight-m.scrollTop-m.clientHeight<140;
   if(liveLog)patchLive(el);else el.innerHTML=md(live);
   if(near)m.scrollTop=m.scrollHeight;
