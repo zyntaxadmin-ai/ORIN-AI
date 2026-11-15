@@ -101,6 +101,11 @@ document.addEventListener('click',async e=>{
     S.repo={full:r.full_name,branch:r.default_branch||'main'};ghTree=null;save();view='';$('sheet').classList.remove('on');render();toast('Repo: '+r.full_name)}
   else if(d.act==='ropen'){closePop();editing=null;view='repo';openSheet()}
   else if(d.act==='gsave'){const g=$('gt');if(g)S.gh={token:g.value.trim()};ghRepos=undefined;ghTree=null;save();drawSheet()}
+  else if(d.act==='gcheck'){
+    const g=$('gt');if(g&&g.value.trim()&&g.value.trim()!==(S.gh||{}).token){S.gh=Object.assign(S.gh||{},{token:g.value.trim()});save()}
+    t.disabled=true;
+    ghAccess().then(a=>{ghAcc=ghAccHTML(a)}).catch(e=>{ghAcc='<p class="h">⚠ '+esc(e.message)+'</p>'}).then(()=>{t.disabled=false;drawSheet()});
+  }
   else if(d.act==='rsub'){rsub=rsub===d.sub?'':d.sub;if(rsub==='hist')loadHist();if(rsub==='files')loadFiles();drawSheet()}
   else if(d.hrest){restoreTo(d.hrest)}
   else if(d.fatt!==undefined){
