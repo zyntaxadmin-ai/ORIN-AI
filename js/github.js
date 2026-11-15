@@ -156,8 +156,12 @@ const defMsg=c=>{const u=[...c.msgs].reverse().find(m=>m.role==='user');return '
 async function getTree(){
   const key=S.repo.full+'@'+S.repo.branch;
   if(ghTree&&ghTree.key===key&&Date.now()-ghTree.at<60000)return ghTree;
-  const t={key,at:Date.now(),paths:new Set(),modes:{},shas:{},trunc:false,empty:false};
-  try{const j=await gh('/repos/'+S.repo.full+'/git/trees/'+encodeURIComponent(S.repo.branch)+'?recursive=1');(j.tree||[]).forEach(x=>{if(x.type==='blob'){t.paths.add(x.path);t.modes[x.path]=x.mode;t.shas[x.path]=x.sha}});t.trunc=!!j.truncated}
+  const t={key,at:Date.now(),paths:new Set(),modes:{},shas:{},sizes:{},trunc:false,empty:false};
+  try{
+    const j=await gh('/repos/'+S.repo.full+'/git/trees/'+encodeURIComponent(S.repo.branch)+'?recursive=1');
+    (j.tree||[]).forEach(x=>{if(x.type==='blob'){t.paths.add(x.path);t.modes[x.path]=x.mode;t.shas[x.path]=x.sha;t.sizes[x.path]=x.size}});
+    t.trunc=!!j.truncated;
+  }
   catch(e){if(/ 409/.test(e.message))t.empty=true;else throw e}
   ghTree=t;return t;
 }
