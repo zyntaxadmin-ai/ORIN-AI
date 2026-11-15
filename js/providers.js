@@ -9,24 +9,36 @@ function cv(p,m){
   if(p.type==='anthropic')return{role:m.role,content:im.map(i=>pdf(i)?{type:'document',source:{type:'base64',media_type:i.mime,data:i.data}}:{type:'image',source:{type:'base64',media_type:i.mime,data:i.data}}).concat([{type:'text',text:tx}])};
   return{role:m.role,content:[{type:'text',text:tx}].concat(im.map(i=>pdf(i)?{type:'file',file:{filename:i.name||'file.pdf',file_data:'data:application/pdf;base64,'+i.data}}:{type:'image_url',image_url:{url:'data:'+i.mime+';base64,'+i.data}}))};
 }
-async function callProvider(p,history,onDelta){
-  const ctl=new AbortController();curCtl=ctl;lastUsage=null;let to=setTimeout(()=>ctl.abort(),120000);
-  const sys=S.system.trim();const base=p.url.replace(/\/+$/,'');
+/* temperature chosen in Settings (S.temp: a number, or unset = the provider's own default); each API has its own range */
+const tempFor=p=>{const t=S.temp;if(t===undefined||t===null||t===''||isNaN(+t))return null;const v=Math.max(0,+t);return p.type==='anthropic'?Math.min(1,v):Math.min(2,v)};
+/* opts: {sys: replaces the Settings system prompt, notemp: ignore the temperature setting} (used by the summary call) */
+async function callProvider(p,history,onDelta,opts){
+  const ctl=new AbortController();curCtl=ctl;lastUsage=null;lastCut=false;let to=setTimeout(()=>ctl.abort(),120000);
+  const sys=(opts&&opts.sys!=null?opts.sys:S.system).trim();const base=p.url.replace(/\/+$/,'');
   try{
     let url,headers={'Content-Type':'application/json'},body;
+    const tp=opts&&opts.notemp?null:tempFor(p);
     if(p.type==='anthropic'){
       url=base+'/v1/messages';headers['x-api-key']=p.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
       body={model:p.model,max_tokens:4096,stream:true,messages:cacheLast(history.map(m=>cv(p,m)))};if(sys)body.system=[{type:'text',text:sys,cache_control:{type:'ephemeral'}}];
+      if(tp!==null)body.temperature=tp;
     }else if(p.type==='gemini'){
       url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':streamGenerateContent?alt=sse&key='+encodeURIComponent(p.key);
       body={contents:history.map(m=>cv(p,m))};
       if(sys)body.systemInstruction={parts:[{text:sys}]};
+      if(tp!==null)body.generationConfig={temperature:tp};
     }else{
       url=base+'/chat/completions';if(p.key)headers.Authorization='Bearer '+p.key;
       body={model:p.model,stream:true,messages:(sys?[{role:'system',content:sys}]:[]).concat(history.map(m=>cv(p,m)))};
       if(/api\.(openai|groq|deepseek|together)\.|openrouter\.ai/.test(base))body.stream_options={include_usage:true};
+      if(tp!==null)body.temperature=tp;
     }
-    const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
+    let r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
+    /* some models (reasoning models) refuse a temperature: say it once and retry without it, instead of failing over to the next provider */
+    if(!r.ok&&tp!==null){
+      const j0=await r.clone().json().catch(()=>null),e0=Array.isArray(j0)?j0[0]:j0,x0=e0&&e0.error,m0=x0?(typeof x0==='string'?x0:x0.message||''):'';
+      if(r.status===400&&/temperature/i.test(m0)){delete body.temperature;if(body.generationConfig)delete body.generationConfig;r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal})}
+    }
     if(!r.ok){const j=await r.json().catch(()=>({}));const e=Array.isArray(j)?j[0]:j;const x=e&&e.error;throw new Error((x&&(typeof x==='string'?x:x.message||JSON.stringify(x)))||r.status+' '+r.statusText)}
     const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
     for(;;){
@@ -39,6 +51,10 @@ async function callProvider(p,history,onDelta){
         const d=ln.slice(5).trim();if(!d||d==='[DONE]')continue;
         let j;try{j=JSON.parse(d)}catch(_){continue}
         if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
+        /* reply was cut off because it hit the output limit: the chat then offers a Continue button */
+        if(p.type==='anthropic'){if(j.type==='message_delta'&&j.delta&&j.delta.stop_reason==='max_tokens')lastCut=true}
+        else if(p.type==='gemini'){const fr=j.candidates&&j.candidates[0]&&j.candidates[0].finishReason;if(fr==='MAX_TOKENS')lastCut=true}
+        else{const fr=j.choices&&j.choices[0]&&j.choices[0].finish_reason;if(fr==='length')lastCut=true}
         if(p.type==='anthropic'){if(j.type==='message_start'&&j.message&&j.message.usage){const mu=j.message.usage,k=mu.cache_read_input_tokens||0;lastUsage={i:(mu.input_tokens||0)+k+(mu.cache_creation_input_tokens||0),o:mu.output_tokens||0,k}}else if(j.type==='message_delta'&&j.usage)lastUsage=Object.assign(lastUsage||{i:0,o:0},{o:j.usage.output_tokens||0})}
         else if(p.type==='gemini'){const u=j.usageMetadata;if(u)lastUsage={i:u.promptTokenCount||0,o:(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0)}}
         else if(j.usage&&(j.usage.prompt_tokens!=null||j.usage.completion_tokens!=null))lastUsage={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
@@ -56,7 +72,7 @@ async function callProvider(p,history,onDelta){
     throw e;
   }finally{clearTimeout(to)}
 }
-let live='',raf=0,lastUsage=null;
+let live='',raf=0,lastUsage=null,lastCut=false;
 /* Agent progress: steps are kept as a list and appended one by one, so earlier rows are never redrawn. */
 let liveLog=null,liveT='',livePn='';
 const stepInner=l=>{const [k,t]=logParse(l);return (k?ico(k,14):'')+'<span>'+esc(t)+'</span>'};

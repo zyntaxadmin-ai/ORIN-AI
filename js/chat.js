@@ -9,7 +9,7 @@ async function send(){
   if(imgMode){if(pend.length){toast('Image mode doesn’t support attachments. Remove them first');return}if(!txt){toast('Describe the image you want');return}if(!imgReady()){toast('Add an image provider in Settings first');spage='img';openSheet();return}}
   else if(!list.length){toast('Add a provider in Settings first');spage='prov';openSheet();return}
   if(!imgMode){
-    const lim=ctxOf(list[0]),oc=chat(),fb=fbudget(lim),pf=pend.reduce((a,x)=>a+(x.kind==='text'?x.tok||etok(x.text):0),0),of=oc?chatFiles(oc).reduce((a,f)=>a+f.tok,0):0,nf=oc?oc.msgs.reduce((a,m)=>a+(m.content||'').length,0):0,est=etok(nf+txt.length)+Math.min(pf+of,fb);
+    const lim=ctxOf(list[0]),oc=chat(),fb=fbudget(lim),pf=pend.reduce((a,x)=>a+(x.kind==='text'?x.tok||etok(x.text):0),0),of=oc?chatFiles(oc).reduce((a,f)=>a+f.tok,0):0,nf=oc?ctxChars(oc):0,est=etok(nf+txt.length)+Math.min(pf+of,fb);
     if(est>lim*0.85&&!await ask('This message may be too long','It is about '+fmtTok(est)+' tokens, but '+list[0].name+' supports about '+fmtTok(lim)+'. The model may return an error.\n\nTry attaching smaller files or using a Gemini model. You can also set the context window per provider in Settings.','Send anyway'))return;
   }
   if(!chat())newChat();
@@ -42,7 +42,7 @@ function render(typing){
   const from=Math.max(0,c.msgs.length-60);c.msgs.forEach((m,i)=>{if(i<from)return;
     if(m.role==='user')h+='<div class="m u">'+(m.imgs?m.imgs.map(x=>x.mime==='application/pdf'?'<span class="tag">'+ico('pdf',13)+esc(x.name||'PDF')+'</span>':'<img class="th" src="data:'+x.mime+';base64,'+x.data+'">').join(''):(m.atts||[]).map(a=>'<span class="tag">'+(a.pdf?ico('pdf',13):ico('image',13))+esc(a.name)+'</span>').join(''))+(m.files||[]).map(f=>'<span class="tag">'+ico('file',13)+esc(f.name)+'</span>').join('')+(m.sm?'<span class="tag">'+ico('search',13)+'Smart · '+m.sm+' excerpts</span>':'')+(m.content?esc(m.content).replace(/\n/g,'<br>'):'')+'</div><div class="meta r">'+ibtn('data-edit="'+i+'"','Edit','edit')+'</div>';
     else if(m.role==='assistant'){
-      h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+usageStr(m.u)+'</span>'+(m.pic?ibtn('data-save="'+i+'"','Save image','dl'):ibtn('data-copy="'+i+'"','Copy','copy'))+(i===c.msgs.length-1?ibtn('data-regen="1"','Regenerate','refresh'):'')+'</div>';
+      h+='<div class="m a">'+logHTML(m)+(m.pic?'<img class="gi" alt="" src="'+qa(m.pic)+'">':md(m.content))+'</div>'+srcHTML(m.src)+'<div class="meta"><span>'+esc(m.by||'')+(m.skipped&&m.skipped.length?' (fallback)':'')+usageStr(m.u)+'</span>'+(m.pic?ibtn('data-save="'+i+'"','Save image','dl'):ibtn('data-copy="'+i+'"','Copy','copy'))+ibtn('data-fork="'+i+'"','Fork: new chat from here','fork')+(i===c.msgs.length-1?ibtn('data-regen="1"','Regenerate','refresh')+(m.cut&&!m.pic?'<button class="chip" data-cont="1">Continue</button>':''):'')+'</div>';
     }else h+='<div class="m e">'+esc(m.content).replace(/\n/g,'<br>')+'</div>'+(i===c.msgs.length-1?'<div class="meta">'+ibtn('data-regen="1"','Retry','refresh')+'<span>Retry</span></div>':'');
   });
   {const tu=c.msgs.reduce((a,m)=>{if(m.u){a.i+=m.u.i;a.o+=m.u.o;if(m.u.c!=null){a.c+=m.u.c;a.hc=1}if(m.u.e)a.e=1;a.n++}return a},{i:0,o:0,c:0,n:0});

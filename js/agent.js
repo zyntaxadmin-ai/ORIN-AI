@@ -130,7 +130,43 @@ async function agentCall(p,history,work,sys,onLive){
     throw e;
   }finally{clearTimeout(to)}
 }
-const buildHistory=(c,agent)=>{const lz=agent?lazyPlan(c):null,sm=lz||smartPlan(c);{const lu=[...c.msgs].reverse().find(m=>m.role==='user');if(lu){if(sm&&!lz)lu.sm=sm.n;else delete lu.sm}}let h=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.role==='user'?fullText(m,sm)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}return h};
+/* ---------- Long chats: older messages are summarized instead of dropped ----------
+   The chat on screen keeps every message; only what is SENT changes: summary + the newest messages.
+   c.sum = {n: how many user/assistant messages the summary covers, fp: fingerprint of the last covered one, text}.
+   If the covered messages change (edit, regenerate), the fingerprint no longer matches and the summary is dropped. */
+const SUM_TRIG=36,SUM_KEEP=16;
+const hmsgs=c=>c.msgs.filter(m=>m.role==='user'||m.role==='assistant');
+const sumFp=m=>m?((m.content||'').length+':'+(m.content||'').slice(0,40)):'';
+const sumOk=(c,hm)=>!!(c.sum&&c.sum.n>0&&hm.length>=c.sum.n&&sumFp(hm[c.sum.n-1])===c.sum.fp);
+const sumWanted=(rest)=>S.autosum!==false&&(rest.length>SUM_TRIG||(rest.reduce((a,m)=>a+(m.content||'').length,0)>70000&&rest.length>SUM_KEEP+2));
+/* rough size (characters) of what the next message will really send, for the "too long" warning */
+function ctxChars(c){
+  const all=hmsgs(c),ok=sumOk(c,all),rest=ok?all.slice(c.sum.n):all,sz=a=>a.reduce((t,m)=>t+(m.content||'').length,0);
+  if(ok)return sz(rest)+c.sum.text.length;
+  return sumWanted(rest)?sz(rest.slice(-SUM_KEEP))+2000:sz(rest);
+}
+async function ensureSummary(c,list){
+  if(S.autosum===false||!list.length)return;
+  const all=hmsgs(c);if(c.sum&&!sumOk(c,all))delete c.sum;
+  const done=c.sum?c.sum.n:0,rest=all.slice(done);
+  if(!sumWanted(rest))return;
+  let n=all.length-SUM_KEEP;while(n>done&&all[n].role!=='user')n--;   /* the kept part must start at a user message */
+  if(n<=done)return;
+  const tr=all.slice(done,n).map(m=>(m.role==='user'?'User: ':'Assistant: ')+String(m.content||'[attachment]').slice(0,2500)).join('\n\n').slice(-40000);
+  const prompt='Below is an earlier part of a conversation'+(c.sum?', and a summary of what came before it':'')+'. Write ONE updated summary (at most 350 words) so the conversation can go on without the original messages. Keep: the user\'s goals and preferences, decisions made, important facts, names, numbers, file names, short code or commands that are still needed, open questions and next steps. Write in the language the user uses. Output only the summary.'+(c.sum?'\n\n[Previous summary]\n'+c.sum.text:'')+'\n\n[Messages]\n'+tr;
+  toast('Summarizing earlier messages…');
+  for(const p of list){
+    if(stopped)return;
+    try{
+      const out=await callProvider(p,[{role:'user',content:prompt}],()=>{},{sys:'',notemp:true});
+      if(out&&out.trim()){c.sum={n,fp:sumFp(all[n-1]),text:out.trim().slice(0,6000)};save();return}
+    }catch(e){if(stopped||e.message==='STOP')return}
+  }
+}
+const buildHistory=(c,agent)=>{const lz=agent?lazyPlan(c):null,sm=lz||smartPlan(c);{const lu=[...c.msgs].reverse().find(m=>m.role==='user');if(lu){if(sm&&!lz)lu.sm=sm.n;else delete lu.sm}}const all=hmsgs(c),ok=sumOk(c,all);if(c.sum&&!ok)delete c.sum;
+  let h=(ok?all.slice(c.sum.n):all).map(m=>({role:m.role,content:m.role==='user'?fullText(m,sm)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}
+  if(ok)h=[{role:'user',content:'[Summary of the earlier part of this conversation, for your context only]\n'+c.sum.text},{role:'assistant',content:'Understood. I will keep this context in mind.'}].concat(h);
+  return h};
 function attachNote(c){const fs=chatFiles(c);if(!fs.length)return '';const sm=smartPlan(c);return '\nFiles attached by the user in this chat: '+fs.map(f=>f.name+' ('+f.text.split('\n').length+' lines)').join(', ')+'.'+(sm?' They are too big for the context, so only excerpts are included in the messages; use search_attachment and read_attachment to look at other parts.':'')+(lazyPlan(c)?' Big attached files are not pasted in the messages (to save tokens): for a zip/folder of updated files call compare_attachment and then apply_attachment instead of reading and rewriting each file; use search_attachment/read_attachment for anything else.':'')}
 function taskNote(c){if(!c.tasks||!c.tasks.length)return '';return '\nTASK CHECKLIST (continue with the first unfinished task, call complete_task after each):\n'+c.tasks.map((x,i)=>(i+1)+'. ['+(x.done?'x':' ')+'] '+x.t).join('\n')}
 function agentSys(c){return agentSys0(c)+attachNote(c)+planNote(c)+taskNote(c)}
@@ -166,6 +202,7 @@ function needPlan(c,name,p){
 async function runAgent(c,list){
   RFC.clear();RDG.clear();TOOLNO=0;
   try{await ensureNotes(c)}catch(e){}
+  try{await ensureSummary(c,list)}catch(e){}
   const history=buildHistory(c,true),work=[],log=[],fails=[],sys=agentSys(c);
   liveLog=log;liveT='';livePn='';
   let pi=0,final='',by='',done=false,failedAll=false;const tot={i:0,o:0,c:0,e:0,hc:0,k:0};

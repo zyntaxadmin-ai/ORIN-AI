@@ -12,6 +12,11 @@ No build step, no framework, no server. Plain HTML, CSS and JavaScript files tha
 - **Auto fallback.** Providers are tried in your chosen order. If one fails (error, rate limit, timeout), the next one takes over.
 - **Model picker.** Choose **Auto** or pin one specific provider from the composer.
 - **Streaming replies** with a **Stop** button.
+- **Code highlighting.** Code blocks are coloured (JS, Python, HTML, CSS, JSON, SQL, shell and more) with a small built-in highlighter, no library.
+- **Continue.** If a reply is cut off by the output limit (or you press Stop), a **Continue** button carries on from where it stopped.
+- **Fork a chat.** The fork button under a reply copies the chat up to that message into a new chat, to try another direction.
+- **Temperature.** Settings → System prompt has a creativity slider (or Default). Models that refuse a temperature are retried without it automatically.
+- **Long chats stay cheap.** After about 36 messages the older ones are summarized once and only the summary plus the newest messages are sent. The chat on screen keeps everything. Turn it off in Settings → System prompt.
 - **Attachments.** Images, text/code files, and PDFs (PDFs work with Gemini and Anthropic).
 - **Web search.** Turn on the 🌐 button and Orin searches the web (via Tavily) before answering, then shows source links under the reply. Add your Tavily key in Settings.
 - **Image generation.** Turn on the 🎨 button to send your message as an image prompt to any OpenAI-compatible `/images/generations` API (OpenAI, Together, ...). Configure it in Settings.

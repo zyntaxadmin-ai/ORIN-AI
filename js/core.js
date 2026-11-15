@@ -27,6 +27,7 @@ const IC={
  up:_s('<path d="M12 19V5M5 12l7-7 7 7"/>'),
  stop:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>',
  copy:_s('<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 017.5 4H16"/>'),
+ fork:_s('<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 6"/>'),
  refresh:_s('<path d="M20 11a8 8 0 10-2.2 5.6M20 4v7h-7"/>'),
  dl:_s('<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>'),
  chev:_s('<path d="M6 9l6 6 6-6"/>',14),
@@ -100,9 +101,37 @@ function tbl(rows){
   const head=sep?R[0]:null,body=sep?R.slice(2):R;
   return '<div class="tw"><table>'+(head?'<thead><tr>'+head.map(c=>'<th>'+inl(c)+'</th>').join('')+'</tr></thead>':'')+'<tbody>'+body.map(r=>'<tr>'+r.map(c=>'<td>'+inl(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
 }
+/* Tiny syntax highlighter for code blocks (no library). md() has already escaped the code, so it is unescaped here,
+   split into pieces by one regex, and every piece is escaped again. Unlabelled or plain-text blocks only get
+   strings, numbers and comments, never keywords, so ordinary text is not coloured by mistake. */
+const unesc=t=>t.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&');
+const HLKW='abstract|and|as|assert|async|await|break|case|catch|chan|class|const|continue|def|default|defer|del|delete|do|elif|else|enum|except|export|extends|false|fi|final|finally|fn|for|from|func|function|global|go|if|impl|implements|import|in|instanceof|interface|is|lambda|let|loop|match|mod|mut|new|None|nonlocal|not|null|of|or|package|pass|private|protected|pub|public|raise|range|return|select|self|static|struct|super|switch|then|this|throw|trait|True|True|try|type|typeof|undefined|use|using|var|void|while|with|yield|SELECT|FROM|WHERE|INSERT|INTO|UPDATE|DELETE|CREATE|TABLE|JOIN|ON|GROUP|BY|ORDER|LIMIT|AND|OR|NOT|NULL|VALUES|SET|AS|true|nil';
+function hl(code,lang){
+  if(code.length>24000)return code;
+  lang=(lang||'').toLowerCase();
+  const plain=!lang||/^(text|txt|plain|plaintext|output|console|log|logs|diff|patch|csv|md|markdown)$/.test(lang);
+  const hash=/^(py|python|sh|bash|shell|zsh|yaml|yml|rb|ruby|toml|ini|conf|dockerfile|r|pl|perl|ps1|powershell|make|makefile)$/.test(lang);
+  const dash=/^(sql|lua|hs|haskell)$/.test(lang),markup=/^(html|htm|xml|svg|vue|jsx|tsx|xhtml)$/.test(lang),css=/^(css|scss|less)$/.test(lang);
+  const parts=[],cls=[],add=(s,c)=>{parts.push('('+s+')');cls.push(c)};
+  add((hash?'#[^\\n]*':dash?'--[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/':'\\/\\*[\\s\\S]*?\\*\\/|\\/\\/[^\\n]*')+'|<!--[\\s\\S]*?-->','hc');
+  add('"(?:\\\\.|[^"\\\\\\n])*"(?=\\s*:)','hy');
+  add('"""[\\s\\S]*?"""|\'\'\'[\\s\\S]*?\'\'\'|"(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'|`(?:\\\\.|[^`\\\\])*`','hs');
+  add('\\b0x[\\da-fA-F]+\\b|\\b\\d+(?:\\.\\d+)?\\b','hn');
+  if(markup)add('<\\/?[A-Za-z][\\w:-]*','ht');
+  if(!plain&&!markup&&!css)add('\\b(?:'+HLKW+')\\b','hk');
+  const re=new RegExp(parts.join('|'),'g'),raw=unesc(code);
+  let out='',last=0,m;
+  while((m=re.exec(raw))){
+    if(m.index>last)out+=esc(raw.slice(last,m.index));
+    let k=1;while(k<m.length&&m[k]===undefined)k++;
+    out+='<span class="'+cls[k-1]+'">'+esc(m[0])+'</span>';last=re.lastIndex;
+    if(m[0]==='')re.lastIndex++;
+  }
+  return out+esc(raw.slice(last));
+}
 function md(t){
   return esc(t).split('```').map((p,i)=>{
-    if(i%2)return '<div class="cw"><button class="cp" data-cc="1">Copy</button><pre><code>'+p.replace(/^[\w-]*\n/,'')+'</code></pre></div>';
+    if(i%2){const mm=p.match(/^([\w+#.-]*)\n/),lg=mm?mm[1]:'',cd=mm?p.slice(mm[0].length):p;return '<div class="cw"><button class="cp" data-cc="1">Copy</button><pre><code>'+hl(cd,lg)+'</code></pre></div>'}
     let h='',tb=[];const stk=[],LI=/^(\s*)([*+-]|\d+[.)])\s+(.*)$/;
     const eL=()=>{while(stk.length)h+='</'+stk.pop().t+'>'};
     const eT=()=>{if(tb.length){h+=tbl(tb);tb=[]}};

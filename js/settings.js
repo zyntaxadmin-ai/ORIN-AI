@@ -52,7 +52,9 @@ function drawSheet(){
    '<div class="mv"><button class="sm-ib" data-up="'+i+'" aria-label="Move up">'+IC.cup+'</button><button class="sm-ib" data-dn="'+i+'" aria-label="Move down">'+IC.cdn+'</button></div>'+
    '<button class="tgl '+(p.on?'on':'')+'" data-tg="'+i+'" role="switch" aria-checked="'+(p.on?'true':'false')+'" aria-label="Enabled"></button><button class="sm-ib" data-ed="'+i+'" aria-label="Edit">'+IC.edit+'</button></div>').join('')||'<p class="h">No providers yet.</p>')+
    '<div class="row"><button class="btn" data-act="padd">Add provider</button></div></div>';
-  else if(spage==='sys')b.innerHTML='<div class="sec"><h3>System prompt</h3><p class="h">Instructions the AI receives at the start of every chat (optional).</p><textarea class="f" id="sp" rows="8">'+esc(S.system)+'</textarea></div>';
+  else if(spage==='sys')b.innerHTML='<div class="sec"><h3>System prompt</h3><p class="h">Instructions the AI receives at the start of every chat (optional).</p><textarea class="f" id="sp" rows="8">'+esc(S.system)+'</textarea></div>'+
+    '<div class="sec"><h3>Long chats</h3><div class="row" style="margin-top:0;align-items:center;gap:10px"><p class="h" style="flex:1;margin:0">Summarize old messages automatically after about 36 messages, so the AI keeps the context and each message sends fewer tokens. Your chat on screen is not changed.</p><button class="tgl '+(S.autosum===false?'':'on')+'" data-act="sumtg" role="switch" aria-checked="'+(S.autosum===false?'false':'true')+'" aria-label="Summarize long chats"></button></div></div>'+
+    '<div class="sec"><h3>Creativity (temperature)</h3><p class="h">Low is precise and steady (good for code and facts). High is more varied and creative (good for stories and ideas). Leave it on Default if unsure. It applies to normal chat, not to the GitHub agent. Claude models cap it at 1.</p><div class="row" style="margin-top:6px;align-items:center;gap:10px"><input type="range" id="tmp" min="0" max="2" step="0.1" value="'+(S.temp==null?1:+S.temp)+'" aria-label="Temperature" style="flex:1"><b id="tmv" style="min-width:56px;text-align:right">'+(S.temp==null?'Default':+S.temp)+'</b><button class="btn ghost sm" data-act="tmpreset">Default</button></div></div>';
   else if(spage==='search')b.innerHTML=webHTML();
   else if(spage==='img')b.innerHTML=imgHTML();
   else if(spage==='gh')b.innerHTML=ghHTML();
@@ -60,6 +62,7 @@ function drawSheet(){
   else if(spage==='acct')b.innerHTML=cloudHTML();
   else if(spage==='bk')b.innerHTML='<div class="sec"><h3>Backup</h3><p class="h">Save your providers, keys and chats to one file, then import it on another device.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div><p class="h" style="margin-top:10px">API keys are stored only in this browser, and they are included in the backup file. Don’t share it with anyone.</p></div>';
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
+  const tmp=$('tmp');if(tmp)tmp.oninput=()=>{S.temp=+tmp.value;$('tmv').textContent=tmp.value;save()};
   const gt2=$('gt');if(gt2)gt2.oninput=()=>{S.gh={token:gt2.value.trim()};save()};
   const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
   ['iu','ik','im','is'].forEach((id,n)=>{const e=$(id);if(e)e.oninput=()=>{S.imgcfg=Object.assign({},S.imgcfg,{[['url','key','model','size'][n]]:e.value.trim()});save()}});
@@ -113,6 +116,8 @@ document.addEventListener('click',async e=>{
   else if(d.pin){closePop();const c=S.chats.find(x=>x.id===d.pin);if(c){c.pin=!c.pin;save();renderList()}}
   else if(d.ren){closePop();const c=S.chats.find(x=>x.id===d.ren);const n=c&&await askText('Rename chat',c.title,'Rename');if(n&&n.trim()){c.title=n.trim().slice(0,60);save();renderList();render()}}
   else if(d.regen)regen()
+  else if(d.cont)contMsg()
+  else if(d.fork!==undefined)forkChat(+d.fork)
   else if(d.edit!==undefined)editMsg(+d.edit)
   else if(d.copy){copyText(chat().msgs[+d.copy].content).then(()=>toast('Copied'))}
   else if(d.preset){const x=PRESETS[+d.preset];editing=Object.assign(readForm(),{_new:true,name:x[0],type:x[1],url:x[2]});drawSheet()}
@@ -128,6 +133,8 @@ document.addEventListener('click',async e=>{
   else if(d.act==='psave'){const f=readForm();if(!f.name||!f.url||!f.model){toast('Name, URL and model are required');return}
     if(editing._new)S.providers.push(Object.assign({id:uid(),on:true},f));else Object.assign(S.providers[editing._idx],f);
     editing=null;save();drawSheet();toast('Saved')}
+  else if(d.act==='sumtg'){S.autosum=S.autosum===false;save();drawSheet()}
+  else if(d.act==='tmpreset'){delete S.temp;save();drawSheet()}
   else if(d.act==='csync')syncNow().then(drawSheet)
   else if(d.act==='cout')logout()
   else if(d.act==='hnew')newChat()

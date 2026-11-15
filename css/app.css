@@ -53,6 +53,7 @@ header h1{flex:1;min-width:0;font-size:16px;font-weight:650;padding-left:4px;whi
 .m.u code{background:rgba(255,255,255,.14)}
 .m pre{background:var(--sf2);border:1px solid var(--line);border-radius:var(--r2);padding:12px;overflow-x:auto;margin:8px 0;font-size:13.5px;line-height:1.55}
 .m pre code{background:none;padding:0}
+.m pre .hc{color:var(--mute);font-style:italic}.m pre .hs{color:var(--ok)}.m pre .hn{color:var(--warn)}.m pre .hk,.m pre .ht{color:var(--ac);font-weight:600}.m pre .hy{color:var(--ac)}
 .cw{border:1px solid var(--line);border-radius:var(--r2);overflow:hidden;margin:8px 0;background:var(--sf)}
 .cw .cp{display:block;margin-left:auto;font-size:12.5px;color:var(--mute);padding:5px 12px}.cw .cp:hover{color:var(--ac)}
 .cw pre{border:0;margin:0;border-radius:0;border-top:1px solid var(--line);background:var(--sf2)}

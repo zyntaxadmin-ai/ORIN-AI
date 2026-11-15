@@ -174,6 +174,25 @@ function regen(){
   const list=provList();if(!list.length){toast('Add a provider in Settings first');return}
   busy=true;stopped=false;setBusyUI(true);save();render(true);(agentOn()?runAgent(c,list):run(c,list));
 }
+/* Continue: a reply that was cut off (output limit or Stop) is carried on by a follow-up message */
+function contMsg(){
+  const c=chat();if(!c||busy)return;
+  const last=c.msgs[c.msgs.length-1];if(!last||last.role!=='assistant')return;
+  const list=provList();if(!list.length){toast('Add a provider in Settings first');return}
+  delete last.cut;
+  c.msgs.push({role:'user',content:'Continue exactly where you stopped. Do not repeat anything you already wrote.',cont:1});
+  busy=true;stopped=false;setBusyUI(true);save();render(true);(agentOn()?runAgent(c,list):run(c,list));
+}
+/* Fork: copy the chat up to and including message i into a new chat, to try another direction without losing this one.
+   Agent state (draft, plan, tasks) and the summary stay with the original chat. */
+function forkChat(i){
+  const c=chat();if(!c||busy)return;
+  const msgs=JSON.parse(JSON.stringify(c.msgs.slice(0,i+1)));
+  msgs.forEach(m=>{delete m.cut;delete m.u});
+  if(!msgs.length)return;
+  const n={id:uid(),title:('Fork: '+c.title).slice(0,60),msgs,t:Date.now()};
+  S.chats.unshift(n);S.cur=n.id;home=false;save();closeDrawer();render();toast('New chat created from this message');$('box').focus();
+}
 async function editMsg(i){
   const c=chat();if(!c||busy)return;const m=c.msgs[i];if(!m||m.role!=='user')return;
   if(i<c.msgs.length-1&&!await ask('Edit this message?','Every message after it will be removed.','Edit'))return;
