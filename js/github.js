@@ -73,8 +73,9 @@ async function gh(path,opt={}){
   const t=S.gh&&S.gh.token;if(!t)throw new Error('GitHub token is missing');
   const h={Authorization:'Bearer '+t,Accept:opt.accept||(opt.raw?'application/vnd.github.raw+json':'application/vnd.github+json'),'X-GitHub-Api-Version':'2022-11-28'};
   if(opt.body)h['Content-Type']='application/json';
+  let away=0;
   for(let att=0;;att++){
-    const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),30000);
+    const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),30000),t0=Date.now();
     try{
       const r=await fetch('https://api.github.com'+path,{method:opt.method||'GET',headers:h,body:opt.body?JSON.stringify(opt.body):undefined,signal:ctl.signal});
       if(opt.raw&&r.ok)return await r.text();
@@ -88,6 +89,9 @@ async function gh(path,opt={}){
       }
       return j;
     }catch(e){
+      /* the app was in the background or offline while a read ran: wait until it is back, then repeat the read.
+         Reads only (GET): a write may already have gone through. */
+      if((e.name==='AbortError'||e instanceof TypeError)&&(opt.method||'GET')==='GET'&&away<3&&wasAway(t0)&&await waitBack()){away++;continue}
       if(e.name==='AbortError')throw new Error('GitHub timeout');
       if(e instanceof TypeError)throw new Error('GitHub network error');
       throw e;
