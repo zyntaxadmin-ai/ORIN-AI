@@ -17,7 +17,7 @@ async function send(){
   if(ims.length){um.imgs=ims.map(a=>({mime:a.mime,data:a.data,name:a.name}));um.atts=ims.map(a=>({name:a.name,pdf:a.kind==='pdf'}))}
   if(fl.length){um.files=[];for(const a of fl){const id=uid(),ok=await fput(id,a.text),f={name:a.name,id,size:a.size||a.text.length,tok:a.tok||etok(a.text)};if(!ok){if(a.text.length<=2e5)f.text=a.text;else{toast(a.name+': storage is full, file was not saved');continue}}um.files.push(f)}}
   if(c.title==='New chat')c.title=(txt||(pend[0]&&pend[0].name)||'File').slice(0,32);
-  c.msgs.push(um);pend=[];renderTray();
+  c.msgs.push(um);skAuto(c,txt);pend=[];renderTray();
   $('box').value='';$('box').style.height='auto';busy=true;stopped=false;setBusyUI(true);save();render(true);
   if(imgMode){um.gen=1;await runImg(c);return}
   if(S.web&&txt){
@@ -34,7 +34,7 @@ const liveWho=()=>liveBy?whoHTML(liveBy).replace('class="who"','class="who" id="
 let rst={id:null,n:0};   /* what the last render showed: only messages added since then get the entrance animation */
 function render(typing){
   const c=chat();
-  updatePill();updateChip();setTimeout(updateFab,0);
+  updatePill();updateChip();updateSkillUI();setTimeout(updateFab,0);
   if(wide.matches)renderList();
   $('form').style.display=home?'none':'';
   if(home){rst={id:null,n:0};const hv=$('hbox')?$('hbox').value:'';$('title').textContent='Orin';$('msgs').innerHTML=homeHTML();if(hv){$('hbox').value=hv;$('hsend').disabled=false}return}$('title').textContent=c?c.title:'Orin';

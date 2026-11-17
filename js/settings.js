@@ -3,7 +3,7 @@
 /* ---------- Settings ---------- */
 let editing=null,view='',spage='';
 function openSheet(){view=view||'';drawSheet();$('sheet').classList.add('on')}
-function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'],search:['Web search'],img:['Image generation'],gh:['GitHub'],app:['Appearance & Voice'],acct:['Account & Sync'],bk:['Backup']}}
+function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'],search:['Web search'],img:['Image generation'],skills:['Skills'],gh:['GitHub'],app:['Appearance & Voice'],acct:['Account & Sync'],bk:['Backup']}}
 function settingsMenu(){
   const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session,nm=((S.cloud&&S.cloud.email)||'').split('@')[0];
   const row=(k,ic,t,sub,st)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+(st?'<i class="sd '+st+'"></i>':'')+esc(sub)+'</small></span><span class="ar">›</span></button>';
@@ -12,6 +12,7 @@ function settingsMenu(){
    gl('AI')+grp(row('prov',ico('bot',20),'Providers & Models',S.providers.length?S.providers.length+(S.providers.length===1?' provider · ':' providers · ')+(on[0]?on[0].model:'all off'):'No providers yet. Add one',S.providers.length?(on.length?'ok':'warn'):'warn')+
    row('sys',ico('chat',20),'System prompt',S.system.trim()?S.system.trim().slice(0,50):'Not set'))+
    gl('Tools')+grp(row('search',ico('globe',20),'Web search',S.search&&S.search.key?'On (Tavily)':'No key yet',S.search&&S.search.key?'ok':'')+
+   row('skills',ico('spark',20),'Skills',skSummary())+
    row('img',ico('image',20),'Image generation',im.model?im.model:'Not set up',im.model?'ok':'')+
    row('gh',ico('github',20),'GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token saved, no repository chosen'):'Not connected',g?'ok':''))+
    gl('App')+grp(row('app',ico('palette',20),'Appearance & Voice','Theme: '+THEME_LABEL[S.theme||'auto']+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||'')))+
@@ -62,6 +63,7 @@ function drawSheet(){
     '<div class="sec"><h3>Creativity (temperature)</h3><p class="h">Low is precise and steady (good for code and facts). High is more varied and creative (good for stories and ideas). Leave it on Default if unsure. It applies to normal chat, not to the GitHub agent. Claude models cap it at 1.</p><div class="row" style="margin-top:6px;align-items:center;gap:10px"><input type="range" id="tmp" min="0" max="2" step="0.1" value="'+(S.temp==null?1:+S.temp)+'" aria-label="Temperature" style="flex:1"><b id="tmv" style="min-width:56px;text-align:right">'+(S.temp==null?'Default':+S.temp)+'</b><button class="btn ghost sm" data-act="tmpreset">Default</button></div></div>';
   else if(spage==='search')b.innerHTML=webHTML();
   else if(spage==='img')b.innerHTML=imgHTML();
+  else if(spage==='skills')b.innerHTML=skillsHTML();
   else if(spage==='gh')b.innerHTML=ghHTML();
   else if(spage==='app')b.innerHTML=themeHTML()+voiceHTML();
   else if(spage==='acct')b.innerHTML=cloudHTML();
@@ -79,6 +81,7 @@ const confirmDelChat=id=>{const c=S.chats.find(x=>x.id===id);return ask('Delete 
 document.addEventListener('click',async e=>{
   const t=e.target.closest('button');if(!t)return;const d=t.dataset;
   if(d.open){S.cur=d.open;home=false;save();closeDrawer();render()}
+  else if(skHandle(d)){}
   else if(d.sdel){if(!await confirmDelChat(d.sdel))return;S.chats=S.chats.filter(c=>c.id!==d.sdel);if(S.cur===d.sdel)S.cur=S.chats[0]?.id||null;save();renderList();render()}
   else if(d.del){closePop();if(!await confirmDelChat(d.del))return;S.chats=S.chats.filter(c=>c.id!==d.del);if(S.cur===d.del)S.cur=S.chats[0]?.id||null;save();renderList();render()}
   else if(d.rmp!==undefined){pend.splice(+d.rmp,1);renderTray()}
@@ -152,7 +155,7 @@ document.addEventListener('click',async e=>{
   else if(d.act==='csync')syncNow().then(drawSheet)
   else if(d.act==='cout')logout()
   else if(d.act==='hnew')newChat()
-  else if(d.sp){spage=d.sp;editing=null;drawSheet();$('sbody').scrollTop=0}
+  else if(d.sp){spage=d.sp;editing=null;skEdit=null;drawSheet();$('sbody').scrollTop=0}
   else if(d.act==='hset'){editing=null;view='';spage=S.providers.length?'':'prov';openSheet()}
   else if(d.act==='exp'){const a=document.createElement('a');const ex=JSON.parse(JSON.stringify(Object.assign({},S,{cloud:undefined}),strip));ex.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text===undefined&&FT.has(f.id))f.text=FT.get(f.id)})));a.href=URL.createObjectURL(new Blob([JSON.stringify(ex)],{type:'application/json'}));a.download='orin-backup.json';a.click()}
   else if(d.act==='imp'){const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=()=>i.files[0].text().then(x=>{try{S=Object.assign(S,JSON.parse(x));S.chats.forEach(c=>c.msgs.forEach(m=>(m.files||[]).forEach(f=>{if(f.id&&f.text!==undefined){fput(f.id,f.text);delete f.text}})));save();applyTheme();drawSheet();render();toast('Imported')}catch(_){toast('Invalid file')}});i.click()}
@@ -191,7 +194,7 @@ $('cq').oninput=e=>{q=e.target.value.toLowerCase();renderList()};
 $('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
 $('newc').onclick=$('newc2').onclick=newChat;
 $('gear').onclick=()=>{editing=null;view='';spage='';openSheet()};
-$('back').onclick=()=>{if(view){view='';$('sheet').classList.remove('on');render();return}if(editing){editing=null;drawSheet()}else if(spage){spage='';drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
+$('back').onclick=()=>{if(view){view='';$('sheet').classList.remove('on');render();return}if(skEdit&&spage==='skills'){skEdit=null;drawSheet()}else if(editing){editing=null;drawSheet()}else if(spage){spage='';drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
 $('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});

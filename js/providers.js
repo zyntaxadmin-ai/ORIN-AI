@@ -14,7 +14,7 @@ const tempFor=p=>{const t=S.temp;if(t===undefined||t===null||t===''||isNaN(+t))r
 /* opts: {sys: replaces the Settings system prompt, notemp: ignore the temperature setting} (used by the summary call) */
 async function callProvider(p,history,onDelta,opts){
   const ctl=new AbortController();curCtl=ctl;lastUsage=null;lastCut=false;let to=setTimeout(()=>ctl.abort(),fbCfg().ttfb*1000);
-  const sys=(opts&&opts.sys!=null?opts.sys:S.system).trim();const base=p.url.replace(/\/+$/,'');
+  const sys=(opts&&opts.sys!=null?opts.sys:skSys()).trim();const base=p.url.replace(/\/+$/,'');
   try{
     let url,headers={'Content-Type':'application/json'},body;
     const tp=opts&&opts.notemp?null:tempFor(p);
