@@ -173,7 +173,7 @@ async function runImg(c){
   busy=false;setBusyUI(false);save();render();
 }
 let imgMode=false;
-function updateModes(){$('mchips').innerHTML=(S.web?'<button type="button" class="chip on" data-tog="web" aria-label="Turn off web search">'+ico('globe',14)+'Web search'+ico('x',12)+'</button>':'')+(imgMode?'<button type="button" class="chip on" data-tog="img" aria-label="Turn off image mode">'+ico('image',14)+'Create image'+ico('x',12)+'</button>':'');$('box').placeholder=imgMode?'Describe the image…':'Message Orin…'}
+function updateModes(){$('mchips').innerHTML=(S.web?'<button type="button" class="chip on" data-tog="web" aria-label="Turn off web search">'+ico('globe',14)+'Web search'+ico('x',12)+'</button>':'')+(imgMode?'<button type="button" class="chip on" data-tog="img" aria-label="Turn off image mode">'+ico('image',14)+'Create image'+ico('x',12)+'</button>':'')+skChips();$('box').placeholder=imgMode?'Describe the image…':'Message Orin…'}
 async function run(c,list){
   liveBy=null;
   try{await ensureSummary(c,list)}catch(e){}
@@ -183,7 +183,7 @@ async function run(c,list){
     live='';shown=0;
     const out=await callProvider(p,history,t=>{live=t;draw()});await drain();
     return out;
-  },{onStart:p=>{curP=p;liveBy={by:p.name,model:p.model}},need:{vision:history.some(m=>m.imgs&&m.imgs.length),tok:estTokens(history,S.system.length)+2000}});
+  },{onStart:p=>{curP=p;liveBy={by:p.name,model:p.model}},need:{vision:history.some(m=>m.imgs&&m.imgs.length),tok:estTokens(history,S.system.length+skPrompt(c).length)+2000}});
   if(r.value!==undefined){
     const p=r.p;c.msgs.push({role:'assistant',content:r.value,by:p.name,model:p.model,skipped:r.fails.slice(),src:srcOf(c),u:mkUsage(p,history,r.value),cut:lastCut||undefined});
   }else if(r.stopped){
