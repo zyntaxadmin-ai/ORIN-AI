@@ -1,0 +1,20 @@
+{
+  "name": "orin-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Orin: personal AI chat app (web + Android APK)",
+  "scripts": {
+    "check": "node scripts/check.js",
+    "build:www": "node scripts/build-www.js",
+    "android:sync": "node scripts/build-www.js && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor-community/speech-recognition": "^6.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0"
+  }
+}

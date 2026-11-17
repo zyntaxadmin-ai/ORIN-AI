@@ -92,6 +92,7 @@ function modelMenu(){
 }
 let rec=null,recOn=false;
 function toggleMic(){
+  if(typeof NATIVE!=='undefined'&&NATIVE)return nativeMic();
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){toast('Voice input isn’t supported in this browser. Try Chrome');return}
   if(recOn){rec&&rec.stop();return}
