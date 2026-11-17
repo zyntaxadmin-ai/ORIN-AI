@@ -40,6 +40,9 @@ jobs:
       - name: Create the Android project
         run: npx cap add android
 
+      - name: Install ImageMagick (for the app icon)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+
       - name: Permissions, version, icon
         run: |
           set -e
