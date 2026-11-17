@@ -1,10 +1,12 @@
 name: Android APK
 
 # Builds Orin as an installable Android app (APK) and puts it in GitHub Releases.
-# Run it by hand (Actions tab -> Android APK -> Run workflow) or push a tag like v1.0.0.
+# Runs when you push the android-app branch, when you push a tag like v1.0.0, or by hand
+# (Actions tab -> Android APK -> Run workflow, once this file is on the main branch).
 on:
   workflow_dispatch:
   push:
+    branches: [android-app]
     tags: ['v*']
 
 permissions:
