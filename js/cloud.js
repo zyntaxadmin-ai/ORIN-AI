@@ -74,7 +74,7 @@ async function authGo(){
 }
 async function logout(){
   if(!await ask('Log out?','Local data on this device will be removed. Your chats and provider list stay in the cloud, but API keys and the GitHub token are never synced, so you will need to enter them again.','Log out',true))return;
-  clearTimeout(pt);
+  clearTimeout(pt);clearTimeout(slT);slT=0;
   try{await push()}catch(e){if(!await ask('Cloud save failed','Your latest changes could not be saved to the cloud. Logging out now may lose them.','Log out anyway',true))return}
   const c=C();S={providers:[],chats:[],cur:null,system:'',theme:S.theme,ts:0,cloud:{url:c.url,anon:c.anon,email:c.email}};
   rawSave();applyTheme();$('sheet').classList.remove('on');closeDrawer();home=true;showAuth(true);setMode('in');render();

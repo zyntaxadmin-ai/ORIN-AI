@@ -85,6 +85,12 @@ const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 let qw=0;
 function rawSave(){try{localStorage.setItem(KEY,JSON.stringify(S,strip))}catch(e){if(Date.now()-qw>30000){qw=Date.now();toast('Storage is full. Delete old chats or export a backup.')}}}
 function save(){S.ts=Date.now();rawSave();schedPush()}
+/* for text inputs that fire on every keystroke: save once typing pauses, and right away when the app goes to the background */
+let slT=0;
+function saveLater(){clearTimeout(slT);slT=setTimeout(()=>{slT=0;save()},400)}
+function saveNow(){if(slT){clearTimeout(slT);slT=0;save()}}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow()});
+addEventListener('pagehide',saveNow);
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),Math.max(1800,String(t).length*55))}
 function inl(t){
   const cs=[],hold=h=>{cs.push(h);return '\u0000'+(cs.length-1)+'\u0000'};
@@ -163,6 +169,9 @@ function md(t){
     eL();eT();return h;
   }).join('');
 }
+/* md() is a pure function of the text, so a finished message is parsed and highlighted only once, not on every render() */
+const MDC=new WeakMap();
+function mdm(m){const e=MDC.get(m);if(e&&e.c===m.content)return e.h;const h=md(m.content);MDC.set(m,{c:m.content,h});return h}
 function copyText(t){return (navigator.clipboard&&window.isSecureContext?navigator.clipboard.writeText(t):Promise.reject()).catch(()=>{const a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';document.body.append(a);a.select();try{document.execCommand('copy')}catch(e){}a.remove()})}
 function applyTheme(){if(S.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=S.theme}
 /* ---------- Dialogs: replace the browser's confirm() / prompt() ---------- */

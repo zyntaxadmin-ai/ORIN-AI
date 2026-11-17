@@ -27,7 +27,7 @@ function drawSheet(){
     (has&&S.repo?'<div class="sec"><h3>'+esc(S.repo.full)+'</h3><div class="row"><button class="btn sm ghost" data-act="rsub" data-sub="hist">'+ico('hist',15)+'History</button><button class="btn sm ghost" data-act="rsub" data-sub="files">'+ico('clip',15)+'File attach</button></div><div id="rsub">'+subHTML()+'</div></div>':'')+
     (has?'<div class="sec"><h3>Choose a repository</h3>'+(S.repo?'<p class="h">Current: <b>'+esc(S.repo.full)+'</b> · '+esc(S.repo.branch)+' <button class="chip" data-act="rclear">Clear</button></p>':'')+(S.repo?'<label>Branch</label><div id="rbw">'+branchHTML()+'</div><label>Repo</label>':'')+'<input class="f" id="rq" placeholder="Search repositories" aria-label="Search repositories" value="'+qa(rfilter)+'"><div id="rl" style="margin-top:6px">'+repoListHTML()+'</div></div>'+
     '<div class="sec"><h3>Create a repository</h3><label>Name</label><input class="f" id="nn" placeholder="my-project"><label>Description (optional)</label><input class="f" id="nd"><label><input type="checkbox" id="np" checked> Private</label><div class="row"><button class="btn sm" data-act="rnew">Create repo</button></div></div>':'');
-    const gt=$('gt');if(gt)gt.oninput=()=>{S.gh={token:gt.value.trim()};save()};
+    const gt=$('gt');if(gt)gt.oninput=()=>{S.gh={token:gt.value.trim()};saveLater()};
     if(has&&ghRepos===undefined)loadRepos();
     if(has&&S.repo&&(!ghBr||ghBr.repo!==S.repo.full))loadBranches();
     return;
@@ -66,12 +66,12 @@ function drawSheet(){
   else if(spage==='app')b.innerHTML=themeHTML()+voiceHTML();
   else if(spage==='acct')b.innerHTML=cloudHTML();
   else if(spage==='bk')b.innerHTML='<div class="sec"><h3>Backup</h3><p class="h">Save your providers, keys and chats to one file, then import it on another device.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div><p class="h" style="margin-top:10px">API keys are stored only in this browser, and they are included in the backup file. Don’t share it with anyone.</p></div>';
-  const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;save()};
+  const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;saveLater()};
   for(const [id,k] of [['fbr','retries'],['fbc','cool'],['fbt','ttfb']]){const el=$(id);if(el)el.oninput=()=>{S.fb=S.fb||{};S.fb[k]=el.value.trim();rawSave()}}
-  const tmp=$('tmp');if(tmp)tmp.oninput=()=>{S.temp=+tmp.value;$('tmv').textContent=tmp.value;save()};
-  const gt2=$('gt');if(gt2)gt2.oninput=()=>{S.gh={token:gt2.value.trim()};save()};
-  const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};save()};
-  ['iu','ik','im','is'].forEach((id,n)=>{const e=$(id);if(e)e.oninput=()=>{S.imgcfg=Object.assign({},S.imgcfg,{[['url','key','model','size'][n]]:e.value.trim()});save()}});
+  const tmp=$('tmp');if(tmp)tmp.oninput=()=>{S.temp=+tmp.value;$('tmv').textContent=tmp.value;saveLater()};
+  const gt2=$('gt');if(gt2)gt2.oninput=()=>{S.gh={token:gt2.value.trim()};saveLater()};
+  const tk=$('tk');if(tk)tk.oninput=()=>{S.search={key:tk.value.trim()};saveLater()};
+  ['iu','ik','im','is'].forEach((id,n)=>{const e=$(id);if(e)e.oninput=()=>{S.imgcfg=Object.assign({},S.imgcfg,{[['url','key','model','size'][n]]:e.value.trim()});saveLater()}});
 }
 function readForm(){return{name:$('pn').value.trim(),type:$('pt').value,url:$('pu').value.trim(),key:$('pk').value.trim(),model:$('pm').value.trim(),ctx:parseInt($('pcx').value,10)||0,pin:parseFloat($('pci').value)||0,pout:parseFloat($('pco').value)||0,cap:(!$('pcv').checked||!$('pct').checked)?Object.assign({},$('pcv').checked?{}:{vision:false},$('pct').checked?{}:{tools:false}):undefined}}
 
@@ -210,4 +210,5 @@ fload().then(()=>{fclean();render()});
 setMode('in');
 if(!C().session)showAuth(true);else syncNow(false);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow(false)});
-try{if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js')}catch(e){}
+/* the Android app already has every file inside it, so it does not need the service worker */
+try{if('serviceWorker' in navigator&&!NATIVE)navigator.serviceWorker.register('sw.js')}catch(e){}
