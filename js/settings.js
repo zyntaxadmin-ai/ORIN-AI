@@ -150,6 +150,10 @@ document.addEventListener('click',async e=>{
   else if(d.act==='sumtg'){S.autosum=S.autosum===false;save();drawSheet()}
   else if(d.act==='tmpreset'){delete S.temp;save();drawSheet()}
   else if(d.act==='csync')syncNow().then(drawSheet)
+  else if(d.act==='keysync'){
+    const pw=await dlg({title:'Sync API keys',body:'Enter your account password. Your keys are encrypted on this device before they are uploaded.',ok:'Sync',input:{type:'password',placeholder:'Account password',max:200}});
+    if(pw){try{await keysetup(pw);toast('API keys synced')}catch(e){toast(e.message)}drawSheet()}
+  }
   else if(d.act==='cout')logout()
   else if(d.act==='hnew')newChat()
   else if(d.sp){spage=d.sp;editing=null;drawSheet();$('sbody').scrollTop=0}

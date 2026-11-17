@@ -186,7 +186,7 @@ function dlg(o){
     ov.querySelector('h2').textContent=o.title;
     if(o.body)ov.querySelector('p').textContent=o.body;
     bc.textContent=o.cancel||'Cancel';bo.textContent=o.ok||'Confirm';
-    if(inp){inp.value=o.input.value||'';inp.placeholder=o.input.placeholder||'';inp.maxLength=o.input.max||120}
+    if(inp){inp.value=o.input.value||'';inp.placeholder=o.input.placeholder||'';inp.maxLength=o.input.max||120;if(o.input.type)inp.type=o.input.type}
     const done=v=>{document.removeEventListener('keydown',kd,true);ov.classList.remove('on');setTimeout(()=>ov.remove(),160);try{prev&&prev.focus&&prev.focus()}catch(e){}res(v)};
     const kd=e=>{
       if(e.key==='Escape'){e.preventDefault();e.stopPropagation();done(none)}
