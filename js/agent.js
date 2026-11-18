@@ -37,7 +37,7 @@ function agentCall0(p,history,work0,sys){
       else{const b={type:'tool_result',tool_use_id:w.id,content:w.result};if(tr)tr.content.push(b);else{tr={role:'user',content:[b]};msgs.push(tr)}}
     }
     const tl=TOOLS.map(t=>({name:t.name,description:t.description,input_schema:t.parameters}));tl[tl.length-1].cache_control={type:'ephemeral'};
-    body={model:p.model,max_tokens:8192,stream:true,system:[{type:'text',text:sys,cache_control:{type:'ephemeral'}}],messages:cacheLast(msgs),tools:tl};
+    body={model:p.model,max_tokens:outCap(p),stream:true,system:[{type:'text',text:sys,cache_control:{type:'ephemeral'}}],messages:cacheLast(msgs),tools:tl};
   }else if(p.type==='gemini'){
     url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':streamGenerateContent?alt=sse&key='+encodeURIComponent(p.key);
     const cs=history.map(m=>cv(p,m));
@@ -62,7 +62,7 @@ async function agentCall(p,history,work,sys,onLive){
   try{
     const {url,headers,body}=agentCall0(p,history,work,sys);const isz=JSON.stringify(body).length;
     if(p.type==='openai'&&/api\.(openai|groq|deepseek|together)\.|openrouter\.ai/.test(p.url))body.stream_options={include_usage:true};
-    const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
+    const r=await postCapped(p,url,headers,body,ctl.signal);
     let text='',calls=[],raw,us=null;
     const ct=r.headers.get('content-type')||'';
     if(!r.ok||!/event-stream/.test(ct)){
@@ -134,11 +134,14 @@ async function agentCall(p,history,work,sys,onLive){
    The chat on screen keeps every message; only what is SENT changes: summary + the newest messages.
    c.sum = {n: how many user/assistant messages the summary covers, fp: fingerprint of the last covered one, text}.
    If the covered messages change (edit, regenerate), the fingerprint no longer matches and the summary is dropped. */
-const SUM_TRIG=36,SUM_KEEP=16;
+/* Old messages are summarized only when the chat really fills the model's context window (SUM_FILL of it), not after a fixed
+   number of messages. SUM_TRIG and HIST_MAX are only safety nets. The context size is per provider (Settings → provider → Context window). */
+const SUM_TRIG=2000,SUM_KEEP=24,SUM_FILL=0.6,HIST_MAX=2000;
+const sumChars=()=>Math.floor(curCtx()*3.2*SUM_FILL);
 const hmsgs=c=>c.msgs.filter(m=>m.role==='user'||m.role==='assistant');
 const sumFp=m=>m?((m.content||'').length+':'+(m.content||'').slice(0,40)):'';
 const sumOk=(c,hm)=>!!(c.sum&&c.sum.n>0&&hm.length>=c.sum.n&&sumFp(hm[c.sum.n-1])===c.sum.fp);
-const sumWanted=(rest)=>S.autosum!==false&&(rest.length>SUM_TRIG||(rest.reduce((a,m)=>a+(m.content||'').length,0)>70000&&rest.length>SUM_KEEP+2));
+const sumWanted=(rest)=>S.autosum!==false&&(rest.length>SUM_TRIG||(rest.reduce((a,m)=>a+(m.content||'').length,0)>sumChars()&&rest.length>SUM_KEEP+2));
 /* rough size (characters) of what the next message will really send, for the "too long" warning */
 function ctxChars(c){
   const all=hmsgs(c),ok=sumOk(c,all),rest=ok?all.slice(c.sum.n):all,sz=a=>a.reduce((t,m)=>t+(m.content||'').length,0);
@@ -152,19 +155,19 @@ async function ensureSummary(c,list){
   if(!sumWanted(rest))return;
   let n=all.length-SUM_KEEP;while(n>done&&all[n].role!=='user')n--;   /* the kept part must start at a user message */
   if(n<=done)return;
-  const tr=all.slice(done,n).map(m=>(m.role==='user'?'User: ':'Assistant: ')+String(m.content||'[attachment]').slice(0,2500)).join('\n\n').slice(-40000);
-  const prompt='Below is an earlier part of a conversation'+(c.sum?', and a summary of what came before it':'')+'. Write ONE updated summary (at most 350 words) so the conversation can go on without the original messages. Keep: the user\'s goals and preferences, decisions made, important facts, names, numbers, file names, short code or commands that are still needed, open questions and next steps. Write in the language the user uses. Output only the summary.'+(c.sum?'\n\n[Previous summary]\n'+c.sum.text:'')+'\n\n[Messages]\n'+tr;
+  const tr=all.slice(done,n).map(m=>(m.role==='user'?'User: ':'Assistant: ')+String(m.content||'[attachment]').slice(0,12000)).join('\n\n').slice(-200000);
+  const prompt='Below is an earlier part of a conversation'+(c.sum?', and a summary of what came before it':'')+'. Write ONE updated summary (at most 900 words) so the conversation can go on without the original messages. Keep: the user\'s goals and preferences, decisions made, important facts, names, numbers, file names, short code or commands that are still needed, open questions and next steps. Write in the language the user uses. Output only the summary.'+(c.sum?'\n\n[Previous summary]\n'+c.sum.text:'')+'\n\n[Messages]\n'+tr;
   toast('Summarizing earlier messages…');
   for(const p of list){
     if(stopped)return;
     try{
       const out=await callProvider(p,[{role:'user',content:prompt}],()=>{},{sys:'',notemp:true});
-      if(out&&out.trim()){c.sum={n,fp:sumFp(all[n-1]),text:out.trim().slice(0,6000)};save();return}
+      if(out&&out.trim()){c.sum={n,fp:sumFp(all[n-1]),text:out.trim().slice(0,20000)};save();return}
     }catch(e){if(stopped||e.message==='STOP')return}
   }
 }
 const buildHistory=(c,agent)=>{const lz=agent?lazyPlan(c):null,sm=lz||smartPlan(c);{const lu=[...c.msgs].reverse().find(m=>m.role==='user');if(lu){if(sm&&!lz)lu.sm=sm.n;else delete lu.sm}}const all=hmsgs(c),ok=sumOk(c,all);if(c.sum&&!ok)delete c.sum;
-  let h=(ok?all.slice(c.sum.n):all).map(m=>({role:m.role,content:m.role==='user'?fullText(m,sm)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>60){h=h.slice(-60);while(h.length&&h[0].role!=='user')h.shift()}
+  let h=(ok?all.slice(c.sum.n):all).map(m=>({role:m.role,content:m.role==='user'?fullText(m,sm)+webCtx(m):m.content,imgs:m.imgs}));if(h.length>HIST_MAX){h=h.slice(-HIST_MAX);while(h.length&&h[0].role!=='user')h.shift()}
   if(ok)h=[{role:'user',content:'[Summary of the earlier part of this conversation, for your context only]\n'+c.sum.text},{role:'assistant',content:'Understood. I will keep this context in mind.'}].concat(h);
   return h};
 function attachNote(c){const fs=chatFiles(c);if(!fs.length)return '';const sm=smartPlan(c);return '\nFiles attached by the user in this chat: '+fs.map(f=>f.name+' ('+f.text.split('\n').length+' lines)').join(', ')+'.'+(sm?' They are too big for the context, so only excerpts are included in the messages; use search_attachment and read_attachment to look at other parts.':'')+(lazyPlan(c)?' Big attached files are not pasted in the messages (to save tokens): for a zip/folder of updated files call compare_attachment and then apply_attachment instead of reading and rewriting each file; use search_attachment/read_attachment for anything else.':'')}
@@ -208,7 +211,7 @@ async function runAgent(c,list){
   liveLog=log;liveT='';shownT=0;livePn='';
   let last=null,final='',by='',mdl='',done=false,failedAll=false,failList=[],failKinds=[];const tot={i:0,o:0,c:0,e:0,hc:0,k:0};
   try{
-    for(let step=0;step<40&&!stopped&&!done&&!failedAll;step++){
+    for(let step=0;step<150&&!stopped&&!done&&!failedAll;step++){
       const r=await withFallback(list,p=>agentCall(p,history,work,sys,(t,pn)=>{liveT=t||'';livePn=pn||'';draw()}),{first:last,onStart:p=>{liveBy={by:p.name,model:p.model}},need:{tools:true,vision:history.some(m=>m.imgs&&m.imgs.length),tok:estTokens(history,sys.length+JSON.stringify(work).length+3500)+3000}});
       r.fails.forEach(f=>fails.push(f));
       if(r.stopped)break;
