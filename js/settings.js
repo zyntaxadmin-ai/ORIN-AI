@@ -42,7 +42,7 @@ function drawSheet(){
     '<label>Base URL</label><input class="f" id="pu" value="'+esc(p.url||'')+'" placeholder="https://…/v1">'+
     '<label>API key</label><input class="f" id="pk" type="password" value="'+esc(p.key||'')+'" autocomplete="off">'+
     '<label>Model name</label><input class="f" id="pm" value="'+esc(p.model||'')+'" placeholder="e.g. llama-3.3-70b-versatile">'+
-    '<label>Context window (tokens, optional)</label><input class="f" id="pcx" inputmode="numeric" placeholder="auto: Gemini 1M · Claude 200k · baki 128k" value="'+qa(p.ctx||'')+'">'+
+    '<label>Context window (tokens, optional)</label><input class="f" id="pcx" inputmode="numeric" placeholder="auto: Gemini 1M · Claude 200k · other 128k (a guess, never blocks)" value="'+qa(p.ctx||'')+'">'+
     '<label>What this model can do (switch off what it cannot)</label><label class="ck"><input type="checkbox" id="pcv" '+(capOn(p,'vision')?'checked':'')+'> Understands images</label><label class="ck"><input type="checkbox" id="pct" '+(capOn(p,'tools')?'checked':'')+'> Supports tool calling (needed for the GitHub agent)</label>'+
     '<label>Price per 1M input tokens $ (optional)</label><input class="f" id="pci" inputmode="decimal" value="'+qa(p.pin||'')+'">'+
     '<label>Price per 1M output tokens $ (optional)</label><input class="f" id="pco" inputmode="decimal" value="'+qa(p.pout||'')+'">'+

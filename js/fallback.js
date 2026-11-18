@@ -142,7 +142,8 @@ function capSkip(p,need){
   if(!need)return null;
   if(need.vision&&!capOn(p,'vision'))return {kind:'capv',why:'does not read images (switched off in its settings)'};
   if(need.tools&&!capOn(p,'tools'))return {kind:'capt',why:'no tool calling (switched off in its settings)'};
-  if(need.tok){const lim=ctxOf(p);if(need.tok>lim)return {kind:'capc',why:'needs about '+fmtTok(need.tok)+' tokens, its limit is '+fmtTok(lim)}}
+  /* only a Context window that YOU set in the provider settings can skip a provider; the automatic 128k/200k/1M is just a guess and must not block a message */
+  if(need.tok&&ctxSet(p)){const lim=ctxOf(p);if(need.tok>lim)return {kind:'capc',why:'needs about '+fmtTok(need.tok)+' tokens, its limit is '+fmtTok(lim)}}
   return null;
 }
 

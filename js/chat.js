@@ -9,7 +9,7 @@ async function send(){
   else if(!list.length){toast('Add a provider in Settings first');spage='prov';openSheet();return}
   if(!imgMode){
     const lim=ctxOf(list[0]),oc=chat(),fb=fbudget(lim),pf=pend.reduce((a,x)=>a+(x.kind==='text'?x.tok||etok(x.text):0),0),of=oc?chatFiles(oc).reduce((a,f)=>a+f.tok,0):0,nf=oc?ctxChars(oc):0,est=etok(nf+txt.length)+Math.min(pf+of,fb);
-    if(est>lim*0.85&&!await ask('This message may be too long','It is about '+fmtTok(est)+' tokens, but '+list[0].name+' supports about '+fmtTok(lim)+'. The model may return an error.\n\nTry attaching smaller files or using a Gemini model. You can also set the context window per provider in Settings.','Send anyway'))return;
+    if(ctxSet(list[0])&&est>lim*0.85&&!await ask('This message may be too long','It is about '+fmtTok(est)+' tokens, but '+list[0].name+' supports about '+fmtTok(lim)+'. The model may return an error.\n\nTry attaching smaller files or using a Gemini model. You can also set the context window per provider in Settings.','Send anyway'))return;
   }
   if(!chat())newChat();
   const c=chat();c.t=Date.now();const um={role:'user',content:txt};

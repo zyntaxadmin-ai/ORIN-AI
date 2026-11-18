@@ -208,6 +208,7 @@ function smartPlan(c){
   return {res,n};
 }
 const ctxOf=p=>+p.ctx||(p.type==='gemini'?1e6:p.type==='anthropic'?2e5:128e3);
+const ctxSet=p=>+p.ctx>0;   /* true when the user typed a Context window for this provider (otherwise ctxOf is only a guess) */
 function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t.innerHTML=pend.map((a,i)=>'<div class="pc">'+(a.kind==='image'?'<img src="data:'+a.mime+';base64,'+a.data+'" alt="">':a.kind==='pdf'?ico('pdf'):ico('file'))+'<span>'+esc(a.name)+(a.kind==='text'&&a.tok?'<small class="pcs">'+fmtSz(a.size||a.text.length)+' · ~'+fmtTok(a.tok)+' token'+(a.tok>fbudget(curCtx())?' · Smart':'')+'</small>':'')+'</span><button data-rmp="'+i+'" aria-label="Remove">'+ico('x',14)+'</button></div>').join('')}
 function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
 async function addFiles(list){
