@@ -12,6 +12,22 @@ function cv(p,m){
 /* temperature chosen in Settings (S.temp: a number, or unset = the provider's own default); each API has its own range */
 const tempFor=p=>{const t=S.temp;if(t===undefined||t===null||t===''||isNaN(+t))return null;const v=Math.max(0,+t);return p.type==='anthropic'?Math.min(1,v):Math.min(2,v)};
 /* opts: {sys: replaces the Settings system prompt, notemp: ignore the temperature setting} (used by the summary call) */
+/* Claude-type providers must be sent max_tokens. Ask for a big reply; when the model allows less ("max_tokens: X > N"),
+   ask again with N and remember N for that provider. OpenAI-type and Gemini providers get no cap from us. */
+const OUT_MAX=32000,OUT_MIN=4096;
+const outCap=p=>parseInt(p&&p.maxout,10)||OUT_MAX;
+async function postCapped(p,url,headers,body,signal){
+  const go=()=>fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal});
+  let r=await go();
+  if(!r.ok&&r.status===400&&p.type==='anthropic'&&body.max_tokens>OUT_MIN){
+    const j=await r.clone().json().catch(()=>null),e=Array.isArray(j)?j[0]:j,x=e&&e.error,m=x?(typeof x==='string'?x:x.message||''):'';
+    if(/max_tokens|output tokens/i.test(m)){
+      const q=/max_tokens\D{0,20}\d+\s*>\s*(\d+)/i.exec(m)||/(?:at most|maximum|limit)\D{0,40}?(\d{4,6})/i.exec(m),n=Math.min(body.max_tokens-1,q?+q[1]:OUT_MIN);
+      if(n>=1024){body.max_tokens=n;p.maxout=n;r=await go()}
+    }
+  }
+  return r;
+}
 async function callProvider(p,history,onDelta,opts){
   const ctl=new AbortController();curCtl=ctl;lastUsage=null;lastCut=false;let to=setTimeout(()=>ctl.abort(),fbCfg().ttfb*1000);
   const sys=(opts&&opts.sys!=null?opts.sys:skSys()).trim();const base=p.url.replace(/\/+$/,'');
@@ -20,7 +36,7 @@ async function callProvider(p,history,onDelta,opts){
     const tp=opts&&opts.notemp?null:tempFor(p);
     if(p.type==='anthropic'){
       url=base+'/v1/messages';headers['x-api-key']=p.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
-      body={model:p.model,max_tokens:4096,stream:true,messages:cacheLast(history.map(m=>cv(p,m)))};if(sys)body.system=[{type:'text',text:sys,cache_control:{type:'ephemeral'}}];
+      body={model:p.model,max_tokens:outCap(p),stream:true,messages:cacheLast(history.map(m=>cv(p,m)))};if(sys)body.system=[{type:'text',text:sys,cache_control:{type:'ephemeral'}}];
       if(tp!==null)body.temperature=tp;
     }else if(p.type==='gemini'){
       url=base+'/v1beta/models/'+encodeURIComponent(p.model.trim().replace(/^models\//,'').replace(/\s+/g,'-').toLowerCase())+':streamGenerateContent?alt=sse&key='+encodeURIComponent(p.key);
@@ -33,7 +49,7 @@ async function callProvider(p,history,onDelta,opts){
       if(/api\.(openai|groq|deepseek|together)\.|openrouter\.ai/.test(base))body.stream_options={include_usage:true};
       if(tp!==null)body.temperature=tp;
     }
-    let r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
+    let r=await postCapped(p,url,headers,body,ctl.signal);
     /* some models (reasoning models) refuse a temperature: say it once and retry without it, instead of failing over to the next provider */
     if(!r.ok&&tp!==null){
       const j0=await r.clone().json().catch(()=>null),e0=Array.isArray(j0)?j0[0]:j0,x0=e0&&e0.error,m0=x0?(typeof x0==='string'?x0:x0.message||''):'';
