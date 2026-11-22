@@ -91,7 +91,7 @@ async function gh(path,opt={}){
     }catch(e){
       /* the app was in the background or offline while a read ran: wait until it is back, then repeat the read.
          Reads only (GET): a write may already have gone through. */
-      if((e.name==='AbortError'||e instanceof TypeError)&&(opt.method||'GET')==='GET'&&away<3&&wasAway(t0)&&await waitBack()){away++;continue}
+      if((e.name==='AbortError'||e instanceof TypeError)&&(opt.method||'GET')==='GET'&&away<6&&(wasAway(t0)||justBack())&&await waitBack()){away++;continue}
       if(e.name==='AbortError')throw new Error('GitHub timeout');
       if(e instanceof TypeError)throw new Error('GitHub network error');
       throw e;

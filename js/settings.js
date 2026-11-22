@@ -3,7 +3,7 @@
 /* ---------- Settings ---------- */
 let editing=null,view='',spage='';
 function openSheet(){view=view||'';drawSheet();$('sheet').classList.add('on')}
-function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'],search:['Web search'],img:['Image generation'],skills:['Skills'],gh:['GitHub'],app:['Appearance & Voice'],acct:['Account & Sync'],bk:['Backup']}}
+function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'],search:['Web search'],img:['Image generation'],skills:['Skills'],gh:['GitHub'],cn:['Connectors'],mem:['Memory'],app:['Appearance & Voice'],acct:['Account & Sync'],bk:['Backup']}}
 function settingsMenu(){
   const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session,nm=((S.cloud&&S.cloud.email)||'').split('@')[0];
   const row=(k,ic,t,sub,st)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+(st?'<i class="sd '+st+'"></i>':'')+esc(sub)+'</small></span><span class="ar">›</span></button>';
@@ -14,7 +14,9 @@ function settingsMenu(){
    gl('Tools')+grp(row('search',ico('globe',20),'Web search',S.search&&S.search.key?'On (Tavily)':'No key yet',S.search&&S.search.key?'ok':'')+
    row('skills',ico('spark',20),'Skills',skSummary())+
    row('img',ico('image',20),'Image generation',im.model?im.model:'Not set up',im.model?'ok':'')+
-   row('gh',ico('github',20),'GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token saved, no repository chosen'):'Not connected',g?'ok':''))+
+   row('gh',ico('github',20),'GitHub',g?(S.repo?S.repo.full+' · '+S.repo.branch:'Token saved, no repository chosen'):'Not connected',g?'ok':'')+
+   row('cn',ico('cloud',20),'Connectors',cnSummary(),cnActive().length||g?'ok':'')+
+   row('mem',ico('note',20),'Memory',memList().length?memList().length+(memList().length===1?' note':' notes'):'Nothing remembered yet'))+
    gl('App')+grp(row('app',ico('palette',20),'Appearance & Voice','Theme: '+THEME_LABEL[S.theme||'auto']+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||'')))+
    gl('Account & data')+grp(row('acct',ico('cloud',20),'Account & Sync',cl?(S.cloud.email||'Logged in'):'Not logged in',cl?'ok':'warn')+
    row('bk',ico('save',20),'Backup','Export / Import'));
@@ -65,9 +67,11 @@ function drawSheet(){
   else if(spage==='img')b.innerHTML=imgHTML();
   else if(spage==='skills')b.innerHTML=skillsHTML();
   else if(spage==='gh')b.innerHTML=ghHTML();
+  else if(spage==='cn')b.innerHTML=cnPage();
+  else if(spage==='mem')b.innerHTML=memPage();
   else if(spage==='app')b.innerHTML=themeHTML()+voiceHTML();
   else if(spage==='acct')b.innerHTML=cloudHTML();
-  else if(spage==='bk')b.innerHTML='<div class="sec"><h3>Backup</h3><p class="h">Save your providers, keys and chats to one file, then import it on another device.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div><p class="h" style="margin-top:10px">API keys are stored only in this browser, and they are included in the backup file. Don’t share it with anyone.</p></div>';
+  else if(spage==='bk')b.innerHTML='<div class="sec"><h3>Backup</h3><p class="h">Save your providers, keys and chats to one file, then import it on another device.</p><div class="row" style="margin-top:0"><button class="btn ghost sm" data-act="exp">Export</button><button class="btn ghost sm" data-act="imp">Import</button></div><p class="h" style="margin-top:10px">API keys are stored only in this browser, and they are included in the backup file. Don’t share it with anyone.</p></div>'+xBackupHTML();
   const sp=$('sp');if(sp)sp.oninput=()=>{S.system=sp.value;saveLater()};
   for(const [id,k] of [['fbr','retries'],['fbc','cool'],['fbt','ttfb']]){const el=$(id);if(el)el.oninput=()=>{S.fb=S.fb||{};S.fb[k]=el.value.trim();rawSave()}}
   const tmp=$('tmp');if(tmp)tmp.oninput=()=>{S.temp=+tmp.value;$('tmv').textContent=tmp.value;saveLater()};
@@ -128,7 +132,7 @@ document.addEventListener('click',async e=>{
   else if(d.act==='gdisc'){const c=chat();if(c&&await ask('Discard draft?','All staged changes in this draft will be removed.','Discard',true)){c.draft=null;save();render()}}
   else if(d.ipre!==undefined){const x=IMGP[+d.ipre];S.imgcfg=Object.assign({},S.imgcfg,{url:x[1],model:x[2],size:x[3]});save();drawSheet()}
   else if(d.save){const m=chat().msgs[+d.save];if(m&&m.pic){const a=document.createElement('a');a.href=m.pic;a.download='orin-image.jpg';a.target='_blank';a.rel='noopener';a.click()}}
-  else if(d.more){const c=S.chats.find(x=>x.id===d.more);pop(t,'<button class="pi" data-pin="'+d.more+'"><span>'+ico('pin',15)+(c&&c.pin?'Unpin':'Pin')+'</span></button><button class="pi" data-ren="'+d.more+'"><span>'+ico('edit',15)+'Rename</span></button><button class="pi" data-del="'+d.more+'"><span>'+ico('trash',15)+'Delete</span></button>')}
+  else if(d.more){const c=S.chats.find(x=>x.id===d.more);pop(t,'<button class="pi" data-pin="'+d.more+'"><span>'+ico('pin',15)+(c&&c.pin?'Unpin':'Pin')+'</span></button><button class="pi" data-ren="'+d.more+'"><span>'+ico('edit',15)+'Rename</span></button><button class="pi" data-xmd="'+d.more+'"><span>'+ico('file',15)+'Export as Markdown</span></button><button class="pi" data-xjs="'+d.more+'"><span>'+ico('save',15)+'Export as JSON</span></button><button class="pi" data-del="'+d.more+'"><span>'+ico('trash',15)+'Delete</span></button>')}
   else if(d.pin){closePop();const c=S.chats.find(x=>x.id===d.pin);if(c){c.pin=!c.pin;save();renderList()}}
   else if(d.ren){closePop();const c=S.chats.find(x=>x.id===d.ren);const n=c&&await askText('Rename chat',c.title,'Rename');if(n&&n.trim()){c.title=n.trim().slice(0,60);save();renderList();render()}}
   else if(d.regen)regen()
@@ -194,7 +198,7 @@ $('cq').oninput=e=>{q=e.target.value.toLowerCase();renderList()};
 $('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
 $('newc').onclick=$('newc2').onclick=newChat;
 $('gear').onclick=()=>{editing=null;view='';spage='';openSheet()};
-$('back').onclick=()=>{if(view){view='';$('sheet').classList.remove('on');render();return}if(skEdit&&spage==='skills'){skEdit=null;drawSheet()}else if(editing){editing=null;drawSheet()}else if(spage){spage='';drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
+$('back').onclick=()=>{if(spage==='cn'&&cnView){cnView='';cnRes='';drawSheet();return}if(view){view='';$('sheet').classList.remove('on');render();return}if(skEdit&&spage==='skills'){skEdit=null;drawSheet()}else if(editing){editing=null;drawSheet()}else if(spage){spage='';drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
 $('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});

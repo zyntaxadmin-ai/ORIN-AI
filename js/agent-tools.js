@@ -40,6 +40,7 @@ const TOOLS=[
  {name:'commit_message',description:'Set a short commit message for the staged changes.',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}
 ];
 async function tool(c,name,a){
+  {const x=await extraTool(c,name,a);if(x!==undefined)return x}
   if(name==='load_skill')return skLoad(c,a.id||a.name);
   if(name==='list_repos'){const l=await fetchRepos(),q=String(a.query||'').toLowerCase();return l.filter(r=>!q||r.full_name.toLowerCase().includes(q)).slice(0,60).map(r=>r.full_name+(r.private?' (private)':'')).join('\n')||'No repos'}
   if(name==='create_repo'){

@@ -118,7 +118,7 @@ function depHTML(u){
   const d=u.dep;if(!d)return '';
   const act='https://github.com/'+qa(u.repo)+'/actions';
   if(d.st==='completed'){
-    if(d.c==='success')return '<div class="dep">'+ico('okc')+'Deployed'+(d.url&&/^https:\/\//.test(d.url)?' · <a href="'+qa(d.url)+'" target="_blank" rel="noopener">View site</a>':'')+'</div>';
+    if(d.c==='success')return '<div class="dep">'+ico('okc')+'Deployed'+(d.url&&/^https:\/\//.test(d.url)?' · <a href="'+qa(d.url)+'" target="_blank" rel="noopener">View site</a>':'')+(d.site?'<br><small>'+(d.site.ok?'Site check passed':'Site check found a problem')+': '+esc(d.site.msg)+'</small>'+(d.site.ok?'':' <button class="chip" data-act="gsitefix">'+ico('chat',14)+'Ask AI to fix</button>'):'')+'</div>';
     return '<div class="dep bad">'+ico('xc')+'Deploy failed ('+esc(d.c||'?')+') · <a href="'+act+'" target="_blank" rel="noopener">View log</a> <button class="chip" data-act="gdepfix">'+ico('chat',14)+'Ask AI to fix</button></div>';
   }
   return '<div class="dep">'+ico('clock')+'Deploy '+(d.st==='in_progress'?'running':'queued')+'…'+(d.stuck?'<br><small>This is taking a while and may be stuck. Open <a href="'+act+'" target="_blank" rel="noopener">Actions</a>, cancel the run and re-run it.</small>':'')+' <button class="chip" data-act="gdep">'+ico('refresh',14)+'Check</button></div>';
@@ -135,7 +135,7 @@ async function watchDeploy(c,R,sha,B,force){
       const run=rs.find(x=>/pages/i.test(x.name||''))||rs[0];
       if(run){u.dep.st=run.status;u.dep.c=run.conclusion;u.dep.run=run.id;if(run.status!=='completed'&&Date.now()-new Date(run.created_at)>5*60e3)u.dep.stuck=1;else delete u.dep.stuck}
       save();render();
-      if(run&&run.status==='completed')return;
+      if(run&&run.status==='completed'){if(run.conclusion==='success'&&typeof postDeploy==='function')postDeploy(c,u);return}
     }catch(e){}
   }
 }

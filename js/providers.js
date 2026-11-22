@@ -30,7 +30,7 @@ async function postCapped(p,url,headers,body,signal){
 }
 async function callProvider(p,history,onDelta,opts){
   const ctl=new AbortController();curCtl=ctl;lastUsage=null;lastCut=false;let to=setTimeout(()=>ctl.abort(),fbCfg().ttfb*1000);
-  const sys=(opts&&opts.sys!=null?opts.sys:skSys()).trim();const base=p.url.replace(/\/+$/,'');
+  const sys=(opts&&opts.sys!=null?opts.sys:skSys()+memNote()).trim();const base=p.url.replace(/\/+$/,'');
   try{
     let url,headers={'Content-Type':'application/json'},body;
     const tp=opts&&opts.notemp?null:tempFor(p);

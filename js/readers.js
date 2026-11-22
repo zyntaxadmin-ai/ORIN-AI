@@ -119,7 +119,7 @@ function imgHTML(){const g=S.imgcfg||{};return '<div class="sec"><h3>Image gener
 const IMGP=[['OpenAI','https://api.openai.com/v1','gpt-image-1',''],['Together','https://api.together.xyz/v1','black-forest-labs/FLUX.1-schnell','']];
 function voiceHTML(){return '<div class="sec"><h3>Voice input</h3><p class="h">Language for the microphone. Works best in Chrome.</p><div class="seg">'+[['bn-BD','Bangla'],['en-US','English'],['hi-IN','Hindi']].map(x=>'<button class="'+((S.lang||'bn-BD')===x[0]?'on':'')+'" data-lang="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>'}
 let curCtl=null,stopped=false;
-function setBusyUI(on){const b=$('sendb');b.innerHTML=on?IC.stop:IC.up;b.setAttribute('aria-label',on?'Stop':'Send')}
+function setBusyUI(on){if(typeof bgBusy==='function')bgBusy(on);const b=$('sendb');b.innerHTML=on?IC.stop:IC.up;b.setAttribute('aria-label',on?'Stop':'Send')}
 function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>ok(r.result.split(',')[1]);r.readAsDataURL(f)})}
 /* providers to use for a message: all enabled ones in your order; a pinned model goes alone, or first when "if it fails, use my other providers" is on */
 function provList(){let l=S.providers.filter(p=>p.on&&p.model&&p.url);if(S.pick){const o=l.find(p=>p.id===S.pick);if(o)l=S.pickFb?[o].concat(l.filter(p=>p!==o)):[o]}return l}

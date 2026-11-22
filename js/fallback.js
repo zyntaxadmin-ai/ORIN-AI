@@ -121,16 +121,28 @@ const sleepStop=ms=>new Promise(res=>{const t0=Date.now();(function w(){if(stopp
    was hidden (or offline) says nothing about the provider, so it must not count as a failure or make the provider
    rest: wait until the app is back, then try the same provider again. */
 let pageAway=0;   /* last time the page was hidden, shown, frozen, resumed, or went offline/online */
-for(const ev of ['visibilitychange','freeze','resume'])document.addEventListener(ev,()=>{pageAway=Date.now()});
-for(const ev of ['pagehide','pageshow','online','offline'])window.addEventListener(ev,()=>{pageAway=Date.now()});
+let pageBack=0;   /* last time the app came back (visible, online, resumed, or woke from a freeze) */
+const markAway=()=>{pageAway=Date.now()};
+const markBack=()=>{pageAway=pageBack=Date.now()};
+document.addEventListener('visibilitychange',()=>{document.hidden?markAway():markBack()});
+document.addEventListener('freeze',markAway);document.addEventListener('resume',markBack);
+window.addEventListener('pagehide',markAway);window.addEventListener('pageshow',e=>{if(e.persisted)markBack()});
+window.addEventListener('offline',markAway);window.addEventListener('online',markBack);
+/* Some phones suspend JavaScript without any event. A timer that fires much later than planned means the device
+   (or the app) was asleep: treat it like "the app was away and has just come back". */
+let hbLast=Date.now();
+setInterval(()=>{const n=Date.now();if(n-hbLast>4000)markBack();hbLast=n},1000);
 const awayNow=()=>document.hidden||navigator.onLine===false;
+/* the network needs a moment to wake up after the app returns: a call that fails in this window is not the provider's fault */
+const BACK_GRACE=20000;
 /* wait until the page is visible and online again, then a moment for the network to wake up; false if Stop was pressed */
 async function waitBack(){
   while(awayNow()){if(stopped)return false;await new Promise(r=>setTimeout(r,400))}
-  return sleepStop(800);
+  return sleepStop(1500);
 }
-/* did this failed call (started at t0) overlap a time when the app was away? */
+/* did this failed call (started at t0) overlap a time when the app was away, or fail right after it came back? */
 const wasAway=t0=>awayNow()||pageAway>=t0;
+const justBack=()=>Date.now()-pageBack<BACK_GRACE;
 
 /* ---------- what a provider can do ----------
    p.cap = {vision:false, tools:false} only holds what you switched OFF in the provider settings; unknown counts as "can".
@@ -164,7 +176,7 @@ async function withFallback(list,attempt,opts){
   const order=fbOrder(pool,o.first);
   setLiveNote('');
   for(let i=0;i<order.length;i++){
-    const p=order[i];let tries=0,away=0;
+    const p=order[i];let tries=0,away=0,grace=0;
     for(;;){
       if(stopped)return {stopped:true,p,fails,kinds};
       tries++;
@@ -177,9 +189,10 @@ async function withFallback(list,attempt,opts){
         if(stopped||e.message==='STOP')return {stopped:true,p,fails,kinds};
         const pe=asProvErr(e);
         /* the call died because the app was in the background or offline: not the provider's fault.
-           Wait until the app is back and retry the same provider without counting it (at most 5 times). */
-        if((pe.kind==='net'||pe.kind==='timeout')&&away<5&&wasAway(t0)){
-          away++;tries--;
+           Wait until the app is back and retry the same provider without counting it (many times: a phone can go away often). */
+        if((pe.kind==='net'||pe.kind==='timeout')&&((away<40&&wasAway(t0))||(grace<3&&justBack()))){
+          if(wasAway(t0))away++;else grace++;
+          tries--;
           setLiveNote('The app was in the background. Reconnecting to '+p.name+'…');
           if(!await waitBack())return {stopped:true,p,fails,kinds};
           setLiveNote('');

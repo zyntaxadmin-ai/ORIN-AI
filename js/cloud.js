@@ -19,7 +19,7 @@ async function refreshTok(){
 }
 /* API keys (providers, Tavily, image API) and the GitHub token are NOT uploaded: they stay on each device */
 const noKey=o=>o?Object.assign({},o,{key:''}):o;
-const cloudData=()=>({providers:(S.providers||[]).map(noKey),chats:S.chats,system:S.system,temp:S.temp,autosum:S.autosum,theme:S.theme,search:noKey(S.search),imgcfg:noKey(S.imgcfg),repo:S.repo,repoNotes:S.repoNotes,sk:S.sk,ts:S.ts||Date.now()});
+const cloudData=()=>({providers:(S.providers||[]).map(noKey),chats:S.chats,system:S.system,temp:S.temp,autosum:S.autosum,theme:S.theme,search:noKey(S.search),imgcfg:noKey(S.imgcfg),repo:S.repo,repoNotes:S.repoNotes,sk:S.sk,mem:S.mem,ts:S.ts||Date.now()});
 const needKey=p=>!p.key&&!/^https?:\/\/(localhost|127\.|10\.|192\.168\.|\[::1\])/i.test(p.url||'');
 async function push(){
   const d=cloudData();
@@ -34,7 +34,7 @@ function applyRemote(rd){
   S.providers=(rd.providers||[]).map(p=>Object.assign({},p,{key:lk.get(p.id)||p.key||''}));
   S.search=withKey(rd.search||S.search,(S.search&&S.search.key)||(rd.search&&rd.search.key));
   S.imgcfg=withKey(rd.imgcfg||S.imgcfg,(S.imgcfg&&S.imgcfg.key)||(rd.imgcfg&&rd.imgcfg.key));
-  S.chats=rd.chats||[];S.system=rd.system||'';if(rd.temp==null)delete S.temp;else S.temp=rd.temp;if(rd.autosum===false)S.autosum=false;else delete S.autosum;S.theme=rd.theme||'auto';S.repo=rd.repo||S.repo;S.repoNotes=rd.repoNotes||S.repoNotes;S.sk=rd.sk||S.sk;S.ts=rd.ts||0;
+  S.chats=rd.chats||[];S.system=rd.system||'';if(rd.temp==null)delete S.temp;else S.temp=rd.temp;if(rd.autosum===false)S.autosum=false;else delete S.autosum;S.theme=rd.theme||'auto';S.repo=rd.repo||S.repo;S.repoNotes=rd.repoNotes||S.repoNotes;S.sk=rd.sk||S.sk;S.mem=rd.mem||S.mem;S.ts=rd.ts||0;
   if(!chat())S.cur=S.chats[0]?S.chats[0].id:null;
   rawSave();applyTheme();render();
   const miss=S.providers.filter(p=>p.on&&needKey(p)).length;

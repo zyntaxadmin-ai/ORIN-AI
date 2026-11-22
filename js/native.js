@@ -44,3 +44,31 @@ if(NATIVE){
     if(A.minimizeApp)A.minimizeApp();
   });
 }
+
+/* ---------- Keep working in the background (Android app) ---------- */
+/* While Orin is writing a reply, a small "foreground service" notification tells Android not to freeze the app or cut
+   its network. Without it a reply stops (or shows a network error) as soon as you switch to another app.
+   bgBusy() in extras.js calls these two. If the plugin is missing, nothing happens and the app still works as before. */
+let fgOn=false;
+async function nativeKeepAlive(on){
+  const F=NP('ForegroundService');
+  if(!F||on===fgOn)return;
+  try{
+    if(on){
+      try{const p=await F.checkPermissions();if(p&&p.display!=='granted')await F.requestPermissions()}catch(e){}
+      await F.startForegroundService({id:4217,title:'Orin is working',body:'Writing your reply. Tap to open.',smallIcon:'ic_stat_orin'});
+      fgOn=true;
+    }else{await F.stopForegroundService();fgOn=false}
+  }catch(e){fgOn=false}
+}
+/* "reply is ready" notification when the app is in the background */
+async function nativeNotify(title,body){
+  const L=NP('LocalNotifications');if(!L)return false;
+  try{
+    let p=await L.checkPermissions();
+    if(!p||p.display!=='granted')p=await L.requestPermissions();
+    if(!p||p.display!=='granted')return false;
+    await L.schedule({notifications:[{id:Math.floor(Date.now()%2147483000),title:String(title).slice(0,60),body:String(body).slice(0,200)}]});
+    return true;
+  }catch(e){return false}
+}
