@@ -308,7 +308,7 @@ label{display:block;font-size:13.5px;font-weight:500;color:var(--mute);margin:14
 .df .fr{display:flex;align-items:center;gap:2px}.df .fr>button:first-child{flex:1}
 .df .fx{flex:none;width:30px;height:30px;color:var(--mute);border-radius:var(--r1)}.df .fx:hover{background:var(--sf2)}
 .df pre{margin:6px 0;max-height:240px;overflow:auto;padding:8px;font-size:12.5px;white-space:pre-wrap;background:var(--sf2);border:1px solid var(--line);border-radius:var(--r1)}
-.tg{margin-right:4px;padding:1px 7px;font-size:11px;border-radius:99px;background:var(--ac2)}.tg.d{color:var(--err)}.tg.n{color:var(--ok)}
+.ftg{margin-right:4px;padding:1px 7px;font-size:11px;border-radius:99px;background:var(--ac2)}.ftg.d{color:var(--err)}.ftg.n{color:var(--ok)}
 .dif{max-height:280px;margin:6px 0;overflow:auto;font:12.5px/1.45 var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:var(--r1)}
 .dif div{padding:0 8px;white-space:pre-wrap;word-break:break-all}
 .dif .da{background:color-mix(in srgb,var(--ok) 20%,transparent)}.dif .dd{background:color-mix(in srgb,var(--err) 20%,transparent)}

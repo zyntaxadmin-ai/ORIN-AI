@@ -48,7 +48,7 @@ function draftHTML(c){
   if(d&&dcount(c)){
     const fs=Object.entries(d.files),pr=S.pushMode==='pr';
     h+='<div class="dc"><b>'+ico('note')+'Draft: '+fs.length+' file</b><small>'+esc(d.repo)+' · '+esc(d.branch)+'</small>'+
-    fs.map(([p,f])=>'<div class="df"><div class="fr"><button data-dv="'+qa(p)+'"><span class="tg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button><button class="fx" data-fx="'+qa(p)+'" aria-label="Remove this file" title="Remove this file">'+IC.x+'</button></div>'+(dview[p]?fileDiffHTML(d,p,f):'')+'</div>').join('')+
+    fs.map(([p,f])=>'<div class="df"><div class="fr"><button data-dv="'+qa(p)+'"><span class="ftg '+(f.del?'d':f.ex?'e':'n')+'">'+(f.del?'delete':f.ex?'edit':'new')+'</span>'+esc(p)+'</button><button class="fx" data-fx="'+qa(p)+'" aria-label="Remove this file" title="Remove this file">'+IC.x+'</button></div>'+(dview[p]?fileDiffHTML(d,p,f):'')+'</div>').join('')+
     (()=>{const iss=checkDraft(c);return iss.length?'<div class="lw">'+iss.slice(0,6).map(x=>ico('xc',14)+esc(x)).join('<br>')+'</div>':''})()+
     '<input class="f cm" placeholder="Commit message" value="'+qa(d.msg||defMsg(c))+'">'+
     (pr?'<textarea class="f pb" rows="3" placeholder="PR description (optional, the AI can write it)">'+esc(d.prBody||'')+'</textarea>':'')+'<div class="seg"><button data-pm="direct" class="'+(pr?'':'on')+'">Push directly</button><button data-pm="pr" class="'+(pr?'on':'')+'">Branch + PR</button></div>'+
