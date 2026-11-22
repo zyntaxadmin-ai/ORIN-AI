@@ -147,6 +147,7 @@ const EXTRA_TOOLS=[
  {name:'list_workflows',description:'List the GitHub Actions workflows of the current repo (name, file, state).',parameters:{type:'object',properties:{}}},
  {name:'rerun_workflow',description:'Re-run a GitHub Actions run (asks the user to confirm). failed_only re-runs only the failed jobs. Get run ids from get_actions_log.',parameters:{type:'object',properties:{run_id:{type:'integer'},failed_only:{type:'boolean'}},required:['run_id']}},
  {name:'dispatch_workflow',description:'Start a workflow that has workflow_dispatch (asks the user to confirm). workflow is the file name (e.g. deploy.yml) or id; ref defaults to the current branch.',parameters:{type:'object',properties:{workflow:{type:'string'},ref:{type:'string'},inputs:{type:'object'}},required:['workflow']}},
+ {name:'run_checks',description:'After the user has pushed, wait (up to about 4 minutes) for the GitHub Actions run of the latest push on the current branch and return CHECKS PASSED or the failed job log. Use it to verify code. If it FAILED, fix the cause in the files, stage the fix, tell the user to push again, then call run_checks again (at most 3 rounds).',parameters:{type:'object',properties:{}}},
  {name:'remember',description:'Save one short fact about the user or their preferences in the global memory, so it is known in every future chat. Use it when the user says "remember …" or states a lasting preference. One fact per call, max 300 characters.',parameters:{type:'object',properties:{note:{type:'string'}},required:['note']}},
  {name:'forget',description:'Remove one memory note by its 1-based number in the Memory list shown in the system prompt.',parameters:{type:'object',properties:{index:{type:'integer'}},required:['index']}}
 ];
@@ -156,6 +157,20 @@ async function extraTool(c,name,a){
   if(name==='remember'){return memAdd(a.note)?'Remembered.':'Already remembered.'}
   if(name==='forget'){const l=memList(),i=(parseInt(a.index,10)||0)-1;if(i<0||i>=l.length)throw new Error('No such note');const t=l[i].t;S.mem=l.filter((_,k)=>k!==i);save();return 'Removed: '+t}
   const R=S.repo&&S.repo.full;
+  if(name==='run_checks'){
+    const rf='/repos/'+R+'/actions/runs?branch='+encodeURIComponent(S.repo.branch)+'&per_page=5';let run=null;
+    for(let i=0;i<40;i++){
+      const rs=(await gh(rf)).workflow_runs||[];run=rs[0]||null;
+      if(!run){if(i>=4)return 'No workflow runs on branch '+S.repo.branch+'. Nothing was pushed, or the repo has no workflow. Tell the user to open the Code screen (sidebar) and tap Add check workflow.'}
+      else if(run.status==='completed')break;
+      if(!await sleepStop(6000))return 'Stopped.';
+    }
+    if(!run||run.status!=='completed')return 'The run is still '+(run?run.status:'missing')+' after 4 minutes. Call run_checks again.';
+    const age=Math.round((Date.now()-Date.parse(run.created_at))/60000),old=age>15?'\nNote: this run is '+age+' minutes old. If the user pushed just now, GitHub may not have started the new run yet: call run_checks again in a minute.':'';
+    if(run.conclusion==='success')return 'CHECKS PASSED: run #'+run.id+' ('+(run.name||'')+') '+(run.html_url||'')+old;
+    if(run.conclusion==='failure'||run.conclusion==='timed_out')return 'CHECKS FAILED.\n'+await tool(c,'get_actions_log',{run_id:run.id})+old;
+    return 'The run ended as '+run.conclusion+' ('+(run.html_url||'')+').'+old;
+  }
   if(name==='list_workflows'){const j=await gh('/repos/'+R+'/actions/workflows');return (j.workflows||[]).map(w=>w.name+' · '+w.path.split('/').pop()+' · '+w.state).join('\n')||'No workflows'}
   if(name==='create_branch'){
     const n=String(a.name||'').trim();if(!/^[A-Za-z0-9._\/-]{1,100}$/.test(n)||/\.\.|\/\/|\.lock$|^\/|\/$/.test(n))throw new Error('Invalid branch name');
@@ -252,6 +267,6 @@ document.addEventListener('click',async e=>{
 function xLabel(k){
   const a=k.args||{};
   return ({fetch_url:'globe:read '+(a.url||''),check_site:'globe:check site '+(a.url||''),create_branch:'branch:new branch '+(a.name||''),
-    list_workflows:'wrench:workflows',rerun_workflow:'refresh:re-run #'+(a.run_id||''),dispatch_workflow:'wrench:start '+(a.workflow||''),
+    list_workflows:'wrench:workflows',run_checks:'wrench:wait for checks',rerun_workflow:'refresh:re-run #'+(a.run_id||''),dispatch_workflow:'wrench:start '+(a.workflow||''),
     remember:'note:remember',forget:'note:forget'})[k.name]||null;
 }

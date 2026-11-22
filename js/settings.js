@@ -3,7 +3,7 @@
 /* ---------- Settings ---------- */
 let editing=null,view='',spage='';
 function openSheet(){view=view||'';drawSheet();$('sheet').classList.add('on')}
-function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'],search:['Web search'],img:['Image generation'],skills:['Skills'],gh:['GitHub'],cn:['Connectors'],mem:['Memory'],app:['Appearance & Voice'],acct:['Account & Sync'],bk:['Backup']}}
+function settingsPages(){return{prov:['Providers & Models'],sys:['System prompt'],search:['Web search'],img:['Image generation'],skills:['Skills'],gh:['GitHub'],cn:['Connectors'],code:['Code'],mem:['Memory'],app:['Appearance & Voice'],acct:['Account & Sync'],bk:['Backup']}}
 function settingsMenu(){
   const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session,nm=((S.cloud&&S.cloud.email)||'').split('@')[0];
   const row=(k,ic,t,sub,st)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+(st?'<i class="sd '+st+'"></i>':'')+esc(sub)+'</small></span><span class="ar">›</span></button>';
@@ -69,6 +69,7 @@ function drawSheet(){
   else if(spage==='skills')b.innerHTML=skillsHTML();
   else if(spage==='gh')b.innerHTML=ghHTML();
   else if(spage==='cn')b.innerHTML=cnPage();
+  else if(spage==='code')b.innerHTML=cdPage();
   else if(spage==='mem')b.innerHTML=memPage();
   else if(spage==='app')b.innerHTML=themeHTML()+voiceHTML();
   else if(spage==='acct')b.innerHTML=cloudHTML();
@@ -210,7 +211,7 @@ $('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();ren
 $('newc').onclick=$('newc2').onclick=newChat;
 $('dav').onclick=$('dset').onclick;$('dchats').onclick=()=>{$('cq').focus()};
 $('gear').onclick=()=>{editing=null;view='';spage='';openSheet()};
-$('back').onclick=()=>{if(spage==='cn'&&cnView){cnView='';cnRes='';drawSheet();return}if(view){view='';$('sheet').classList.remove('on');render();return}if(skEdit&&spage==='skills'){skEdit=null;drawSheet()}else if(editing){editing=null;drawSheet()}else if(spage){spage='';drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
+$('back').onclick=()=>{if(spage==='code'){spage='';$('sheet').classList.remove('on');render();return}if(spage==='cn'&&cnView){cnView='';cnRes='';drawSheet();return}if(view){view='';$('sheet').classList.remove('on');render();return}if(skEdit&&spage==='skills'){skEdit=null;drawSheet()}else if(editing){editing=null;drawSheet()}else if(spage){spage='';drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
 $('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};
 $('box').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229&&window.innerWidth>700){e.preventDefault();send()}});
 let tr=0;$('box').addEventListener('input',e=>{if(tr)return;tr=requestAnimationFrame(()=>{tr=0;const b=e.target;b.style.height='auto';b.style.height=Math.min(b.scrollHeight,140)+'px'})});

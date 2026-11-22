@@ -472,6 +472,11 @@ input[type=range]{accent-color:var(--ac)}
 .tl li.ts svg.ic{flex:none}.tl li.ts span{min-width:0;overflow-wrap:anywhere}
 .grp.lo{margin-top:22px}.grp.lo .mrow .mt b{color:var(--err)}.grp.lo .mrow .mi{background:transparent;color:var(--err)}
 
+/* Code screen */
+.sd.bad{background:var(--err)}
+a.mrow{text-decoration:none;color:inherit}
+.cdt{list-style:none;margin:0;padding:0}.cdt li{padding:5px 0;color:var(--ink)}.cdt li.dn{color:var(--mute);text-decoration:line-through}
+
 /* ---------- Claude look (design v3): chat, sidebar, settings and sheets follow the Claude mobile app.
    Colours and fonts are the tokens at the top (serif for reading and titles, sans for controls). This block only reshapes components. ---------- */
 :root{--chatic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z'/%3E%3C/svg%3E")}

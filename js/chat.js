@@ -72,6 +72,6 @@ function renderList(){
 }
 const wide=matchMedia('(min-width:1024px)');
 wide.addEventListener('change',()=>{if(wide.matches)renderList()});
-function openDrawer(){$('dchats').innerHTML=ico('chat',20)+'<span>Chats</span>';$('dav').textContent=((S.cloud&&S.cloud.email)||'o')[0];renderList();$('drawer').classList.add('on');$('ov').classList.add('on')}
+function openDrawer(){$('dchats').innerHTML=ico('chat',20)+'<span>Chats</span>';$('dcode').innerHTML=ico('wrench',20)+'<span>Code</span>';$('dav').textContent=((S.cloud&&S.cloud.email)||'o')[0];renderList();$('drawer').classList.add('on');$('ov').classList.add('on')}
 function closeDrawer(){$('drawer').classList.remove('on');$('ov').classList.remove('on')}
 
