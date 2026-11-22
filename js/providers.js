@@ -140,7 +140,7 @@ function tick(){
 const drain=()=>new Promise(res=>{const t0=performance.now();(function w(){if(!backlog()||!busy||stopped||performance.now()-t0>1500)res();else setTimeout(w,30)})()});
 let pend=[];
 /* big text files live in IndexedDB (not localStorage); messages keep {name,id,size,tok} */
-const FT=new Map(),MAXF=15e6,etok=n=>Math.ceil((typeof n==='string'?n.length:n)/3.2),fmtSz=n=>n>=1e6?(n/1e6).toFixed(1)+'MB':Math.max(1,Math.round(n/1e3))+'KB';
+const FT=new Map(),MAXF=Infinity,etok=n=>Math.ceil((typeof n==='string'?n.length:n)/3.2),fmtSz=n=>n>=1e6?(n/1e6).toFixed(1)+'MB':Math.max(1,Math.round(n/1e3))+'KB';
 let fdb;
 const idb=()=>fdb||(fdb=new Promise((res,rej)=>{try{const r=indexedDB.open('orin-files',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}}));
 async function fput(id,text){FT.set(id,text);try{const d=await idb();await new Promise((res,rej)=>{const t=d.transaction('f','readwrite');t.objectStore('f').put(text,id);t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)});return true}catch(e){return false}}
@@ -213,22 +213,21 @@ function renderTray(){const t=$('tray');t.classList.toggle('on',pend.length>0);t
 function readImg(f){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const im=new Image();im.onerror=no;im.onload=()=>{const k=Math.min(1,1280/Math.max(im.width,im.height)),w=Math.round(im.width*k),h=Math.round(im.height*k),cn=document.createElement('canvas');cn.width=w;cn.height=h;const x=cn.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);ok(cn.toDataURL('image/jpeg',.82).split(',')[1])};im.src=r.result};r.readAsDataURL(f)})}
 async function addFiles(list){
   for(const f of list){
-    if(pend.length>=10){toast('You can attach up to 10 files');break}
     try{
+      toast('Reading '+f.name+'…');
       if(f.type.startsWith('image/'))pend.push({kind:'image',name:f.name,mime:'image/jpeg',data:await readImg(f)});
-      else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){if(f.size>10e6)toast(f.name+' is too large (max 10MB)');else pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)})}
+      else if(f.type==='application/pdf'||/\.pdf$/i.test(f.name))pend.push({kind:'pdf',name:f.name,mime:'application/pdf',data:await b64(f)});
       else if(/\.zip$/i.test(f.name)){
-        if(f.size>150e6){toast(f.name+' is too large (max 150MB)');continue}
-        const r=await zipToText(f);if(!r.n){toast(f.name+': no readable text files found');continue}
-        pend.push({kind:'text',name:f.name,text:r.text,size:r.text.length,tok:etok(r.text)});toast(f.name+': read '+r.n+(r.n===1?' file':' files')+(r.skipped?' ('+r.skipped+' skipped: binary, large or node_modules)':''));
+        const r=await zipToText(f,(d,n)=>toast('Reading '+f.name+'… '+d+'/'+n));
+        if(!r.n){toast(f.name+': no readable text files found');continue}
+        pend.push({kind:'text',name:f.name,text:r.text,size:r.text.length,tok:etok(r.text)});toast(f.name+': read '+r.n+(r.n===1?' file':' files')+(r.skipped?' ('+r.skipped+' skipped: binary or node_modules)':''));
       }
       else if(/\.(docx|xlsx|pptx)$/i.test(f.name)){
-        if(f.size>60e6){toast(f.name+' is too large');continue}
         const t=await officeToText(f);if(!t.trim()){toast(f.name+': no text found');continue}
         pend.push({kind:'text',name:f.name,text:t,size:t.length,tok:etok(t)});
       }
-      else if(f.size>MAXF)toast(f.name+' is too large (max '+fmtSz(MAXF)+')');
       else{const t=await f.text();if(t.includes('\u0000')){toast(f.name+': this file type isn’t supported');continue}pend.push({kind:'text',name:f.name,text:t,size:f.size,tok:etok(t)})}
+      renderTray();
     }catch(e){toast(f.name+' could not be read')}
   }
   renderTray();

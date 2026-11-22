@@ -24,23 +24,26 @@ async function zipRead(file,e){
 }
 const zipStr=async(f,e)=>new TextDecoder().decode(await zipRead(f,e));
 function packText(items){let out='',n=0,skipped=0;for(const [name,t] of items){if(out.length+t.length>MAXF){skipped++;continue}out+='\n=== '+name+' ===\n'+t;n++}return {text:out.trimStart(),n,skipped}}
-async function zipToText(file){
+async function zipToText(file,onp){
   const es=(await zipList(file)).filter(e=>!e.name.endsWith('/')),items=[];let skipped=0;
-  for(const e of es){
-    if(BIN_EXT.test(e.name)||SKIP_DIR.test('/'+e.name)||e.us>1.5e6||e.enc){skipped++;continue}
-    try{const t=await zipStr(file,e);if(t.includes('\u0000')){skipped++;continue}items.push([e.name,t])}catch(_){skipped++}
+  const want=es.filter(e=>{if(BIN_EXT.test(e.name)||SKIP_DIR.test('/'+e.name)||e.enc){skipped++;return false}return true});
+  const res=new Array(want.length);
+  for(let i=0;i<want.length;i+=8){
+    await Promise.all(want.slice(i,i+8).map(async(e,j)=>{try{const t=await zipStr(file,e);if(t.includes('\u0000'))skipped++;else res[i+j]=[e.name,t]}catch(_){skipped++}}));
+    if(onp)onp(Math.min(i+8,want.length),want.length);
   }
+  for(const r of res)if(r)items.push(r);
   const r=packText(items);r.skipped+=skipped;return r;
 }
 async function dirToText(list){
   const items=[];let skipped=0;
   for(const f of list){const n=f.webkitRelativePath||f.name;
-    if(BIN_EXT.test(n)||SKIP_DIR.test('/'+n)||f.size>1.5e6){skipped++;continue}
+    if(BIN_EXT.test(n)||SKIP_DIR.test('/'+n)){skipped++;continue}
     try{const t=await f.text();if(t.includes('\u0000')){skipped++;continue}items.push([n,t])}catch(_){skipped++}}
   const r=packText(items);r.skipped+=skipped;return r;
 }
 async function addDir(list){
-  if(!list.length)return;if(pend.length>=10){toast('You can attach up to 10 files');return}
+  if(!list.length)return;
   const nm=((list[0].webkitRelativePath||'').split('/')[0]||'folder')+'/';
   toast('Reading folder…');const r=await dirToText(list);
   if(!r.n){toast('No readable text files found');return}

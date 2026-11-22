@@ -1,4 +1,4 @@
-const C='orin-v17';
+const C='orin-v18';
 /* Same-origin files are also cached when they are fetched, so this list only speeds up the first offline start. Keep it in step with index.html. */
 const SHELL=['./','index.html','preview.html','css/app.css','fonts/inter-Regular.woff','fonts/inter-Medium.woff','fonts/inter-SemiBold.woff','fonts/poppins-Medium.woff','fonts/poppins-Bold.woff','js/core.js','js/cloud.js','js/fallback.js','js/providers.js','js/readers.js','js/github.js','js/checks.js','js/preview.js','js/templates.js','js/repomap.js','js/skills.js','js/agent-tools.js','js/agent.js','js/push.js','js/chat.js','js/native.js','js/settings.js','js/preview-frame.js'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL)).catch(()=>{}));self.skipWaiting()});

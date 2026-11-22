@@ -251,7 +251,7 @@ async function tool(c,name,a){
     if(!all.length)throw new Error('No image is attached to this chat');
     const w=String(a.which||'1'),im=/^\d+$/.test(w)?all[+w-1]:all.find(i=>i.name===w);
     if(!im)throw new Error('That attachment was not found');
-    if(im.data.length>2.5e6)throw new Error('Image is too large (max ~1.8MB)');
+    if(im.data.length>70e6)throw new Error('Image is too large for GitHub (max ~50MB)');
     const t=await getTree();d.files[p]={bin:im.data,mime:im.mime,ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Staged binary '+p+' ('+Math.round(im.data.length*0.75/1024)+' KB)';
   }
@@ -262,7 +262,7 @@ async function tool(c,name,a){
     if(!await ask('Generate an image?','The assistant wants to generate an image with '+S.imgcfg.model+'. This uses your API credits.\n\n"'+pr.slice(0,150)+'"\nSaves to '+p,'Generate'))throw new Error('The user declined this action');
     const pic=await genImage(pr),b=String(pic).split(',')[1];
     if(!b||!/^data:image\//.test(pic))throw new Error('Could not get the image (CORS or format issue)');
-    if(b.length>2.5e6)throw new Error('Image is too large');
+    if(b.length>70e6)throw new Error('Image is too large for GitHub (max ~50MB)');
     const t=await getTree();d.files[p]={bin:b,mime:'image/jpeg',ex:t.paths.has(p),bs:t.shas[p]};rawSave();
     return 'Generated and staged '+p+' ('+Math.round(b.length*0.75/1024)+' KB). Use it in the project (e.g. <img src="'+p+'">).';
   }
@@ -323,7 +323,7 @@ async function tool(c,name,a){
   }
   if(name==='write_file'){
     if(typeof a.content!=='string')throw new Error('content is required');
-    if(a.content.length>300000)throw new Error('File is too large (max 300KB)');
+    
     const t=await getTree();
     if(t.paths.has(p)){let o=null;try{o=await gh('/repos/'+S.repo.full+'/contents/'+enc(p)+'?ref='+encodeURIComponent(S.repo.branch),{raw:true})}catch(e){}
       if(o!==null&&o.trimEnd()===a.content.trimEnd()){delete d.files[p];rawSave();return 'NO CHANGE: new content is identical to the current file, nothing staged. Tell the user the file already looks like this.'}}

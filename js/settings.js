@@ -112,7 +112,7 @@ document.addEventListener('click',async e=>{
   else if(d.act==='rsub'){rsub=rsub===d.sub?'':d.sub;if(rsub==='hist')loadHist();if(rsub==='files')loadFiles();drawSheet()}
   else if(d.hrest){restoreTo(d.hrest)}
   else if(d.fatt!==undefined){
-    if(pend.length>=10){toast('You can attach up to 10 files');return}
+    
     readFull(chat()||{draft:null},d.fatt).then(tx=>{pend.push({kind:'text',name:d.fatt.split('/').pop(),text:tx.slice(0,MAXF),size:tx.length,tok:etok(tx)});renderTray();view='';$('sheet').classList.remove('on');render();toast('Attached: '+d.fatt)}).catch(e=>toast(e.message));
   }
   else if(d.act==='rclear'){S.repo=null;ghTree=null;save();if(view==='repo')drawSheet();render()}
