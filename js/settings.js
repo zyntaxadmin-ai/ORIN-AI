@@ -176,9 +176,12 @@ $('pve').addEventListener('click',e=>{if(e.target.closest('#pvs')){const t='The 
 $('fdir').onchange=e=>{addDir([...e.target.files]);e.target.value=''};
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
 const tgl=on=>'<b class="tg'+(on?' on':'')+'"></b>';
+const repoSub=()=>{if(!S.repo)return 'Choose a repository';const c=chat(),n=c?dcount(c):0;return S.repo.full+' · '+S.repo.branch+(n?' · '+n+' draft':'')+(agentOn()?'':' · no token')};
+const skSub=()=>{const n=skActive(chat()).length;return (skAutoOn()?'Auto on':'Auto off')+(n?' · '+n+' active':'')};
 const plusMenu=()=>'<div class="tiles"><button class="tile" data-add="fcam">'+ico('camera',24)+'<span>Camera</span></button><button class="tile" data-add="fimg">'+ico('image',24)+'<span>Photos</span></button><button class="tile" data-add="fi">'+ico('file',24)+'<span>Files</span></button></div>'+
   '<button class="pi big" data-add="fdir"><span>'+ico('folder',18)+'Folder or zip</span></button>'+
-  '<button class="pi big" data-act="ropen"><span>'+ico('box',18)+'GitHub repo</span></button>'+
+  '<button class="pi big" data-act="ropen"><span>'+ico('repo',18)+'<em class="pt2"><b>GitHub repo</b><small>'+esc(repoSub())+'</small></em></span><i class="ar">›</i></button>'+
+  '<button class="pi big" data-act="skpop"><span>'+ico('spark',18)+'<em class="pt2"><b>Skills</b><small>'+esc(skSub())+'</small></em></span><i class="ar">›</i></button>'+
   '<button class="pi big" data-tog="web" role="switch" aria-checked="'+(S.web?'true':'false')+'"><span>'+ico('globe',18)+'Web search</span>'+tgl(S.web)+'</button>'+
   '<button class="pi big" data-tog="img" role="switch" aria-checked="'+(imgMode?'true':'false')+'"><span>'+ico('image',18)+'Create image</span>'+tgl(imgMode)+'</button>'+
   '<button class="pi big" data-go="cn"><span>'+ico('cloud',18)+'Connectors</span><i class="ar">›</i></button>';

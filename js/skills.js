@@ -191,12 +191,8 @@ function skLoad(c,id){
 
 /* ---------- composer button, chips and menu ---------- */
 function updateSkillUI(){
-  const b=$('skb');if(!b)return;
-  const n=skActive(chat()).length;
-  b.innerHTML=ico('spark',14)+'<span class="skl">Skills</span>'+(n?'<b class="skn">'+n+'</b>':'');
-  b.className='pill'+(skAutoOn()?' au':'');
-  b.setAttribute('aria-label','Skills, auto '+(skAutoOn()?'on':'off')+(n?', '+n+' active':''));
   updateModes();
+  if(typeof updateChip==='function')updateChip();
 }
 function skChips(){
   const c=chat();if(!c)return '';
@@ -291,6 +287,7 @@ async function skDelete(id){
 }
 /* click handler (called from the global click handler in settings.js): returns true when the click was a skills action */
 function skHandle(d){
+  if(d.act==='skpop'){pop($('plus'),skMenu(),'Skills');return true}
   if(d.skauto!==undefined){skAutoToggle();return true}
   if(d.sk!==undefined){skPin(d.sk);return true}
   if(d.skrm!==undefined){skRemove(d.skrm);return true}
@@ -303,4 +300,3 @@ function skHandle(d){
   if(d.act==='skset'){closePop();editing=null;view='';spage='skills';skEdit=null;openSheet();return true}
   return false;
 }
-{const b=$('skb');if(b)b.onclick=e=>pop(e.currentTarget,skMenu(),'Skills')}

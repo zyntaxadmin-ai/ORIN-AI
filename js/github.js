@@ -139,13 +139,9 @@ function subHTML(){
   return '';
 }
 function updateChip(){
-  const e=$('rchip');if(!e)return;
-  if(!S.repo){e.hidden=true;e.className='cb';e.innerHTML='';e.title='';return}
-  const c=chat(),n=c?dcount(c):0;
-  e.hidden=false;e.className='cb'+(n?' dr':'')+(agentOn()?'':' nt');
-  e.title=S.repo.full+' · '+S.repo.branch+(n?' · '+n+' draft':'')+(agentOn()?'':' · no token');
-  e.setAttribute('aria-label','GitHub repo: '+e.title);
-  e.innerHTML=ico('box',20)+(n?'<i class="rdot"></i>':'');
+  const b=$('plus');if(!b)return;
+  const n=typeof skActive==='function'?skActive(chat()).length:0;
+  b.classList.toggle('has',!!S.repo||n>0);
 }
 function okPath(p){
   if(typeof p!=='string')throw new Error('path is required');
