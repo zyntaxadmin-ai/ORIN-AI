@@ -10,25 +10,25 @@
 @font-face{font-family:Poppins;font-weight:500;font-style:normal;font-display:swap;src:url(../fonts/poppins-Medium.woff) format("woff")}
 @font-face{font-family:Poppins;font-weight:700;font-style:normal;font-display:swap;src:url(../fonts/poppins-Bold.woff) format("woff")}
 :root{
-  --bg:#f4f6fb;--sf:#fff;--sf2:#eaeef8;--ink:#0d1230;--mute:#5a6283;--line:#dde2f0;
-  --ac:#2f4dff;--ac2:#e6ebff;--acink:#fff;--me:#0d1230;--meink:#fff;
-  --orb:#ffb224;--tile:#2f4dff;
+  --bg:#faf9f5;--sf:#fff;--sf2:#f0eee6;--ink:#1f1e1d;--mute:#6f6d66;--line:#e4e1d6;
+  --ac:#2f7be4;--ac2:#e3edfb;--acink:#fff;--me:#ece9df;--meink:#1f1e1d;
+  --orb:#d97757;--tile:#d97757;
   --err:#d4302a;--errink:#fff;--ok:#12794a;--warn:#a85f00;
   --r1:8px;--r2:12px;--r3:20px;--r:var(--r3);
   --sh1:0 1px 2px rgba(13,18,48,.06);--sh2:0 18px 48px rgba(13,18,48,.2);--shc:0 1px 2px rgba(13,18,48,.05),0 8px 28px rgba(13,18,48,.07);
   --sb:292px;
   --sans:Inter,system-ui,-apple-system,"Segoe UI Variable Text","Segoe UI",Roboto,"Noto Sans Bengali","Nirmala UI","Hind Siliguri",Vrinda,sans-serif;
-  --disp:Poppins,Inter,system-ui,"Noto Sans Bengali","Nirmala UI","Hind Siliguri",sans-serif;
+  --serif:ui-serif,Georgia,"Noto Serif","Noto Serif Bengali","Times New Roman",serif;--disp:var(--serif);
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --orbit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' fill='none' stroke='%232f4dff' stroke-width='1'%3E%3Ccircle cx='200' cy='200' r='60' opacity='.34'/%3E%3Ccircle cx='200' cy='200' r='110' opacity='.24'/%3E%3Ccircle cx='200' cy='200' r='160' opacity='.16'/%3E%3Ccircle cx='200' cy='200' r='198' opacity='.1'/%3E%3Ccircle cx='283' cy='86' r='5' fill='%23ffb224' stroke='none'/%3E%3C/svg%3E");
 }
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){
-  --bg:#080b1c;--sf:#10142a;--sf2:#181d38;--ink:#e9ecfa;--mute:#939bbd;--line:#232a4a;
-  --ac:#8196ff;--ac2:#1a2250;--acink:#080b1c;--me:#2f4dff;--meink:#fff;--orb:#ffc04d;
+  --bg:#171716;--sf:#222221;--sf2:#2c2c2b;--ink:#f3f2ee;--mute:#a09f9a;--line:#363634;
+  --ac:#4b8df0;--ac2:#1c2b44;--acink:#fff;--me:#2d2d2c;--meink:#f3f2ee;--orb:#d97757;
   --err:#ff8a80;--errink:#2b0806;--ok:#4cc790;--warn:#f0b04a;--sh2:0 18px 48px rgba(0,0,0,.55);--shc:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.3)}}
 :root[data-theme=dark]{
-  --bg:#080b1c;--sf:#10142a;--sf2:#181d38;--ink:#e9ecfa;--mute:#939bbd;--line:#232a4a;
-  --ac:#8196ff;--ac2:#1a2250;--acink:#080b1c;--me:#2f4dff;--meink:#fff;--orb:#ffc04d;
+  --bg:#171716;--sf:#222221;--sf2:#2c2c2b;--ink:#f3f2ee;--mute:#a09f9a;--line:#363634;
+  --ac:#4b8df0;--ac2:#1c2b44;--acink:#fff;--me:#2d2d2c;--meink:#f3f2ee;--orb:#d97757;
   --err:#ff8a80;--errink:#2b0806;--ok:#4cc790;--warn:#f0b04a;--sh2:0 18px 48px rgba(0,0,0,.55);--shc:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.3)}
 
 *{box-sizing:border-box;margin:0}
@@ -228,7 +228,7 @@ label{display:block;font-size:13.5px;font-weight:500;color:var(--mute);margin:14
 /* ---------- Chat history: an ink-coloured drawer, a permanent sidebar on wide screens.
    The drawer re-declares the colour tokens, so every control inside it follows without extra rules. ---------- */
 .ov{position:fixed;inset:0;z-index:20;display:none;background:rgba(8,11,28,.55)}.ov.on{display:block}
-.drawer{--sf:#0d1230;--sf2:#1a2048;--ink:#e9ecfa;--mute:#8d96bd;--line:#252c58;--ac:#93a6ff;--ac2:#1d2762;--acink:#0d1230;--err:#ff8a80;--errink:#2b0806;
+.drawer{--err:#ff8a80;--errink:#2b0806;
   position:fixed;top:0;bottom:0;left:0;z-index:21;width:min(320px,86vw);display:flex;flex-direction:column;padding:calc(14px + env(safe-area-inset-top,0px)) 12px 12px;background:var(--sf);color:var(--ink);transform:translateX(-100%);transition:transform .22s ease}
 .drawer.on{transform:none;box-shadow:var(--sh2)}
 .dh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -471,3 +471,69 @@ input[type=range]{accent-color:var(--ac)}
 .tl li.ts{display:flex;align-items:center;gap:8px;color:var(--ink);font-weight:600;padding-left:26px}
 .tl li.ts svg.ic{flex:none}.tl li.ts span{min-width:0;overflow-wrap:anywhere}
 .grp.lo{margin-top:22px}.grp.lo .mrow .mt b{color:var(--err)}.grp.lo .mrow .mi{background:transparent;color:var(--err)}
+
+/* ---------- Claude look (design v3): chat, sidebar, settings and sheets follow the Claude mobile app.
+   Colours and fonts are the tokens at the top (serif for reading and titles, sans for controls). This block only reshapes components. ---------- */
+:root{--chatic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z'/%3E%3C/svg%3E")}
+header{padding:10px 8px}
+header h1{margin-left:40px;padding:0;text-align:center;font:400 17px/1.3 var(--serif)}
+.ib:hover{background:transparent}
+#msgs{padding:8px 18px 20px;gap:18px}
+.m.u{padding:10px 16px;border-radius:20px}
+.m.a{font:400 16.5px/1.62 var(--serif)}
+.m code{color:var(--ac);font-family:var(--mono)}
+.who.r,.who:not(.r)::before{display:none}
+.who{font:500 12.5px/1.3 var(--sans)}
+button.act.lg{margin:0 0 8px;background:none;border:0;border-radius:0}
+button.act.lg .acth{min-height:0;padding:4px 0;color:var(--mute);font:400 15px/1.4 var(--sans)}
+.m pre,.cw{background:#1f1f1e}.cw{border-color:#343432}.cw pre{border-top-color:#343432}
+.ov,.dov{background:rgba(0,0,0,.55)}#pov.sh{background:rgba(0,0,0,.5)}
+/* composer: one calm pill, a filled + button, flat model and skills labels, a solid send button */
+form.in{padding:4px 12px 10px}
+.comp{padding:8px;border-radius:28px;box-shadow:none}
+.comp:focus-within{border-color:var(--mute);box-shadow:none}
+form.in textarea{padding:6px 10px 8px;font-size:16.5px}
+#plus{background:var(--sf2);color:var(--ink)}
+.pill{padding:0 8px;background:transparent;color:var(--mute);font-weight:500}
+.pill:hover{background:var(--sf2)}
+.send,.send:hover:not(:disabled){background:var(--ink);color:var(--bg)}
+/* sidebar */
+.drawer{width:min(340px,82vw);background:var(--bg);border-radius:0 24px 24px 0}
+.brand{padding:6px 8px;font:400 30px/1 var(--serif);letter-spacing:0}
+.brand i,#dclose{display:none}
+.dnav button{padding:12px 10px;font-size:17px;font-weight:400}
+.drawer .gl.rc{margin:14px 10px 6px;font:400 15px/1.3 var(--sans)}
+.gh{display:none}
+.sw .ci{background:var(--bg)}.sw .ci:hover,.sw .ci.cur{background:var(--sf2)}
+.ci.cur{box-shadow:none}
+.ci .t{font-size:16.5px;font-weight:400}.ci.cur .t{font-weight:400}
+.ci .t::before{content:'';display:inline-block;width:20px;height:20px;margin-right:14px;vertical-align:-5px;background:var(--mute);-webkit-mask:var(--chatic) center/contain no-repeat;mask:var(--chatic) center/contain no-repeat}
+.drawer>.btn,.dfoot .btn{background:var(--ink);color:var(--bg)}
+/* settings: centered serif title, one rounded card per group, plain rows without arrows */
+.sheet header{border-bottom:0;padding:10px 8px}
+.sheet header h1{margin:0 40px 0 0}
+.sheet .body{padding:6px 16px 28px}
+.gl{display:none}
+.grp,.sec{border:0;border-radius:20px}
+.grp{margin-bottom:12px}.grp.lo{margin-top:0}
+.grp .mrow{gap:14px;padding:14px 16px}
+.grp .mrow .mi{width:26px;height:26px;border-radius:0;background:transparent;color:var(--ink)}
+.grp .mrow .mt b{font-size:16.5px;font-weight:400}
+.grp .mrow .mt small{font-size:14px}
+.grp .mrow .ar{display:none}
+.prof{justify-content:space-between;margin-bottom:12px;padding:16px;background:transparent}
+.prof .pt2 b{font:500 16px/1.3 var(--sans)}
+.plan{flex:none;padding:5px 12px;border-radius:99px;background:var(--ink);color:var(--bg);font-size:13px;font-weight:600}
+/* sheets (model, add to chat, summary): close button at the left, title centered, soft rows */
+#pop.sh{padding:8px 14px calc(16px + env(safe-area-inset-bottom,0px));border:0;border-radius:28px 28px 0 0}
+#pop .pt{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 44px 6px;font:600 17px/1.2 var(--sans)}
+#pop .pt .px{position:absolute;left:-6px;top:0}
+#pop .pi{margin-bottom:3px;padding:14px 16px;background:var(--sf2);border-radius:14px}
+#pop .pi b{font-size:17px;font-weight:500}#pop .pi small{font-size:14px}
+#pop hr{margin:8px 0;border:0}
+.tile,.pi.big{border-radius:18px}
+.tl li{font:400 16px/1.45 var(--serif)}.tl li.ts{font-family:var(--sans);color:var(--ink)}
+/* home and sign-in: no orbit art, a serif greeting */
+.orb,.empty::before{display:none}
+.hgreet,.empty h2{font:400 32px/1.2 var(--serif);letter-spacing:-.01em}
+.auth{background:var(--bg)}.auth .card{border:0}

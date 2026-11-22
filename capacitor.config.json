@@ -2,7 +2,7 @@
   "appId": "com.zyntax.orin",
   "appName": "Orin",
   "webDir": "www",
-  "backgroundColor": "#f4f6fb",
+  "backgroundColor": "#171716",
   "server": {
     "androidScheme": "https"
   },

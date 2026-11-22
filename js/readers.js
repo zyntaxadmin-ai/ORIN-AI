@@ -82,10 +82,11 @@ function closePop(){['pov','pop'].forEach(i=>{const e=$(i);if(e)e.remove()})}
 function pop(anchor,html,title){
   closePop();const r=anchor.getBoundingClientRect(),sh=innerWidth<=700;
   const o=document.createElement('div');o.id='pov';o.onclick=closePop;if(sh)o.className='sh';
-  const p=document.createElement('div');p.id='pop';p.innerHTML=(sh?'<i class="grab"></i>':'')+(title?'<div class="pt">'+title+'</div>':'')+html;
+  const p=document.createElement('div');p.id='pop';p.innerHTML=(sh?'<i class="grab"></i>':'')+(title?'<div class="pt"><button type="button" class="ib px" aria-label="Close">'+IC.x+'</button><span>'+title+'</span></div>':'')+html;
   if(sh)p.className='sh';
   else{p.style.left=Math.max(8,Math.min(r.left,innerWidth-250))+'px';if(r.top<260)p.style.top=(r.bottom+8)+'px';else p.style.bottom=(innerHeight-r.top+8)+'px'}
   document.body.append(o,p);
+  const px=p.querySelector('.px');if(px)px.onclick=closePop;
 }
 const EFF=[['','Default'],['low','Low'],['medium','Medium'],['high','High']];
 const effHTML=()=>'<hr><div class="eff"><b>Effort</b><small>How hard the model thinks. Used by Claude and reasoning models; others ignore it.</small><div class="seg">'+EFF.map(x=>'<button data-eff="'+x[0]+'" class="'+((S.effort||'')===x[0]?'on':'')+'">'+x[1]+'</button>').join('')+'</div></div>';

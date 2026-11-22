@@ -242,7 +242,7 @@ const sumReg=new Map();let sumSeq=0;
 const logHTML=m=>{
   const n=(m.log||[]).length;if(!n&&!m.think)return '';
   if(sumSeq>400){sumReg.clear();sumSeq=0}const id=++sumSeq;sumReg.set(id,m);
-  return '<button class="act lg sumb" data-sum="'+id+'"><span class="acth">'+ico(n?'wrench':'spark',14)+'<span class="actt">'+(n?n+(n===1?' step':' steps')+(m.think?' · thinking':''):'Thought process')+'</span><span class="ar">›</span></span></button>';
+  return '<button class="act lg sumb" data-sum="'+id+'"><span class="acth">'+ico('hist',16)+'<span class="actt">'+(n?n+(n===1?' step':' steps')+(m.think?' · thinking':''):'Thought process')+'</span><span class="ar">›</span></span></button>';
 };
 /* Summary sheet: the model's thinking (when the provider sends it) and the steps of an agent run, as a timeline */
 function sumHTML(m){

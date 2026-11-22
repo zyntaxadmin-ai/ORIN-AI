@@ -13,6 +13,7 @@ const strip=(k,v)=>k==='imgs'?undefined:v;
 let S={providers:[],chats:[],cur:null,system:'',theme:'light'};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 if(S.theme==='auto'&&!S.t2){S.theme='light';S.t2=1}
+if(!S.t3){S.theme='dark';S.t3=1}
 const $=id=>document.getElementById(id);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const _s=(p,w)=>'<svg viewBox="0 0 24 24" width="'+(w||20)+'" height="'+(w||20)+'" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+p+'</svg>';
@@ -78,7 +79,7 @@ const IX={
 };
 const ico=(k,w)=>_s(IX[k]||'',w||16).replace('<svg','<svg class="ic"');
 const ibtn=(a,l,k)=>'<button '+a+' aria-label="'+l+'" title="'+l+'">'+IC[k]+'</button>';
-function initIcons(){const m={menu:'menu',newc:'edit',gear:'gear',plus:'plus',mic:'mic',dclose:'x',tobot:'dn'};for(const k in m){const e=$(k);if(e)e.innerHTML=IC[m[k]]}$('dset').innerHTML=IC.gear+'<span>Settings</span>';setBusyUI(false)}
+function initIcons(){const m={menu:'menu',newc:'edit',gear:'gear',plus:'plus',mic:'mic',dclose:'x',tobot:'dn'};for(const k in m){const e=$(k);if(e)e.innerHTML=IC[m[k]]}$('gear').innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>';$('dset').innerHTML=IC.gear+'<span>Settings</span>';setBusyUI(false)}
 const SUG=[['Write an email','Draft a professional email','Help me write a professional email: '],['Explain code','Step-by-step walkthrough','Explain this code step by step:\n'],['Brainstorm','Ideas for a new project','Give me 5 ideas for a new project.'],['Write in Bangla','Stories, poems, essays','Write a short story in Bangla.']];
 const sugHTML=()=>'<div class="sug">'+SUG.map((x,i)=>'<button data-sug="'+i+'"><b>'+x[0]+'</b><span>'+x[1]+'</span></button>').join('')+'</div>';
 const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');

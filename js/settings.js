@@ -8,7 +8,7 @@ function settingsMenu(){
   const on=S.providers.filter(p=>p.on),g=S.gh&&S.gh.token,im=S.imgcfg||{},cl=S.cloud&&S.cloud.session,nm=((S.cloud&&S.cloud.email)||'').split('@')[0];
   const row=(k,ic,t,sub,st)=>'<button class="mrow" data-sp="'+k+'"><span class="mi">'+ic+'</span><span class="mt"><b>'+t+'</b><small>'+(st?'<i class="sd '+st+'"></i>':'')+esc(sub)+'</small></span><span class="ar">›</span></button>';
   const grp=h=>'<div class="grp">'+h+'</div>';
-  return (cl?'<div class="prof"><span class="av">'+esc((nm||'o')[0])+'</span><div class="pt2"><b>'+esc(nm||'Orin')+'</b><small>'+esc(S.cloud.email||'')+(S.providers.length?' · '+S.providers.length+(S.providers.length===1?' provider':' providers'):'')+'</small></div></div>':'')+
+  return (cl?'<div class="prof"><div class="pt2"><b>'+esc(S.cloud.email||nm||'Orin')+'</b></div>'+(S.providers.length?'<span class="plan">'+S.providers.length+(S.providers.length===1?' provider':' providers')+'</span>':'')+'</div>':'')+
    gl('AI')+grp(row('prov',ico('bot',20),'Providers & Models',S.providers.length?S.providers.length+(S.providers.length===1?' provider · ':' providers · ')+(on[0]?on[0].model:'all off'):'No providers yet. Add one',S.providers.length?(on.length?'ok':'warn'):'warn')+
    row('sys',ico('chat',20),'System prompt',S.system.trim()?S.system.trim().slice(0,50):'Not set'))+
    gl('Tools')+grp(row('search',ico('globe',20),'Web search',S.search&&S.search.key?'On (Tavily)':'No key yet',S.search&&S.search.key?'ok':'')+
