@@ -262,16 +262,21 @@ const cnCustomHeaders=x=>{const h={};if(x.hname&&x.hval)h[x.hname]=x.hval;return
 /* Any MCP server that speaks HTTP can be added by URL; its tools then reach the agent as mcp_<server>_<tool>. */
 let mcpSeq=0;const mcpSid=new Map();
 function cnMcpList(){return (S.cn&&S.cn.mcp)||[]}
-async function mcpRpc(s,method,params,note){
+async function mcpRpc(s,method,params,note,tried){
   const body={jsonrpc:'2.0',method};if(params!==undefined)body.params=params;
   const id=note?null:++mcpSeq;if(!note)body.id=id;
   const h={'Content-Type':'application/json',Accept:'application/json, text/event-stream','MCP-Protocol-Version':'2025-06-18'};
-  if(s.token)h.Authorization='Bearer '+s.token;
+  const tk=await oaToken(s);if(tk)h.Authorization='Bearer '+tk;
   const sid=mcpSid.get(s.id);if(sid)h['Mcp-Session-Id']=sid;
   const r=await cnHttp(s.url,{method:'POST',headers:h,body});
   if(r.headers['mcp-session-id'])mcpSid.set(s.id,r.headers['mcp-session-id']);
   if(note)return null;
-  if(!r.ok){if(r.status===404&&sid){mcpSid.delete(s.id);await mcpInit(s);return mcpRpc(s,method,params,note)}throw new Error('MCP '+r.status+': '+cnCut(r.text,200))}
+  if(!r.ok){if(r.status===404&&sid){mcpSid.delete(s.id);await mcpInit(s);return mcpRpc(s,method,params,note)}
+    if(r.status===401){
+      const cur=cnMcpList().find(x=>x.id===s.id)||s;
+      if(!tried&&cur.oauth&&cur.oauth.refresh){await oaRefresh(s.id);return mcpRpc(s,method,params,note,true)}
+      const e=new Error(cur.oauth?'Login expired. Open this server in Settings → Connectors and tap Log in again.':(cur.token?'MCP 401: the token was rejected.':'This server needs you to log in. Tap Log in.'));e.auth=!cur.token&&!cur.oauth;throw e}
+    throw new Error('MCP '+r.status+': '+cnCut(r.text,200))}
   let msg=null;
   if(/event-stream/.test(r.headers['content-type']||'')){
     for(const ln of r.text.split('\n')){if(!ln.startsWith('data:'))continue;const j=cnParse(ln.slice(5).trim());if(j&&j.id===id)msg=j}
@@ -308,6 +313,98 @@ function cnSchema(x,top){
   return o;
 }
 const cnSlug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20)||'x';
+
+/* ---------- MCP login (OAuth 2.1 + PKCE, no client secret, no pasted token) ----------
+   Flow: find the login server (/.well-known), register Orin once (dynamic client registration), send the user to the
+   service's own "Authorize" page, get back a code, swap it for a token and keep it (with a refresh token) on this device.
+   All requests go through cnHttp, so the Android app and the Browser-access proxy work the same way. */
+const OA_KEY='orin_oauth_pending';
+const oaRedirect=()=>(typeof NATIVE!=='undefined'&&NATIVE)?'com.zyntax.orin://oauth':location.origin+location.pathname;
+const oaB64=b=>btoa(String.fromCharCode.apply(null,new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const oaRand=n=>oaB64(crypto.getRandomValues(new Uint8Array(n)));
+const oaSha=async v=>oaB64(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
+const oaForm=o=>new URLSearchParams(o).toString();
+const oaGet=async u=>{try{const r=await cnHttp(u);return r.ok?cnParse(r.text):null}catch(e){return null}};
+async function oaDiscover(s){
+  const u=new URL(s.url),pth=u.pathname.replace(/\/+$/,'');
+  let as=u.origin;
+  for(const x of [u.origin+'/.well-known/oauth-protected-resource'+pth,u.origin+'/.well-known/oauth-protected-resource']){
+    const j=await oaGet(x);if(j&&j.authorization_servers&&j.authorization_servers[0]){as=j.authorization_servers[0];break}
+  }
+  const a=new URL(as),ap=a.pathname.replace(/\/+$/,'');
+  for(const x of [a.origin+'/.well-known/oauth-authorization-server'+ap,a.origin+'/.well-known/openid-configuration'+ap,a.origin+ap+'/.well-known/openid-configuration']){
+    const j=await oaGet(x);if(j&&j.authorization_endpoint&&j.token_endpoint)return j;
+  }
+  throw new Error('This server does not offer login (OAuth). Add an access token instead.');
+}
+async function oaRegister(meta,redirect){
+  if(!meta.registration_endpoint)throw new Error('This service does not allow apps to register themselves, so one-tap login is not possible here. Use an access token.');
+  const r=await cnHttp(meta.registration_endpoint,{method:'POST',body:{client_name:'Orin',redirect_uris:[redirect],grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none'}});
+  const j=cnParse(r.text);
+  if(!r.ok||!j||!j.client_id)throw new Error('Login setup failed ('+r.status+'): '+cnMsg(j,r.text));
+  return j.client_id;
+}
+function oaSave(id,tok,extra){
+  const r=cnMcpList().map(x=>x.id!==id?x:Object.assign({},x,{oauth:Object.assign({},x.oauth,extra,{
+    access:tok.access_token,refresh:tok.refresh_token||(x.oauth&&x.oauth.refresh)||'',exp:tok.expires_in?Date.now()+tok.expires_in*1000:0})}));
+  S.cn=Object.assign({},S.cn,{mcp:r});rawSave();
+}
+async function oaStart(id){
+  const s=cnMcpList().find(x=>x.id===id);if(!s)throw new Error('Server not found');
+  if(!window.crypto||!crypto.subtle)throw new Error('Login needs a secure (https) page.');
+  const redirect=oaRedirect(),meta=await oaDiscover(s);
+  const o=s.oauth||{};
+  const client=(o.client&&o.redirect===redirect&&o.token_endpoint===meta.token_endpoint)?o.client:await oaRegister(meta,redirect);
+  const verifier=oaRand(48),state=oaRand(16);
+  localStorage.setItem(OA_KEY,JSON.stringify({id,verifier,state,client,redirect,token_endpoint:meta.token_endpoint,resource:s.url,t:Date.now()}));
+  const q=oaForm({response_type:'code',client_id:client,redirect_uri:redirect,state,code_challenge:await oaSha(verifier),code_challenge_method:'S256',resource:s.url});
+  location.href=meta.authorization_endpoint+(meta.authorization_endpoint.includes('?')?'&':'?')+q;
+}
+/* called when the app is opened again from the login page (web: ?code=…&state=…, Android: com.zyntax.orin://oauth?…) */
+async function oaReturn(url){
+  let p;try{p=new URL(url||location.href).searchParams}catch(e){return}
+  const state=p.get('state'),pend=cnParse(localStorage.getItem(OA_KEY)||'');
+  if(!state||!pend||pend.state!==state)return;
+  localStorage.removeItem(OA_KEY);
+  if(!url)try{history.replaceState(null,'',location.pathname+location.hash)}catch(e){}
+  const go=()=>{try{spage='cn';cnView='mcp:'+pend.id;openSheet()}catch(e){}};
+  if(Date.now()-pend.t>15*60000){cnRes='✗ Login took too long. Try again.';go();return}
+  if(p.get('error')){cnRes='✗ Login was not completed: '+(p.get('error_description')||p.get('error'));go();return}
+  try{
+    const r=await cnHttp(pend.token_endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:oaForm({grant_type:'authorization_code',code:p.get('code')||'',redirect_uri:pend.redirect,client_id:pend.client,code_verifier:pend.verifier,resource:pend.resource})});
+    const j=cnParse(r.text);
+    if(!r.ok||!j||!j.access_token)throw new Error('Token request failed ('+r.status+'): '+cnMsg(j,r.text));
+    oaSave(pend.id,j,{client:pend.client,redirect:pend.redirect,token_endpoint:pend.token_endpoint});
+    const sv=cnMcpList().find(x=>x.id===pend.id);
+    cnRes='✓ Logged in. '+await cnMcpConnector(sv).test();
+  }catch(e){cnRes='✗ '+e.message}
+  go();
+}
+const oaBusy=new Map();
+function oaRefresh(id){
+  if(oaBusy.has(id))return oaBusy.get(id);
+  const pr=(async()=>{
+    const cur=cnMcpList().find(x=>x.id===id),o=cur&&cur.oauth;
+    if(!o||!o.refresh||!o.token_endpoint)throw new Error('Login expired. Open this server in Settings → Connectors and tap Log in again.');
+    const r=await cnHttp(o.token_endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:oaForm({grant_type:'refresh_token',refresh_token:o.refresh,client_id:o.client})});
+    const j=cnParse(r.text);
+    if(!r.ok||!j||!j.access_token)throw new Error('Login expired. Open this server in Settings → Connectors and tap Log in again.');
+    oaSave(id,j,{});return j.access_token;
+  })().finally(()=>oaBusy.delete(id));
+  oaBusy.set(id,pr);return pr;
+}
+async function oaToken(s){
+  const cur=cnMcpList().find(x=>x.id===s.id)||s,o=cur.oauth;
+  if(o&&o.access){
+    if(o.exp&&o.exp-Date.now()<60000&&o.refresh)return oaRefresh(s.id);
+    return o.access;
+  }
+  return cur.token||'';
+}
+window.addEventListener('load',()=>{oaReturn()});
+try{const A=(typeof NP==='function')&&NP('App');if(A)A.addListener('appUrlOpen',d=>{if(d&&/^com\.zyntax\.orin:/.test(d.url||''))oaReturn(d.url.replace('com.zyntax.orin://oauth','https://x.invalid/'))})}catch(e){}
+
 function cnMcpConnector(s){
   return {id:'mcp:'+s.id,mcp:s,name:s.name||'MCP server',ic:'spark',desc:s.url,isOn:()=>!!s.url&&!!(s.tools&&s.tools.length),
     test:async()=>{const t=await mcpList(s);const r=cnMcpList().map(x=>x.id===s.id?Object.assign({},x,{tools:t.map(k=>({name:k.name,description:k.description||'',inputSchema:k.inputSchema,ro:!!(k.annotations&&k.annotations.readOnlyHint)}))}):x);
@@ -366,7 +463,7 @@ function cnDetail(){
   const h1=$('sheet').querySelector('h1');
   if(cnView==='newmcp'||cnView==='newapi'){
     const m=cnView==='newmcp';h1.textContent=m?'Add MCP server':'Add custom API';
-    return '<div class="sec">'+(m?'<p class="h">Paste the address of a remote MCP server (Streamable HTTP). Orin reads its tools and offers them to the agent.</p>':'<p class="h">Any REST API that uses a token in a header. The agent gets one tool to call it; changes ask you first.</p>')+
+    return '<div class="sec">'+(m?'<p class="h">Paste the address of a remote MCP server (Streamable HTTP). Orin reads its tools and offers them to the agent. If the server needs a login, leave the token empty: Orin opens the Authorize page of the service itself (like GitHub, Vercel or Supabase do).</p>':'<p class="h">Any REST API that uses a token in a header. The agent gets one tool to call it; changes ask you first.</p>')+
       '<label>Name</label><input class="f" id="cnn" placeholder="'+(m?'My tools':'My API')+'">'+
       '<label>'+(m?'Server URL':'Base URL')+'</label><input class="f" id="cnu" placeholder="https://…">'+
       (m?'<label>Access token (optional)</label><input class="f" id="cnt" type="password" autocomplete="off">':'<label>Header name (optional)</label><input class="f" id="cnh" placeholder="Authorization"><label>Header value (optional)</label><input class="f" id="cnt" type="password" autocomplete="off" placeholder="Bearer …"><label>Note for the assistant (optional)</label><input class="f" id="cnd" placeholder="what this API is for">')+
@@ -384,6 +481,7 @@ function cnDetail(){
       :'<label>'+esc(f.label)+'</label><input class="f" data-cnf="'+f.k+'" type="'+(f.type==='password'?'password':'text')+'" autocomplete="off" placeholder="'+qa(f.ph||'')+'" value="'+qa(cfg[f.k]||'')+'">').join('');
   }
   h+='<div class="row">'+(c.mcp||c.custom?'':'<button class="btn" data-cn="save" data-id="'+qa(c.id)+'">Save</button>')+'<button class="btn ghost" data-cn="test" data-id="'+qa(c.id)+'">'+(c.mcp?'Connect / refresh tools':'Test')+'</button>'+
+    (c.mcp&&!c.mcp.token?'<button class="btn" data-cn="oalogin" data-id="'+qa(c.id)+'">'+(c.mcp.oauth?'Log in again':'Log in')+'</button>':'')+(c.mcp&&c.mcp.oauth?'<button class="btn ghost" data-cn="oalogout" data-id="'+qa(c.id)+'">Log out</button>':'')+
     ((c.mcp||c.custom)?'<button class="btn danger" data-cn="remove" data-id="'+qa(c.id)+'">Remove</button>':(cnIsOn(c)?'<button class="btn danger" data-cn="disc" data-id="'+qa(c.id)+'">Disconnect</button>':''))+'</div>';
   h+='<div id="cnres" class="h">'+esc(cnRes)+'</div>';
   if(c.tools&&c.tools.length)h+='<h3 style="margin-top:14px">What the agent can do</h3><p class="h">'+c.tools.map(t=>'<b>'+esc(t.name)+'</b>'+(t.confirm?' (asks first)':'')).join(' · ')+'</p>';
@@ -410,13 +508,21 @@ document.addEventListener('click',async e=>{
     try{cnRes='✓ '+await c.test(c.mcp||c.custom||cnGet(id))}catch(er){cnRes='✗ '+er.message}
     redraw();
   }
+  else if(a==='oalogin'){
+    const sid=id.split(':')[1];cnRes='Opening login…';const r=$('cnres');if(r)r.textContent=cnRes;
+    try{await oaStart(sid)}catch(er){cnRes='✗ '+er.message;redraw()}
+  }
+  else if(a==='oalogout'){
+    const sid=id.split(':')[1];
+    S.cn=Object.assign({},S.cn,{mcp:cnMcpList().map(x=>{if(x.id!==sid)return x;const y=Object.assign({},x);delete y.oauth;return y})});rawSave();mcpSid.delete(sid);cnRes='Logged out.';redraw();
+  }
   else if(a==='addmcp'||a==='addapi'){
     const nm=$('cnn').value.trim(),u=$('cnu').value.trim();
     if(!/^https:\/\//i.test(u)&&!/^http:\/\/(localhost|127\.)/i.test(u)){cnRes='Enter a full https:// address.';redraw();return}
     const x={id:cnUid(),name:nm||(a==='addmcp'?'MCP server':'API'),token:($('cnt')||{}).value||''};
     if(a==='addmcp'){x.url=u;S.cn=Object.assign({},S.cn,{mcp:cnMcpList().concat([x])});rawSave();cnView='mcp:'+x.id;
       cnRes='Connecting…';redraw();
-      try{cnRes='✓ '+await cnMcpConnector(x).test()}catch(er){cnRes='✗ '+er.message}
+      try{cnRes='✓ '+await cnMcpConnector(x).test()}catch(er){cnRes='✗ '+er.message;if(er.auth){cnRes='Opening login…';redraw();try{await oaStart(x.id);return}catch(e2){cnRes='✗ '+e2.message}}}
     }else{
       x.base=u;x.hname=($('cnh')||{}).value.trim();x.hval=x.token;delete x.token;x.note=($('cnd')||{}).value.trim();
       S.cn=Object.assign({},S.cn,{custom:cnCustomList().concat([x])});rawSave();cnView='custom:'+x.id;cnRes='Added.';
