@@ -175,9 +175,8 @@ form.in textarea::placeholder{color:var(--mute);opacity:.85}
 .pc img{width:38px;height:38px;object-fit:cover;border-radius:var(--r1)}
 .pc>span{display:flex;flex-direction:column;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pcs{font-size:11px;color:var(--mute)}
 .pc button{flex:none;width:26px;height:26px;color:var(--mute)}
-#rchip{display:none;padding:6px 14px 0;background:var(--bg)}#rchip.on{display:flex;gap:6px;align-items:center}
-#rchip button{max-width:80vw;padding:4px 11px;font-size:13px;background:var(--sf);border:1px solid var(--line);border-radius:99px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#rchip button:hover{border-color:var(--ac)}
+#rchip{position:relative;color:var(--ac)}#rchip[hidden]{display:none}#rchip.nt{color:var(--mute)}
+#rchip .rdot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--ac);border:2px solid var(--sf)}
 
 /* ---------- Popup menus ---------- */
 #pov{position:fixed;inset:0;z-index:34}

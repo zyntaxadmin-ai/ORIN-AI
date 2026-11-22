@@ -139,9 +139,13 @@ function subHTML(){
   return '';
 }
 function updateChip(){
-  const e=$('rchip');if(!S.repo){e.className='';e.innerHTML='';return}
+  const e=$('rchip');if(!e)return;
+  if(!S.repo){e.hidden=true;e.className='cb';e.innerHTML='';e.title='';return}
   const c=chat(),n=c?dcount(c):0;
-  e.className='on';e.innerHTML='<button data-act="ropen">'+ico('box',15)+esc(S.repo.full)+' · '+esc(S.repo.branch)+(n?' · '+n+' draft':'')+(agentOn()?'':' · no token')+'</button><button data-act="rclear" aria-label="Remove repo">'+ico('x',14)+'</button>';
+  e.hidden=false;e.className='cb'+(n?' dr':'')+(agentOn()?'':' nt');
+  e.title=S.repo.full+' · '+S.repo.branch+(n?' · '+n+' draft':'')+(agentOn()?'':' · no token');
+  e.setAttribute('aria-label','GitHub repo: '+e.title);
+  e.innerHTML=ico('box',20)+(n?'<i class="rdot"></i>':'');
 }
 function okPath(p){
   if(typeof p!=='string')throw new Error('path is required');
