@@ -62,6 +62,9 @@ jobs:
                   s = s.replace('</manifest>', '    <uses-permission android:name="android.permission.' + perm + '" />\n</manifest>')
           if 'AndroidForegroundService' not in s:
               s = s.replace('</application>', '        <receiver android:name="io.capawesome.capacitorjs.plugins.foregroundservice.NotificationActionBroadcastReceiver" />\n        <service android:name="io.capawesome.capacitorjs.plugins.foregroundservice.AndroidForegroundService" android:foregroundServiceType="dataSync" />\n    </application>')
+          # login return link for connectors (OAuth): com.zyntax.orin://oauth
+          if 'android:scheme="com.zyntax.orin"' not in s:
+              s = s.replace('</activity>', '    <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="com.zyntax.orin" android:host="oauth" />\n            </intent-filter>\n        </activity>', 1)
           open(p, 'w', encoding='utf-8').write(s)
           PY
           # small status-bar icon for that notification
