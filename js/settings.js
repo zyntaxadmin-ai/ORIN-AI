@@ -19,7 +19,8 @@ function settingsMenu(){
    row('mem',ico('note',20),'Memory',memList().length?memList().length+(memList().length===1?' note':' notes'):'Nothing remembered yet'))+
    gl('App')+grp(row('app',ico('palette',20),'Appearance & Voice','Theme: '+THEME_LABEL[S.theme||'auto']+' · Mic: '+({'bn-BD':'Bangla','en-US':'English','hi-IN':'Hindi'}[S.lang||'bn-BD']||'')))+
    gl('Account & data')+grp(row('acct',ico('cloud',20),'Account & Sync',cl?(S.cloud.email||'Logged in'):'Not logged in',cl?'ok':'warn')+
-   row('bk',ico('save',20),'Backup','Export / Import'));
+   row('bk',ico('save',20),'Backup','Export / Import'))+
+   (cl?'<div class="grp lo"><button class="mrow" data-act="cout"><span class="mi">'+ico('x',20)+'</span><span class="mt"><b>Log out</b></span></button></div>':'');
 }
 function drawSheet(){
   let hi=null;   /* health of the provider row being drawn */
@@ -90,6 +91,9 @@ document.addEventListener('click',async e=>{
   else if(d.del){closePop();if(!await confirmDelChat(d.del))return;S.chats=S.chats.filter(c=>c.id!==d.del);if(S.cur===d.del)S.cur=S.chats[0]?.id||null;save();renderList();render()}
   else if(d.rmp!==undefined){pend.splice(+d.rmp,1);renderTray()}
   else if(d.add){closePop();$(d.add).click()}
+  else if(d.go==='cn'){closePop();editing=null;view='';spage='cn';cnView='';openSheet()}
+  else if(d.eff!==undefined){S.effort=d.eff;rawSave();t.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===t));updatePill()}
+  else if(d.sum){const m=sumReg.get(+d.sum);if(m){pop(t,sumHTML(m),'Summary');const q=$('pop');if(q)q.classList.add('tall')}}
   else if(d.tog){closePop();d.tog==='web'?toggleWeb():toggleImg()}
   else if(d.pkfb){S.pickFb=!S.pickFb;rawSave();t.setAttribute('aria-checked',S.pickFb?'true':'false');t.querySelector('small').textContent=S.pickFb?'On: this model first, then the rest':'Off: only this model';t.querySelector('i').innerHTML=S.pickFb?ico('check',16):''}
   else if(d.hr!==undefined){hreset(S.providers[+d.hr]);drawSheet()}
@@ -170,7 +174,14 @@ $('pvd').onclick=()=>{pvMode=(pvMode+1)%3;const w=[['Phone','390px'],['Tablet','
 $('pve').addEventListener('click',e=>{if(e.target.closest('#pvs')){const t='The preview shows these errors. Please fix them:\n- '+pvErrs.slice(0,8).join('\n- ');$('pvx').click();$('box').value=t;if(!busy)send()}});
 $('fdir').onchange=e=>{addDir([...e.target.files]);e.target.value=''};
 ['fi','fimg','fcam'].forEach(id=>{$(id).onchange=e=>{addFiles([...e.target.files]);e.target.value=''}});
-$('plus').onclick=e=>pop(e.currentTarget,'<button class="pi" data-tog="web"><span>'+ico('globe',16)+'Web search</span>'+(S.web?'<i>On</i>':'')+'</button><button class="pi" data-tog="img"><span>'+ico('image',16)+'Create image</span>'+(imgMode?'<i>On</i>':'')+'</button><hr><button class="pi" data-add="fimg"><span>'+ico('image',16)+'Photos</span></button><button class="pi" data-add="fcam"><span>'+ico('camera',16)+'Camera</span></button><button class="pi" data-add="fi"><span>'+ico('file',16)+'Files / zip / Word / Excel</span></button><button class="pi" data-add="fdir"><span>'+ico('folder',16)+'Folder</span></button><button class="pi" data-act="ropen"><span>'+ico('box',16)+'GitHub repo</span></button>');
+const tgl=on=>'<b class="tg'+(on?' on':'')+'"></b>';
+const plusMenu=()=>'<div class="tiles"><button class="tile" data-add="fcam">'+ico('camera',24)+'<span>Camera</span></button><button class="tile" data-add="fimg">'+ico('image',24)+'<span>Photos</span></button><button class="tile" data-add="fi">'+ico('file',24)+'<span>Files</span></button></div>'+
+  '<button class="pi big" data-add="fdir"><span>'+ico('folder',18)+'Folder or zip</span></button>'+
+  '<button class="pi big" data-act="ropen"><span>'+ico('box',18)+'GitHub repo</span></button>'+
+  '<button class="pi big" data-tog="web" role="switch" aria-checked="'+(S.web?'true':'false')+'"><span>'+ico('globe',18)+'Web search</span>'+tgl(S.web)+'</button>'+
+  '<button class="pi big" data-tog="img" role="switch" aria-checked="'+(imgMode?'true':'false')+'"><span>'+ico('image',18)+'Create image</span>'+tgl(imgMode)+'</button>'+
+  '<button class="pi big" data-go="cn"><span>'+ico('cloud',18)+'Connectors</span><i class="ar">›</i></button>';
+$('plus').onclick=e=>pop(e.currentTarget,plusMenu(),'Add to chat');
 $('modelb').onclick=e=>pop(e.currentTarget,modelMenu(),'Model');
 $('mic').onclick=toggleMic;
 $('tobot').onclick=()=>{const m=$('msgs');m.scrollTo({top:m.scrollHeight,behavior:'smooth'})};
@@ -197,6 +208,7 @@ document.addEventListener('input',e=>{const t=e.target;if(t.id==='fq'){fq=t.valu
 $('cq').oninput=e=>{q=e.target.value.toLowerCase();renderList()};
 $('menu').onclick=openDrawer;$('homeb').onclick=()=>{home=true;closeDrawer();render()};$('aswitch').onclick=()=>setMode(amode==='in'?'up':'in');$('abtn').onclick=authGo;$('ov').onclick=closeDrawer;
 $('newc').onclick=$('newc2').onclick=newChat;
+$('dav').onclick=$('dset').onclick;$('dchats').onclick=()=>{$('cq').focus()};
 $('gear').onclick=()=>{editing=null;view='';spage='';openSheet()};
 $('back').onclick=()=>{if(spage==='cn'&&cnView){cnView='';cnRes='';drawSheet();return}if(view){view='';$('sheet').classList.remove('on');render();return}if(skEdit&&spage==='skills'){skEdit=null;drawSheet()}else if(editing){editing=null;drawSheet()}else if(spage){spage='';drawSheet()}else{$('sheet').classList.remove('on');updatePill()}};
 $('form').onsubmit=e=>{e.preventDefault();if(busy){stopped=true;if(curCtl)curCtl.abort()}else send()};

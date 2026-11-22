@@ -238,4 +238,14 @@ async function runAgent(c,list){
 }
 const logParse=l=>{const m=/^([a-z]+):(.*)$/s.exec(l);return m&&IX[m[1]]?[m[1],m[2]]:[null,String(l).replace(/^[^\w#\s]+\uFE0F?\s*/u,'')]};
 const logTxt=l=>logParse(l)[1];
-const logHTML=m=>m.log&&m.log.length?'<details class="act lg"><summary class="acth">'+ico('wrench',14)+'<span class="actt">'+m.log.length+(m.log.length===1?' step':' steps')+'</span></summary><ul class="actl">'+m.log.map(l=>'<li>'+stepInner(l)+'</li>').join('')+'</ul></details>':'';
+const sumReg=new Map();let sumSeq=0;
+const logHTML=m=>{
+  const n=(m.log||[]).length;if(!n&&!m.think)return '';
+  if(sumSeq>400){sumReg.clear();sumSeq=0}const id=++sumSeq;sumReg.set(id,m);
+  return '<button class="act lg sumb" data-sum="'+id+'"><span class="acth">'+ico(n?'wrench':'spark',14)+'<span class="actt">'+(n?n+(n===1?' step':' steps')+(m.think?' · thinking':''):'Thought process')+'</span><span class="ar">›</span></span></button>';
+};
+/* Summary sheet: the model's thinking (when the provider sends it) and the steps of an agent run, as a timeline */
+function sumHTML(m){
+  const th=String(m.think||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean).slice(0,40);
+  return '<ol class="tl">'+th.map(x=>'<li>'+esc(x.length>420?x.slice(0,420)+'…':x)+'</li>').join('')+(m.log||[]).map(l=>'<li class="ts">'+stepInner(l)+'</li>').join('')+'</ol>';
+}

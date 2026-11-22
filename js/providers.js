@@ -29,7 +29,7 @@ async function postCapped(p,url,headers,body,signal){
   return r;
 }
 async function callProvider(p,history,onDelta,opts){
-  const ctl=new AbortController();curCtl=ctl;lastUsage=null;lastCut=false;let to=setTimeout(()=>ctl.abort(),fbCfg().ttfb*1000);
+  const ctl=new AbortController();curCtl=ctl;lastUsage=null;lastCut=false;lastThink='';let to=setTimeout(()=>ctl.abort(),fbCfg().ttfb*1000);
   const sys=(opts&&opts.sys!=null?opts.sys:skSys()+memNote()).trim();const base=p.url.replace(/\/+$/,'');
   try{
     let url,headers={'Content-Type':'application/json'},body;
@@ -49,7 +49,13 @@ async function callProvider(p,history,onDelta,opts){
       if(/api\.(openai|groq|deepseek|together)\.|openrouter\.ai/.test(base))body.stream_options={include_usage:true};
       if(tp!==null)body.temperature=tp;
     }
+    /* Effort (model picker): Claude gets a thinking budget, OpenAI-style APIs get reasoning_effort. Skipped for agent calls.
+       A provider that refuses it is retried once without it, so a wrong guess never breaks a chat. */
+    const ef=(opts&&(opts.noeff||opts.agent))?'':(S.effort||'');let efOn=false;
+    if(ef&&p.type==='anthropic'){const bt={low:2000,medium:6000,high:14000}[ef];if(bt&&body.max_tokens>bt+1024){body.thinking={type:'enabled',budget_tokens:bt};delete body.temperature;efOn=true}}
+    else if(ef&&p.type!=='gemini'){body.reasoning_effort=ef;efOn=true}
     let r=await postCapped(p,url,headers,body,ctl.signal);
+    if(!r.ok&&efOn&&r.status===400){delete body.thinking;delete body.reasoning_effort;if(p.type==='anthropic'&&tp!==null)body.temperature=tp;r=await postCapped(p,url,headers,body,ctl.signal)}
     /* some models (reasoning models) refuse a temperature: say it once and retry without it, instead of failing over to the next provider */
     if(!r.ok&&tp!==null){
       const j0=await r.clone().json().catch(()=>null),e0=Array.isArray(j0)?j0[0]:j0,x0=e0&&e0.error,m0=x0?(typeof x0==='string'?x0:x0.message||''):'';
@@ -74,6 +80,8 @@ async function callProvider(p,history,onDelta,opts){
         if(p.type==='anthropic'){if(j.type==='message_start'&&j.message&&j.message.usage){const mu=j.message.usage,k=mu.cache_read_input_tokens||0;lastUsage={i:(mu.input_tokens||0)+k+(mu.cache_creation_input_tokens||0),o:mu.output_tokens||0,k}}else if(j.type==='message_delta'&&j.usage)lastUsage=Object.assign(lastUsage||{i:0,o:0},{o:j.usage.output_tokens||0})}
         else if(p.type==='gemini'){const u=j.usageMetadata;if(u)lastUsage={i:u.promptTokenCount||0,o:(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0)}}
         else if(j.usage&&(j.usage.prompt_tokens!=null||j.usage.completion_tokens!=null))lastUsage={i:j.usage.prompt_tokens||0,o:j.usage.completion_tokens||0};
+        if(p.type==='anthropic'){if(j.type==='content_block_delta'&&j.delta&&j.delta.type==='thinking_delta')lastThink+=j.delta.thinking||''}
+        else if(p.type!=='gemini'){const dl=j.choices&&j.choices[0]&&j.choices[0].delta,rt=dl&&(dl.reasoning_content||dl.reasoning);if(typeof rt==='string')lastThink+=rt}
         const t=p.type==='anthropic'?(j.type==='content_block_delta'?j.delta&&j.delta.text:''):
           p.type==='gemini'?((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(x=>x.text||'').join(''):
           j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content;
@@ -88,7 +96,7 @@ async function callProvider(p,history,onDelta,opts){
     throw e;
   }finally{clearTimeout(to)}
 }
-let live='',raf=0,lastUsage=null,lastCut=false,liveBy=null,shown=0,shownT=0;   /* shown/shownT: how many characters of live/liveT are on screen (smooth reveal) */
+let live='',raf=0,lastThink='',lastUsage=null,lastCut=false,liveBy=null,shown=0,shownT=0;   /* shown/shownT: how many characters of live/liveT are on screen (smooth reveal) */
 /* Agent progress: steps are kept as a list and appended one by one, so earlier rows are never redrawn. */
 let liveLog=null,liveT='',livePn='';
 const stepInner=l=>{const [k,t]=logParse(l);return (k?ico(k,14):'')+'<span>'+esc(t)+'</span>'};

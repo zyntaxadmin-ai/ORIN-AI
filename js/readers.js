@@ -76,7 +76,7 @@ async function officeToText(file){
       o+=Array.from(row,v=>v||'').join(',')+'\n'}}
   return o;
 }
-function updatePill(){const p=S.pick&&S.providers.find(x=>x.id===S.pick&&x.on);$('modelb').innerHTML='<i class="pd'+(p?' pin':'')+'"></i>'+esc(p?p.name:'Auto')+IC.chev}
+function updatePill(){const p=S.pick&&S.providers.find(x=>x.id===S.pick&&x.on);$('modelb').innerHTML='<i class="pd'+(p?' pin':'')+'"></i>'+esc(p?p.name:'Auto')+(S.effort?' · '+S.effort:'')+IC.chev}
 function closePop(){['pov','pop'].forEach(i=>{const e=$(i);if(e)e.remove()})}
 /* Popup menu. On a phone it is a bottom sheet (easier to reach and to tap); on a wide screen it opens next to the button. */
 function pop(anchor,html,title){
@@ -87,11 +87,13 @@ function pop(anchor,html,title){
   else{p.style.left=Math.max(8,Math.min(r.left,innerWidth-250))+'px';if(r.top<260)p.style.top=(r.bottom+8)+'px';else p.style.bottom=(innerHeight-r.top+8)+'px'}
   document.body.append(o,p);
 }
+const EFF=[['','Default'],['low','Low'],['medium','Medium'],['high','High']];
+const effHTML=()=>'<hr><div class="eff"><b>Effort</b><small>How hard the model thinks. Used by Claude and reasoning models; others ignore it.</small><div class="seg">'+EFF.map(x=>'<button data-eff="'+x[0]+'" class="'+((S.effort||'')===x[0]?'on':'')+'">'+x[1]+'</button>').join('')+'</div></div>';
 function modelMenu(){
   const l=S.providers.filter(p=>p.on&&p.model&&p.url);
   return '<button class="pi'+(!S.pick?' sel':'')+'" data-pk="auto"><em class="pn2 au">'+ico('spark',14)+'</em><span><b>Auto</b><small>Tries your providers in order</small></span>'+(!S.pick?'<i>'+ico('check',16)+'</i>':'')+'</button>'+
   l.map((p,n)=>{const hi=healthInfo(p);return '<button class="pi'+(S.pick===p.id?' sel':'')+'" data-pk="'+p.id+'"><em class="pn2">'+(n+1)+'</em><span><b>'+esc(p.name)+'</b><small>'+esc(p.model)+'</small>'+(hi?'<small class="ph '+hi.cls+'">'+esc(hi.txt)+'</small>':'')+'</span>'+(S.pick===p.id?'<i>'+ico('check',16)+'</i>':'')+'</button>'}).join('')+
-  (S.pick?'<hr><button class="pi" data-pkfb="1" role="switch" aria-checked="'+(S.pickFb?'true':'false')+'"><span><b>If it fails, use my other providers</b><small>'+(S.pickFb?'On: this model first, then the rest':'Off: only this model')+'</small></span><i>'+(S.pickFb?ico('check',16):'')+'</i></button>':'');
+  (S.pick?'<hr><button class="pi" data-pkfb="1" role="switch" aria-checked="'+(S.pickFb?'true':'false')+'"><span><b>If it fails, use my other providers</b><small>'+(S.pickFb?'On: this model first, then the rest':'Off: only this model')+'</small></span><i>'+(S.pickFb?ico('check',16):'')+'</i></button>':'')+effHTML();
 }
 let rec=null,recOn=false;
 function toggleMic(){
@@ -188,7 +190,7 @@ async function run(c,list){
     return out;
   },{onStart:p=>{curP=p;liveBy={by:p.name,model:p.model}},need:{vision:history.some(m=>m.imgs&&m.imgs.length),tok:estTokens(history,S.system.length+skPrompt(c).length)+2000}});
   if(r.value!==undefined){
-    const p=r.p;c.msgs.push({role:'assistant',content:r.value,by:p.name,model:p.model,skipped:r.fails.slice(),src:srcOf(c),u:mkUsage(p,history,r.value),cut:lastCut||undefined});
+    const p=r.p;c.msgs.push({role:'assistant',content:r.value,by:p.name,model:p.model,skipped:r.fails.slice(),src:srcOf(c),u:mkUsage(p,history,r.value),cut:lastCut||undefined,think:lastThink?lastThink.slice(0,20000):undefined});
   }else if(r.stopped){
     if(live&&curP)c.msgs.push({role:'assistant',content:live,by:curP.name,model:curP.model,skipped:[],src:srcOf(c),u:mkUsage(curP,history,live),cut:1});
   }else c.msgs.push({role:'error',content:failMsg(r.fails,r.kinds)});
